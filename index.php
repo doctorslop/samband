@@ -404,6 +404,16 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
     <meta property="og:title" content="Sambandscentralen">
     <meta property="og:description" content="Aktuella händelsenotiser från Svenska Polisen i realtid">
     <meta property="og:type" content="website">
+    <meta property="og:url" content="https://<?= $_SERVER['HTTP_HOST'] ?? 'sambandscentralen.se' ?><?= $_SERVER['REQUEST_URI'] ?? '/' ?>">
+    <meta property="og:image" content="https://<?= $_SERVER['HTTP_HOST'] ?? 'sambandscentralen.se' ?>/og-image.php">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:site_name" content="Sambandscentralen">
+    <meta property="og:locale" content="sv_SE">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Sambandscentralen">
+    <meta name="twitter:description" content="Aktuella händelsenotiser från Svenska Polisen i realtid">
+    <meta name="twitter:image" content="https://<?= $_SERVER['HTTP_HOST'] ?? 'sambandscentralen.se' ?>/og-image.php">
     
     <title>Sambandscentralen</title>
     
@@ -464,6 +474,8 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
             font-size: 22px; box-shadow: 0 4px 16px var(--accent-glow); transition: transform 0.3s;
         }
         .logo:hover .logo-icon { transform: scale(1.05) rotate(-3deg); }
+        .logo-icon.radio-playing { animation: radioGlow 1.5s ease-in-out infinite; }
+        @keyframes radioGlow { 0%, 100% { box-shadow: 0 4px 16px var(--accent-glow); } 50% { box-shadow: 0 4px 24px var(--accent-glow), 0 0 30px var(--accent-glow); } }
         .logo-text { min-width: 0; }
         .logo-text h1 { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700; line-height: 1.2; }
         .logo-text p { font-size: 12px; color: var(--text-muted); line-height: 1.3; }
@@ -666,11 +678,15 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
         @media (max-width: 1024px) { .stats-sidebar { display: none !important; } .main-content { flex-direction: column; } }
         @media (max-width: 768px) {
             .container { padding: 0 20px; padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); }
-            header { margin: 0 -20px 16px; padding: 16px 20px 14px; width: calc(100% + 40px); }
-            .header-content { flex-direction: column; align-items: center; gap: 10px; }
-            .logo { justify-content: center; }
-            .header-controls { flex-wrap: wrap; justify-content: center; gap: 8px; }
-            .logo-text h1 { font-size: 18px; }
+            header { margin: 0 -20px 16px; padding: 12px 20px; width: calc(100% + 40px); }
+            .header-content { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: nowrap; }
+            .logo { justify-content: flex-start; gap: 8px; }
+            .logo-icon { width: 36px; height: 36px; min-width: 36px; min-height: 36px; font-size: 18px; border-radius: 8px; }
+            .logo-text h1 { font-size: 15px; }
+            .logo-text p { font-size: 10px; }
+            .header-controls { flex-wrap: nowrap; gap: 6px; }
+            .view-toggle { padding: 2px; }
+            .view-toggle button { padding: 5px 8px; font-size: 12px; }
             .search-form { flex-direction: column; }
             .filter-select { width: 100%; }
             .event-card-inner { flex-direction: column; gap: 10px; }
@@ -717,7 +733,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                     <div class="logo-icon">🚔</div>
                     <div class="logo-text">
                         <h1>Sambandscentralen</h1>
-                        <p>Polisens händelsenotiser</p>
+                        <p>Svenska Polisens händelsenotiser</p>
                     </div>
                 </div>
                 
@@ -1020,6 +1036,29 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
             btn.classList.remove('loading');
         }
     });
+
+    // Radio easter egg
+    (function() {
+        const logoIcon = document.querySelector('.logo-icon');
+        let audio = null;
+        logoIcon.style.cursor = 'pointer';
+        logoIcon.title = '';
+        logoIcon.addEventListener('click', function(e) {
+            e.preventDefault();
+            if (!audio) {
+                audio = new Audio('radio.mp3');
+                audio.loop = true;
+                audio.volume = 0.5;
+                audio.addEventListener('ended', () => logoIcon.classList.remove('radio-playing'));
+            }
+            if (audio.paused) {
+                audio.play().then(() => logoIcon.classList.add('radio-playing')).catch(() => {});
+            } else {
+                audio.pause();
+                logoIcon.classList.remove('radio-playing');
+            }
+        });
+    })();
 
     // Init view
     if ('<?= $currentView ?>' !== 'list') setView('<?= $currentView ?>');
