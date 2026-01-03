@@ -1,6 +1,6 @@
-## Sambandscentralen 🚔
+## Sambandscentralen 
 
-Sambandscentralen är en modern, responsiv webbapplikation som visar polisens händelsenotiser i realtid. Applikationen hämtar data från Polisens öppna API och presenterar information om utryckningar och händelser över hela Sverige.
+Sambandscentralen visar polisens händelsenotiser i realtid. "Applikationen" hämtar data från Polisens öppna API och presenterar information om utryckningar och händelser över hela Sverige.
 
 ## Funktioner
 
