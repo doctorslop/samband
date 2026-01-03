@@ -228,7 +228,7 @@ $initialEvents = is_array($events) ? array_slice($events, 0, EVENTS_PER_PAGE) : 
 $hasMorePages = $eventCount > EVENTS_PER_PAGE;
 ?>
 <!DOCTYPE html>
-<html lang="sv" data-theme="dark">
+<html lang="sv">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -255,20 +255,12 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
     
     <style>
-        :root { --radius: 16px; --radius-sm: 8px; }
-        
-        [data-theme="dark"] {
+        :root {
+            --radius: 16px; --radius-sm: 8px;
             --primary: #0a1628; --primary-light: #1a2d4a; --accent: #fcd34d; --accent-dark: #d4a82c;
             --accent-glow: rgba(252, 211, 77, 0.4); --text: #e2e8f0; --text-muted: #94a3b8;
             --surface: #0f1f38; --surface-light: #162a48; --border: rgba(255, 255, 255, 0.08);
             --success: #10b981; --danger: #ef4444; --shadow: rgba(0, 0, 0, 0.3);
-        }
-        
-        [data-theme="light"] {
-            --primary: #f8fafc; --primary-light: #e2e8f0; --accent: #d97706; --accent-dark: #b45309;
-            --accent-glow: rgba(217, 119, 6, 0.3); --text: #1e293b; --text-muted: #64748b;
-            --surface: #ffffff; --surface-light: #f1f5f9; --border: rgba(0, 0, 0, 0.08);
-            --success: #059669; --danger: #dc2626; --shadow: rgba(0, 0, 0, 0.1);
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -277,7 +269,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
         body {
             font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
             background: var(--primary); color: var(--text); min-height: 100vh; line-height: 1.6;
-            -webkit-font-smoothing: antialiased; transition: background 0.3s, color 0.3s;
+            -webkit-font-smoothing: antialiased; overflow-x: clip;
         }
 
         body::before {
@@ -286,11 +278,11 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                         radial-gradient(ellipse at 80% 100%, rgba(59, 130, 246, 0.06) 0%, transparent 50%);
         }
 
-        .container { max-width: 1400px; margin: 0 auto; padding: 0 32px; position: relative; z-index: 1; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 0 32px; position: relative; z-index: 1; overflow: visible; }
 
         header {
             padding: 24px 0 20px; border-bottom: 1px solid var(--border); margin-bottom: 20px;
-            position: sticky; top: 0; background: var(--primary); z-index: 100; transition: background 0.3s;
+            position: sticky; top: 0; background: var(--primary); z-index: 100; overflow: visible;
         }
 
         .header-content { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
@@ -318,13 +310,6 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
         }
         .view-toggle button.active { background: var(--accent); color: var(--primary); }
         .view-toggle button:hover:not(.active) { color: var(--text); background: var(--surface-light); }
-
-        .stats-badge {
-            display: flex; align-items: center; gap: 8px; background: var(--surface);
-            padding: 8px 14px; border-radius: 50px; border: 1px solid var(--border);
-        }
-        .stats-badge .count { font-size: 18px; font-weight: 700; color: var(--accent); }
-        .stats-badge .label { font-size: 11px; color: var(--text-muted); }
 
         .live-indicator {
             display: flex; align-items: center; gap: 5px; padding: 5px 10px;
@@ -490,7 +475,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
 
         @media (max-width: 1024px) { .stats-sidebar { display: none !important; } .main-content { flex-direction: column; } }
         @media (max-width: 768px) {
-            .container { padding: 0 16px; }
+            .container { padding: 0 max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
             header { padding: 16px 0 14px; }
             .header-content { flex-direction: column; align-items: center; gap: 10px; }
             .logo { justify-content: center; }
@@ -505,6 +490,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
             .read-more-link { margin-left: 0; margin-top: 6px; }
             .map-container { height: 350px; }
             .view-toggle button span.label { display: none; }
+            .live-indicator span:not(.live-dot) { display: none; }
         }
 
         @media print { body::before, .scroll-top, .refresh-btn, .search-bar, .stats-sidebar, .view-toggle, .theme-toggle, .install-prompt { display: none !important; } }
@@ -532,8 +518,6 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                         <button type="button" data-view="map" class="<?= $currentView === 'map' ? 'active' : '' ?>">🗺️ <span class="label">Karta</span></button>
                         <button type="button" data-view="stats" class="<?= $currentView === 'stats' ? 'active' : '' ?>">📊 <span class="label">Statistik</span></button>
                     </div>
-                    
-                    <div class="stats-badge"><span class="count"><?= $eventCount ?></span><span class="label">händelser</span></div>
                 </div>
             </div>
         </header>
@@ -676,9 +660,6 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
     <script>
     const CONFIG = { perPage: <?= EVENTS_PER_PAGE ?>, filters: { location: '<?= addslashes($locationFilter) ?>', type: '<?= addslashes($typeFilter) ?>', search: '<?= addslashes($searchFilter) ?>' }, total: <?= $eventCount ?>, hasMore: <?= $hasMorePages ? 'true' : 'false' ?> };
 
-    // Theme
-    const setTheme = (t) => { document.documentElement.setAttribute('data-theme', t); localStorage.setItem('theme', t); document.getElementById('theme-color-meta').content = t === 'dark' ? '#0a1628' : '#f8fafc'; };
-    setTheme(localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'));
 
     // Views
     const viewBtns = document.querySelectorAll('.view-toggle button');
@@ -704,9 +685,8 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
 
     function initMap() {
         if (mapInit) return; mapInit = true;
-        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
         map = L.map('map').setView([62.5, 17.5], 5);
-        L.tileLayer(isDark ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { attribution: '© OpenStreetMap', maxZoom: 18 }).addTo(map);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '© OpenStreetMap', maxZoom: 18 }).addTo(map);
         
         const markers = L.layerGroup();
         eventsData.forEach(e => {
