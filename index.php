@@ -30,26 +30,141 @@ function saveToCache($filters, $data) {
 function fetchPoliceEvents($filters = []) {
     $cached = getFromCache($filters);
     if ($cached !== null) return $cached;
-    
+
     $baseUrl = 'https://polisen.se/api/events';
     $queryParams = [];
-    
+
     if (!empty($filters['location'])) $queryParams['locationname'] = $filters['location'];
     if (!empty($filters['type'])) $queryParams['type'] = $filters['type'];
     if (!empty($filters['date'])) $queryParams['DateTime'] = $filters['date'];
-    
+
     $url = $baseUrl . (!empty($queryParams) ? '?' . http_build_query($queryParams) : '');
-    
+
     $context = stream_context_create([
         'http' => ['timeout' => 15, 'header' => "User-Agent: Sambandscentralen/3.0\r\nAccept: application/json"]
     ]);
-    
+
     $response = @file_get_contents($url, false, $context);
     if ($response === false) return ['error' => 'Kunde inte hämta data från Polisens API.'];
-    
+
     $data = json_decode($response, true) ?: [];
     if (!isset($data['error'])) saveToCache($filters, $data);
     return $data;
+}
+
+function getDetailCacheFilePath($eventUrl) {
+    $cacheKey = md5($eventUrl);
+    return sys_get_temp_dir() . '/police_event_detail_' . $cacheKey . '.json';
+}
+
+function fetchEventDetails($eventUrl) {
+    if (empty($eventUrl)) return null;
+
+    // Check cache first (cache details for 1 hour)
+    $cacheFile = getDetailCacheFilePath($eventUrl);
+    if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 3600) {
+        $cached = json_decode(file_get_contents($cacheFile), true);
+        if ($cached !== null) return $cached;
+    }
+
+    $fullUrl = 'https://polisen.se' . $eventUrl;
+
+    $context = stream_context_create([
+        'http' => [
+            'timeout' => 10,
+            'header' => "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\r\nAccept: text/html,application/xhtml+xml\r\nAccept-Language: sv-SE,sv;q=0.9,en;q=0.8"
+        ],
+        'ssl' => [
+            'verify_peer' => true,
+            'verify_peer_name' => true
+        ]
+    ]);
+
+    $html = @file_get_contents($fullUrl, false, $context);
+    if ($html === false) return null;
+
+    $details = [];
+
+    // polisen.se event pages typically have the content in a specific structure
+    // Try multiple patterns to extract the main text content
+
+    // Pattern 1: Look for the main event body content (common polisen.se structure)
+    if (preg_match('/<div[^>]*class="[^"]*(?:text-body|body-content|article-body|event-body|hpt-body)[^"]*"[^>]*>(.*?)<\/div>/is', $html, $matches)) {
+        $content = $matches[1];
+        // Remove script and style tags
+        $content = preg_replace('/<(script|style)[^>]*>.*?<\/\1>/is', '', $content);
+        $content = strip_tags($content);
+        $content = html_entity_decode($content, ENT_QUOTES, 'UTF-8');
+        $content = preg_replace('/\s+/', ' ', $content);
+        $details['content'] = trim($content);
+    }
+
+    // Pattern 2: Look for main content area
+    if (empty($details['content'])) {
+        if (preg_match('/<main[^>]*>(.*?)<\/main>/is', $html, $matches)) {
+            // Find paragraphs within main
+            if (preg_match_all('/<p[^>]*class="[^"]*(?:ingress|preamble|lead|body|content)[^"]*"[^>]*>(.*?)<\/p>/is', $matches[1], $pMatches)) {
+                $paragraphs = array_map(function($p) {
+                    $text = strip_tags($p);
+                    $text = html_entity_decode($text, ENT_QUOTES, 'UTF-8');
+                    return trim(preg_replace('/\s+/', ' ', $text));
+                }, $pMatches[1]);
+                $paragraphs = array_filter($paragraphs, fn($p) => strlen($p) > 15);
+                if (!empty($paragraphs)) {
+                    $details['content'] = implode("\n\n", $paragraphs);
+                }
+            }
+        }
+    }
+
+    // Pattern 3: Extract from article element
+    if (empty($details['content'])) {
+        if (preg_match('/<article[^>]*>(.*?)<\/article>/is', $html, $matches)) {
+            // Get all paragraphs, excluding those that look like navigation or metadata
+            if (preg_match_all('/<p(?:\s[^>]*)?>([^<]{20,})<\/p>/is', $matches[1], $pMatches)) {
+                $paragraphs = array_map(function($p) {
+                    $text = strip_tags($p);
+                    $text = html_entity_decode($text, ENT_QUOTES, 'UTF-8');
+                    return trim(preg_replace('/\s+/', ' ', $text));
+                }, $pMatches[1]);
+                $paragraphs = array_filter($paragraphs, function($p) {
+                    // Filter out navigation-like text
+                    return strlen($p) > 20 && !preg_match('/^(Dela|Skriv ut|Tipsa|Läs mer|Tillbaka)/i', $p);
+                });
+                if (!empty($paragraphs)) {
+                    $details['content'] = implode("\n\n", $paragraphs);
+                }
+            }
+        }
+    }
+
+    // Pattern 4: Last resort - find any substantial text blocks on the page
+    if (empty($details['content'])) {
+        if (preg_match_all('/<(?:p|div)[^>]*>([^<]{50,})<\/(?:p|div)>/is', $html, $matches)) {
+            $blocks = array_map(function($text) {
+                $text = strip_tags($text);
+                $text = html_entity_decode($text, ENT_QUOTES, 'UTF-8');
+                return trim(preg_replace('/\s+/', ' ', $text));
+            }, $matches[1]);
+            // Filter to get only content-like blocks
+            $blocks = array_filter($blocks, function($text) {
+                return strlen($text) > 50 &&
+                       strlen($text) < 2000 &&
+                       !preg_match('/^(Copyright|Polisen|Kontakt|Dela|cookie)/i', $text) &&
+                       preg_match('/[a-zåäö]{3,}/i', $text);
+            });
+            if (!empty($blocks)) {
+                $details['content'] = implode("\n\n", array_slice(array_values($blocks), 0, 5));
+            }
+        }
+    }
+
+    if (!empty($details['content']) && strlen($details['content']) > 30) {
+        file_put_contents($cacheFile, json_encode($details));
+        return $details;
+    }
+
+    return null;
 }
 
 function formatDate($dateString) {
@@ -215,6 +330,21 @@ if (isset($_GET['ajax'])) {
     
     if ($_GET['ajax'] === 'stats') {
         echo json_encode(calculateStats(fetchPoliceEvents()));
+        exit;
+    }
+
+    if ($_GET['ajax'] === 'details') {
+        $eventUrl = $_GET['url'] ?? '';
+        if (empty($eventUrl)) {
+            echo json_encode(['error' => 'No URL provided']);
+            exit;
+        }
+        $details = fetchEventDetails($eventUrl);
+        if ($details) {
+            echo json_encode(['success' => true, 'details' => $details]);
+        } else {
+            echo json_encode(['error' => 'Could not fetch details']);
+        }
         exit;
     }
 }
@@ -451,6 +581,24 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
         .read-more-link span { opacity: 0.7; }
         .read-more-link:hover { text-decoration: underline; }
 
+        .show-details-btn {
+            background: transparent; border: 1px solid var(--border); color: var(--text-muted);
+            padding: 4px 10px; border-radius: 4px; font-size: 11px; cursor: pointer;
+            transition: all 0.2s; display: inline-flex; align-items: center; gap: 4px;
+        }
+        .show-details-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .show-details-btn.loading { opacity: 0.6; cursor: wait; }
+        .show-details-btn.expanded { background: var(--accent); color: var(--primary); border-color: var(--accent); }
+
+        .event-details {
+            display: none; margin-top: 12px; padding: 12px; background: var(--primary);
+            border-radius: var(--radius-sm); border: 1px solid var(--border);
+            font-size: 13px; line-height: 1.7; color: var(--text); white-space: pre-wrap;
+        }
+        .event-details.visible { display: block; animation: fadeIn 0.3s ease-out; }
+        .event-details.error { color: var(--text-muted); font-style: italic; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+
         .empty-state { text-align: center; padding: 50px 20px; color: var(--text-muted); }
         .empty-state-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
         .empty-state h2 { font-size: 18px; color: var(--text); margin-bottom: 8px; }
@@ -653,9 +801,11 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                                         <p class="event-summary"><?= htmlspecialchars($event['summary'] ?? '') ?></p>
                                         <div class="event-meta">
                                             <?php if (!empty($event['url'])): ?>
-                                                <a href="https://polisen.se<?= htmlspecialchars($event['url']) ?>" target="_blank" rel="noopener noreferrer" class="read-more-link"><span>🔗</span> Läs mer</a>
+                                                <button type="button" class="show-details-btn" data-url="<?= htmlspecialchars($event['url']) ?>">📖 Visa detaljer</button>
+                                                <a href="https://polisen.se<?= htmlspecialchars($event['url']) ?>" target="_blank" rel="noopener noreferrer" class="read-more-link"><span>🔗</span> polisen.se</a>
                                             <?php endif; ?>
                                         </div>
+                                        <div class="event-details"></div>
                                     </div>
                                 </div>
                             </article>
@@ -782,7 +932,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                 const card = document.createElement('article');
                 card.className = 'event-card';
                 card.style.animationDelay = `${i * 0.02}s`;
-                card.innerHTML = `<div class="event-card-inner"><div class="event-date"><div class="day">${e.date.day}</div><div class="month">${e.date.month}</div><div class="time">${e.date.time}</div><div class="relative">${e.date.relative}</div></div><div class="event-content"><div class="event-header"><div class="event-title-group"><a href="?type=${encodeURIComponent(e.type)}&view=${viewInput.value}" class="event-type" style="background:${e.color}20;color:${e.color}">${e.icon} ${escHtml(e.type)}</a><a href="?location=${encodeURIComponent(e.location)}&view=${viewInput.value}" class="event-location-link">${escHtml(e.location)}</a></div></div><p class="event-summary">${escHtml(e.summary)}</p><div class="event-meta">${e.url ? `<a href="https://polisen.se${escHtml(e.url)}" target="_blank" rel="noopener noreferrer" class="read-more-link"><span>🔗</span> Läs mer</a>` : ''}</div></div></div>`;
+                card.innerHTML = `<div class="event-card-inner"><div class="event-date"><div class="day">${e.date.day}</div><div class="month">${e.date.month}</div><div class="time">${e.date.time}</div><div class="relative">${e.date.relative}</div></div><div class="event-content"><div class="event-header"><div class="event-title-group"><a href="?type=${encodeURIComponent(e.type)}&view=${viewInput.value}" class="event-type" style="background:${e.color}20;color:${e.color}">${e.icon} ${escHtml(e.type)}</a><a href="?location=${encodeURIComponent(e.location)}&view=${viewInput.value}" class="event-location-link">${escHtml(e.location)}</a></div></div><p class="event-summary">${escHtml(e.summary)}</p><div class="event-meta">${e.url ? `<button type="button" class="show-details-btn" data-url="${escHtml(e.url)}">📖 Visa detaljer</button><a href="https://polisen.se${escHtml(e.url)}" target="_blank" rel="noopener noreferrer" class="read-more-link"><span>🔗</span> polisen.se</a>` : ''}</div><div class="event-details"></div></div></div>`;
                 eventsGrid.appendChild(card);
             });
         } catch (err) { console.error(err); } finally { loading = false; loadingEl.style.display = 'none'; }
@@ -812,6 +962,64 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
 
     // Keyboard
     document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); document.getElementById('searchInput')?.focus(); } });
+
+    // Event details expansion
+    const detailsCache = {};
+    document.addEventListener('click', async (e) => {
+        const btn = e.target.closest('.show-details-btn');
+        if (!btn) return;
+
+        const eventUrl = btn.dataset.url;
+        const detailsDiv = btn.closest('.event-content').querySelector('.event-details');
+        if (!eventUrl || !detailsDiv) return;
+
+        // Toggle if already visible
+        if (detailsDiv.classList.contains('visible')) {
+            detailsDiv.classList.remove('visible');
+            btn.classList.remove('expanded');
+            btn.innerHTML = '📖 Visa detaljer';
+            return;
+        }
+
+        // Check cache first
+        if (detailsCache[eventUrl]) {
+            detailsDiv.textContent = detailsCache[eventUrl];
+            detailsDiv.classList.add('visible');
+            detailsDiv.classList.remove('error');
+            btn.classList.add('expanded');
+            btn.innerHTML = '📖 Dölj detaljer';
+            return;
+        }
+
+        // Fetch details
+        btn.classList.add('loading');
+        btn.innerHTML = '⏳ Laddar...';
+
+        try {
+            const res = await fetch(`?ajax=details&url=${encodeURIComponent(eventUrl)}`);
+            const data = await res.json();
+
+            if (data.success && data.details?.content) {
+                detailsCache[eventUrl] = data.details.content;
+                detailsDiv.textContent = data.details.content;
+                detailsDiv.classList.add('visible');
+                detailsDiv.classList.remove('error');
+                btn.classList.add('expanded');
+                btn.innerHTML = '📖 Dölj detaljer';
+            } else {
+                detailsDiv.textContent = 'Kunde inte hämta detaljer. Klicka på polisen.se-länken för att läsa mer.';
+                detailsDiv.classList.add('visible', 'error');
+                btn.innerHTML = '📖 Visa detaljer';
+            }
+        } catch (err) {
+            console.error('Failed to fetch details:', err);
+            detailsDiv.textContent = 'Kunde inte hämta detaljer. Klicka på polisen.se-länken för att läsa mer.';
+            detailsDiv.classList.add('visible', 'error');
+            btn.innerHTML = '📖 Visa detaljer';
+        } finally {
+            btn.classList.remove('loading');
+        }
+    });
 
     // Init view
     if ('<?= $currentView ?>' !== 'list') setView('<?= $currentView ?>');
