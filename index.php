@@ -1047,7 +1047,6 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
             e.preventDefault();
             if (!audio) {
                 audio = new Audio('radio.mp3');
-                audio.loop = true;
                 audio.volume = 0.5;
                 audio.addEventListener('ended', () => logoIcon.classList.remove('radio-playing'));
             }
