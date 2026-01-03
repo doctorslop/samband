@@ -404,17 +404,18 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
         .event-card:hover { border-color: var(--accent-glow); transform: translateY(-2px); box-shadow: 0 8px 24px var(--shadow); }
 
         .event-card-inner { display: flex; gap: 14px; padding: 16px; }
-        .event-date { flex-shrink: 0; text-align: center; min-width: 54px; }
+        .event-date { flex-shrink: 0; text-align: center; min-width: 60px; padding: 4px 0; }
         .event-date .day { font-size: 26px; font-weight: 700; color: var(--accent); line-height: 1; }
-        .event-date .month { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
-        .event-date .time { font-size: 10px; color: var(--text-muted); margin-top: 5px; padding: 2px 5px; background: var(--primary); border-radius: 3px; display: inline-block; }
-        .event-date .relative { font-size: 9px; color: var(--success); margin-top: 3px; }
+        .event-date .month { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+        .event-date .time { font-size: 10px; color: var(--text-muted); margin-top: 8px; padding: 3px 6px; background: var(--primary); border-radius: 3px; display: inline-block; }
+        .event-date .relative { font-size: 9px; color: var(--success); margin-top: 6px; }
 
         .event-content { flex: 1; min-width: 0; }
         .event-header { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
         .event-icon { font-size: 20px; line-height: 1; flex-shrink: 0; }
         .event-title-group { flex: 1; min-width: 0; }
-        .event-type { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+        .event-type { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; text-decoration: none; cursor: pointer; transition: all 0.2s; }
+        .event-type:hover { opacity: 0.8; transform: scale(1.05); }
         .event-location-link { display: block; font-size: 14px; font-weight: 600; color: var(--text); text-decoration: none; margin-top: 4px; transition: color 0.2s; }
         .event-location-link:hover { color: var(--accent); }
         .event-summary { color: var(--text-muted); font-size: 13px; line-height: 1.5; margin-top: 8px; }
@@ -422,10 +423,11 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
         .event-meta { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
 
         .read-more-link {
-            display: inline-flex; align-items: center; gap: 3px; color: var(--accent);
-            text-decoration: none; font-size: 12px; font-weight: 500; transition: all 0.2s;
+            display: inline-flex; align-items: center; gap: 4px; color: var(--accent);
+            text-decoration: none; font-size: 11px; font-weight: 500; transition: all 0.2s; margin-left: auto;
         }
-        .read-more-link:hover { text-decoration: underline; color: var(--accent-dark); }
+        .read-more-link span { opacity: 0.7; }
+        .read-more-link:hover { text-decoration: underline; }
 
         .empty-state { text-align: center; padding: 50px 20px; color: var(--text-muted); }
         .empty-state-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
@@ -502,12 +504,34 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
             .search-form { flex-direction: column; }
             .filter-select { width: 100%; }
             .event-card-inner { flex-direction: column; gap: 10px; }
-            .event-date { display: flex; align-items: center; gap: 8px; text-align: left; }
-            .event-date .time, .event-date .relative { margin-top: 0; }
-            .event-meta { justify-content: flex-start; }
+            .event-date { display: flex; align-items: center; gap: 12px; text-align: left; padding: 0; }
+            .event-date .day { font-size: 22px; }
+            .event-date .month { margin-top: 0; }
+            .event-date .time { margin-top: 0; }
+            .event-date .relative { margin-top: 0; }
+            .event-meta { flex-direction: column; align-items: flex-start; gap: 5px; }
+            .read-more-link { margin-left: 0; margin-top: 6px; }
             .map-container { height: 350px; }
             .view-toggle button span.label { display: none; }
-            .live-indicator span:not(.live-dot) { display: none; }
+            .live-indicator { display: none; }
+        }
+
+        /* Stats view: hide search, show full width stats */
+        body.view-stats .filters-section { display: none; }
+        body.view-stats .stats-sidebar { display: block !important; width: 100%; max-width: 100%; }
+        body.view-stats .stats-sidebar .stats-card { display: inline-block; vertical-align: top; width: calc(25% - 12px); margin-right: 14px; margin-bottom: 14px; }
+        body.view-stats .stats-sidebar .stats-card:nth-child(4n) { margin-right: 0; }
+        body.view-stats .content-area { display: none; }
+        body.view-stats .main-content { display: block; }
+
+        @media (max-width: 1200px) {
+            body.view-stats .stats-sidebar .stats-card { width: calc(50% - 8px); }
+            body.view-stats .stats-sidebar .stats-card:nth-child(4n) { margin-right: 14px; }
+            body.view-stats .stats-sidebar .stats-card:nth-child(2n) { margin-right: 0; }
+        }
+
+        @media (max-width: 768px) {
+            body.view-stats .stats-sidebar .stats-card { width: 100%; margin-right: 0; }
         }
 
         @media print { body::before, .scroll-top, .refresh-btn, .search-bar, .stats-sidebar, .view-toggle, .theme-toggle, .install-prompt { display: none !important; } }
@@ -515,7 +539,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
         .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
     </style>
 </head>
-<body>
+<body class="view-<?= htmlspecialchars($currentView) ?>">
     <div class="container">
         <header>
             <div class="header-content">
@@ -600,14 +624,14 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                                     <div class="event-content">
                                         <div class="event-header">
                                             <div class="event-title-group">
-                                                <span class="event-type" style="background: <?= $color ?>20; color: <?= $color ?>"><?= $icon ?> <?= htmlspecialchars($type) ?></span>
+                                                <a href="?type=<?= urlencode($type) ?>&view=<?= $currentView ?>" class="event-type" style="background: <?= $color ?>20; color: <?= $color ?>"><?= $icon ?> <?= htmlspecialchars($type) ?></a>
                                                 <a href="?location=<?= urlencode($location) ?>&view=<?= $currentView ?>" class="event-location-link"><?= htmlspecialchars($location) ?></a>
                                             </div>
                                         </div>
                                         <p class="event-summary"><?= htmlspecialchars($event['summary'] ?? '') ?></p>
                                         <div class="event-meta">
                                             <?php if (!empty($event['url'])): ?>
-                                                <a href="https://polisen.se<?= htmlspecialchars($event['url']) ?>" target="_blank" rel="noopener noreferrer" class="read-more-link">Läs mer på polisen.se →</a>
+                                                <a href="https://polisen.se<?= htmlspecialchars($event['url']) ?>" target="_blank" rel="noopener noreferrer" class="read-more-link"><span>🔗</span> Läs mer</a>
                                             <?php endif; ?>
                                         </div>
                                     </div>
@@ -688,6 +712,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
     const setView = (v) => {
         viewBtns.forEach(b => b.classList.toggle('active', b.dataset.view === v));
         viewInput.value = v;
+        document.body.className = 'view-' + v;
         eventsGrid.style.display = v === 'list' ? 'grid' : 'none';
         mapContainer.classList.toggle('active', v === 'map');
         statsSidebar.classList.toggle('active', v === 'stats');
@@ -735,7 +760,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                 const card = document.createElement('article');
                 card.className = 'event-card';
                 card.style.animationDelay = `${i * 0.02}s`;
-                card.innerHTML = `<div class="event-card-inner"><div class="event-date"><div class="day">${e.date.day}</div><div class="month">${e.date.month}</div><div class="time">${e.date.time}</div><div class="relative">${e.date.relative}</div></div><div class="event-content"><div class="event-header"><div class="event-title-group"><span class="event-type" style="background:${e.color}20;color:${e.color}">${e.icon} ${escHtml(e.type)}</span><a href="?location=${encodeURIComponent(e.location)}&view=${viewInput.value}" class="event-location-link">${escHtml(e.location)}</a></div></div><p class="event-summary">${escHtml(e.summary)}</p><div class="event-meta">${e.url ? `<a href="https://polisen.se${escHtml(e.url)}" target="_blank" rel="noopener noreferrer" class="read-more-link">Läs mer på polisen.se →</a>` : ''}</div></div></div>`;
+                card.innerHTML = `<div class="event-card-inner"><div class="event-date"><div class="day">${e.date.day}</div><div class="month">${e.date.month}</div><div class="time">${e.date.time}</div><div class="relative">${e.date.relative}</div></div><div class="event-content"><div class="event-header"><div class="event-title-group"><a href="?type=${encodeURIComponent(e.type)}&view=${viewInput.value}" class="event-type" style="background:${e.color}20;color:${e.color}">${e.icon} ${escHtml(e.type)}</a><a href="?location=${encodeURIComponent(e.location)}&view=${viewInput.value}" class="event-location-link">${escHtml(e.location)}</a></div></div><p class="event-summary">${escHtml(e.summary)}</p><div class="event-meta">${e.url ? `<a href="https://polisen.se${escHtml(e.url)}" target="_blank" rel="noopener noreferrer" class="read-more-link"><span>🔗</span> Läs mer</a>` : ''}</div></div></div>`;
                 eventsGrid.appendChild(card);
             });
         } catch (err) { console.error(err); } finally { loading = false; loadingEl.style.display = 'none'; }
