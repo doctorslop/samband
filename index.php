@@ -286,7 +286,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                         radial-gradient(ellipse at 80% 100%, rgba(59, 130, 246, 0.06) 0%, transparent 50%);
         }
 
-        .container { max-width: 1400px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 0 32px; position: relative; z-index: 1; }
 
         header {
             padding: 24px 0 20px; border-bottom: 1px solid var(--border); margin-bottom: 20px;
@@ -318,13 +318,6 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
         }
         .view-toggle button.active { background: var(--accent); color: var(--primary); }
         .view-toggle button:hover:not(.active) { color: var(--text); background: var(--surface-light); }
-
-        .theme-toggle {
-            width: 40px; height: 40px; background: var(--surface); border: 1px solid var(--border);
-            border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            cursor: pointer; font-size: 18px; transition: all 0.3s;
-        }
-        .theme-toggle:hover { background: var(--surface-light); transform: rotate(15deg); }
 
         .stats-badge {
             display: flex; align-items: center; gap: 8px; background: var(--surface);
@@ -497,10 +490,11 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
 
         @media (max-width: 1024px) { .stats-sidebar { display: none !important; } .main-content { flex-direction: column; } }
         @media (max-width: 768px) {
-            .container { padding: 0 14px; }
+            .container { padding: 0 16px; }
             header { padding: 16px 0 14px; }
-            .header-content { flex-direction: column; align-items: stretch; gap: 10px; }
-            .header-controls { flex-wrap: wrap; justify-content: space-between; }
+            .header-content { flex-direction: column; align-items: center; gap: 10px; }
+            .logo { justify-content: center; }
+            .header-controls { flex-wrap: wrap; justify-content: center; gap: 8px; }
             .logo-text h1 { font-size: 18px; }
             .search-form { flex-direction: column; }
             .filter-select { width: 100%; }
@@ -539,7 +533,6 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                         <button type="button" data-view="stats" class="<?= $currentView === 'stats' ? 'active' : '' ?>">📊 <span class="label">Statistik</span></button>
                     </div>
                     
-                    <button type="button" class="theme-toggle" id="themeToggle" aria-label="Byt tema"><span class="theme-icon">🌙</span></button>
                     <div class="stats-badge"><span class="count"><?= $eventCount ?></span><span class="label">händelser</span></div>
                 </div>
             </div>
@@ -614,7 +607,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                                             <div class="event-meta-item"><span>📍</span> <?= htmlspecialchars($event['location']['name'] ?? 'Okänd') ?></div>
                                             <div class="event-meta-item"><span>🗓️</span> <time datetime="<?= $date['iso'] ?>"><?= ucfirst($date['weekday']) ?> <?= $date['full'] ?></time></div>
                                             <?php if (!empty($event['url'])): ?>
-                                                <a href="<?= htmlspecialchars($event['url']) ?>" target="_blank" rel="noopener noreferrer" class="read-more-link"><span>🔗</span> Läs mer</a>
+                                                <a href="https://polisen.se<?= htmlspecialchars($event['url']) ?>" target="_blank" rel="noopener noreferrer" class="read-more-link"><span>🔗</span> Läs mer</a>
                                             <?php endif; ?>
                                         </div>
                                     </div>
@@ -684,10 +677,8 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
     const CONFIG = { perPage: <?= EVENTS_PER_PAGE ?>, filters: { location: '<?= addslashes($locationFilter) ?>', type: '<?= addslashes($typeFilter) ?>', search: '<?= addslashes($searchFilter) ?>' }, total: <?= $eventCount ?>, hasMore: <?= $hasMorePages ? 'true' : 'false' ?> };
 
     // Theme
-    const themeToggle = document.getElementById('themeToggle');
-    const setTheme = (t) => { document.documentElement.setAttribute('data-theme', t); localStorage.setItem('theme', t); themeToggle.querySelector('.theme-icon').textContent = t === 'dark' ? '🌙' : '☀️'; document.getElementById('theme-color-meta').content = t === 'dark' ? '#0a1628' : '#f8fafc'; };
+    const setTheme = (t) => { document.documentElement.setAttribute('data-theme', t); localStorage.setItem('theme', t); document.getElementById('theme-color-meta').content = t === 'dark' ? '#0a1628' : '#f8fafc'; };
     setTheme(localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'));
-    themeToggle.addEventListener('click', () => setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'));
 
     // Views
     const viewBtns = document.querySelectorAll('.view-toggle button');
@@ -723,7 +714,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                 const [lat, lng] = e.gps.split(',').map(Number);
                 if (!isNaN(lat) && !isNaN(lng)) {
                     const m = L.circleMarker([lat, lng], { radius: 7, fillColor: e.color, color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.8 });
-                    m.bindPopup(`<div class="map-popup"><span class="badge" style="background:${e.color}20;color:${e.color}">${e.icon} ${e.type}</span><h3>${e.name}</h3><p>${e.summary.substring(0, 120)}${e.summary.length > 120 ? '...' : ''}</p><p><strong>📍 ${e.location}</strong></p>${e.url ? `<a href="${e.url}" target="_blank" rel="noopener">Läs mer →</a>` : ''}</div>`);
+                    m.bindPopup(`<div class="map-popup"><span class="badge" style="background:${e.color}20;color:${e.color}">${e.icon} ${e.type}</span><h3>${e.name}</h3><p>${e.summary.substring(0, 120)}${e.summary.length > 120 ? '...' : ''}</p><p><strong>📍 ${e.location}</strong></p>${e.url ? `<a href="https://polisen.se${e.url}" target="_blank" rel="noopener">Läs mer →</a>` : ''}</div>`);
                     markers.addLayer(m);
                 }
             }
@@ -748,7 +739,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                 const card = document.createElement('article');
                 card.className = 'event-card';
                 card.style.animationDelay = `${i * 0.02}s`;
-                card.innerHTML = `<div class="event-card-inner"><div class="event-date"><div class="day">${e.date.day}</div><div class="month">${e.date.month}</div><div class="time">${e.date.time}</div><div class="relative">${e.date.relative}</div></div><div class="event-content"><div class="event-header"><span class="event-icon">${e.icon}</span><div class="event-title-group"><span class="event-type" style="background:${e.color}20;color:${e.color}">${e.type}</span><h2 class="event-title">${escHtml(e.name)}</h2></div></div><p class="event-summary">${escHtml(e.summary)}</p><div class="event-meta"><div class="event-meta-item"><span>📍</span> ${escHtml(e.location)}</div><div class="event-meta-item"><span>🗓️</span> <time>${e.date.weekday} ${e.date.full}</time></div>${e.url ? `<a href="${escHtml(e.url)}" target="_blank" rel="noopener noreferrer" class="read-more-link"><span>🔗</span> Läs mer</a>` : ''}</div></div></div>`;
+                card.innerHTML = `<div class="event-card-inner"><div class="event-date"><div class="day">${e.date.day}</div><div class="month">${e.date.month}</div><div class="time">${e.date.time}</div><div class="relative">${e.date.relative}</div></div><div class="event-content"><div class="event-header"><span class="event-icon">${e.icon}</span><div class="event-title-group"><span class="event-type" style="background:${e.color}20;color:${e.color}">${e.type}</span><h2 class="event-title">${escHtml(e.name)}</h2></div></div><p class="event-summary">${escHtml(e.summary)}</p><div class="event-meta"><div class="event-meta-item"><span>📍</span> ${escHtml(e.location)}</div><div class="event-meta-item"><span>🗓️</span> <time>${e.date.weekday} ${e.date.full}</time></div>${e.url ? `<a href="https://polisen.se${escHtml(e.url)}" target="_blank" rel="noopener noreferrer" class="read-more-link"><span>🔗</span> Läs mer</a>` : ''}</div></div></div>`;
                 eventsGrid.appendChild(card);
             });
         } catch (err) { console.error(err); } finally { loading = false; loadingEl.style.display = 'none'; }
