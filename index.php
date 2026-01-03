@@ -176,7 +176,15 @@ if (isset($_GET['ajax'])) {
         
         $allEvents = fetchPoliceEvents($filters);
         if (isset($allEvents['error'])) { echo json_encode(['error' => $allEvents['error']]); exit; }
-        
+
+        // Client-side type filtering as fallback (API may not filter correctly when no location is specified)
+        $typeFilter = $filters['type'] ?? '';
+        if ($typeFilter && is_array($allEvents)) {
+            $allEvents = array_values(array_filter($allEvents, function($e) use ($typeFilter) {
+                return isset($e['type']) && $e['type'] === $typeFilter;
+            }));
+        }
+
         $searchFilter = $_GET['search'] ?? '';
         if ($searchFilter) {
             $allEvents = array_values(array_filter($allEvents, function($e) use ($searchFilter) {
@@ -223,6 +231,13 @@ if ($locationFilter) $filters['location'] = $locationFilter;
 if ($typeFilter) $filters['type'] = $typeFilter;
 
 $events = !empty($filters) ? fetchPoliceEvents($filters) : $allEvents;
+
+// Client-side type filtering as fallback (API may not filter correctly when no location is specified)
+if ($typeFilter && is_array($events) && !isset($events['error'])) {
+    $events = array_values(array_filter($events, function($e) use ($typeFilter) {
+        return isset($e['type']) && $e['type'] === $typeFilter;
+    }));
+}
 
 if ($searchFilter && is_array($events) && !isset($events['error'])) {
     $events = array_values(array_filter($events, function($e) use ($searchFilter) {
@@ -300,21 +315,28 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
         .container { max-width: 1400px; margin: 0 auto; padding: 0 40px; position: relative; z-index: 1; }
 
         header {
-            padding: 24px 0 20px; border-bottom: 1px solid var(--border); margin-bottom: 20px;
-            position: sticky; top: 0; background: var(--primary); z-index: 100; overflow: visible;
+            position: sticky; top: 0; z-index: 100;
+            background: var(--primary); border-bottom: 1px solid var(--border);
+            margin: 0 -40px 20px; padding: 24px 40px 20px;
+            width: calc(100% + 80px);
         }
 
-        .header-content { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+        .header-content {
+            display: flex; align-items: center; justify-content: space-between;
+            flex-wrap: wrap; gap: 16px; max-width: 1320px; margin: 0 auto;
+        }
 
-        .logo { display: flex; align-items: center; gap: 12px; }
+        .logo { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
         .logo-icon {
-            width: 44px; height: 44px; background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+            width: 44px; height: 44px; min-width: 44px; min-height: 44px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-dark));
             border-radius: 10px; display: flex; align-items: center; justify-content: center;
             font-size: 22px; box-shadow: 0 4px 16px var(--accent-glow); transition: transform 0.3s;
         }
         .logo:hover .logo-icon { transform: scale(1.05) rotate(-3deg); }
-        .logo-text h1 { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700; }
-        .logo-text p { font-size: 12px; color: var(--text-muted); }
+        .logo-text { min-width: 0; }
+        .logo-text h1 { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700; line-height: 1.2; }
+        .logo-text p { font-size: 12px; color: var(--text-muted); line-height: 1.3; }
 
         .header-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
@@ -495,8 +517,8 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
 
         @media (max-width: 1024px) { .stats-sidebar { display: none !important; } .main-content { flex-direction: column; } }
         @media (max-width: 768px) {
-            .container { padding: 0 max(24px, env(safe-area-inset-left)); padding-right: max(24px, env(safe-area-inset-right)); }
-            header { padding: 16px 0 14px; }
+            .container { padding: 0 20px; padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); }
+            header { margin: 0 -20px 16px; padding: 16px 20px 14px; width: calc(100% + 40px); }
             .header-content { flex-direction: column; align-items: center; gap: 10px; }
             .logo { justify-content: center; }
             .header-controls { flex-wrap: wrap; justify-content: center; gap: 8px; }
