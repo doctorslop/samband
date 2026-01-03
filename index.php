@@ -112,6 +112,25 @@ function getEventColor($type) {
     return '#3498db';
 }
 
+function cleanEventName($name, $type, $location) {
+    // Remove date prefix pattern like "03 januari 08.37, " from the name
+    $cleaned = preg_replace('/^\d{1,2}\s+\w+\s+\d{1,2}[\.:]\d{2},?\s*/', '', $name);
+    // Remove the type if it's at the start
+    if (stripos($cleaned, $type) === 0) {
+        $cleaned = trim(substr($cleaned, strlen($type)));
+        $cleaned = ltrim($cleaned, ', ');
+    }
+    // Remove location if it's the only thing left
+    if (trim($cleaned) === $location || empty(trim($cleaned))) {
+        return null;
+    }
+    // Remove trailing location if present
+    if ($location && preg_match('/,\s*' . preg_quote($location, '/') . '\s*$/i', $cleaned)) {
+        $cleaned = preg_replace('/,\s*' . preg_quote($location, '/') . '\s*$/i', '', $cleaned);
+    }
+    return trim($cleaned) ?: null;
+}
+
 function calculateStats($events) {
     if (!is_array($events) || isset($events['error'])) return null;
     
@@ -269,7 +288,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
         body {
             font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
             background: var(--primary); color: var(--text); min-height: 100vh; line-height: 1.6;
-            -webkit-font-smoothing: antialiased; overflow-x: clip;
+            -webkit-font-smoothing: antialiased; overflow-x: hidden;
         }
 
         body::before {
@@ -278,7 +297,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                         radial-gradient(ellipse at 80% 100%, rgba(59, 130, 246, 0.06) 0%, transparent 50%);
         }
 
-        .container { max-width: 1400px; margin: 0 auto; padding: 0 32px; position: relative; z-index: 1; overflow: visible; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 0 40px; position: relative; z-index: 1; }
 
         header {
             padding: 24px 0 20px; border-bottom: 1px solid var(--border); margin-bottom: 20px;
@@ -395,19 +414,18 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
         .event-header { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
         .event-icon { font-size: 20px; line-height: 1; flex-shrink: 0; }
         .event-title-group { flex: 1; min-width: 0; }
-        .event-type { display: inline-block; padding: 2px 7px; border-radius: 3px; font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 3px; }
-        .event-title { font-size: 14px; font-weight: 600; line-height: 1.3; }
-        .event-summary { color: var(--text-muted); font-size: 12px; line-height: 1.5; margin-bottom: 10px; }
+        .event-type { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+        .event-location-link { display: block; font-size: 14px; font-weight: 600; color: var(--text); text-decoration: none; margin-top: 4px; transition: color 0.2s; }
+        .event-location-link:hover { color: var(--accent); }
+        .event-summary { color: var(--text-muted); font-size: 13px; line-height: 1.5; margin-top: 8px; }
 
-        .event-meta { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-        .event-meta-item { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-muted); }
-        .event-meta-item span { opacity: 0.7; }
+        .event-meta { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
 
         .read-more-link {
             display: inline-flex; align-items: center; gap: 3px; color: var(--accent);
-            text-decoration: none; font-size: 11px; font-weight: 500; transition: all 0.2s; margin-left: auto;
+            text-decoration: none; font-size: 12px; font-weight: 500; transition: all 0.2s;
         }
-        .read-more-link:hover { text-decoration: underline; }
+        .read-more-link:hover { text-decoration: underline; color: var(--accent-dark); }
 
         .empty-state { text-align: center; padding: 50px 20px; color: var(--text-muted); }
         .empty-state-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
@@ -475,7 +493,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
 
         @media (max-width: 1024px) { .stats-sidebar { display: none !important; } .main-content { flex-direction: column; } }
         @media (max-width: 768px) {
-            .container { padding: 0 max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
+            .container { padding: 0 max(24px, env(safe-area-inset-left)); padding-right: max(24px, env(safe-area-inset-right)); }
             header { padding: 16px 0 14px; }
             .header-content { flex-direction: column; align-items: center; gap: 10px; }
             .logo { justify-content: center; }
@@ -486,8 +504,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
             .event-card-inner { flex-direction: column; gap: 10px; }
             .event-date { display: flex; align-items: center; gap: 8px; text-align: left; }
             .event-date .time, .event-date .relative { margin-top: 0; }
-            .event-meta { flex-direction: column; align-items: flex-start; gap: 5px; }
-            .read-more-link { margin-left: 0; margin-top: 6px; }
+            .event-meta { justify-content: flex-start; }
             .map-container { height: 350px; }
             .view-toggle button span.label { display: none; }
             .live-indicator span:not(.live-dot) { display: none; }
@@ -564,11 +581,13 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                     <?php elseif (empty($initialEvents)): ?>
                         <div class="empty-state"><div class="empty-state-icon">📭</div><h2>Inga händelser</h2><p>Ändra filter eller sök efter något annat.</p></div>
                     <?php else: ?>
-                        <?php foreach ($initialEvents as $i => $event): 
+                        <?php foreach ($initialEvents as $i => $event):
                             $date = formatDate($event['datetime'] ?? date('Y-m-d H:i:s'));
                             $type = $event['type'] ?? 'Okänd';
                             $color = getEventColor($type);
                             $icon = getEventIcon($type);
+                            $location = $event['location']['name'] ?? 'Okänd';
+                            $cleanedName = cleanEventName($event['name'] ?? '', $type, $location);
                         ?>
                             <article class="event-card" style="animation-delay: <?= min($i * 0.02, 0.2) ?>s">
                                 <div class="event-card-inner">
@@ -580,18 +599,15 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                                     </div>
                                     <div class="event-content">
                                         <div class="event-header">
-                                            <span class="event-icon"><?= $icon ?></span>
                                             <div class="event-title-group">
-                                                <span class="event-type" style="background: <?= $color ?>20; color: <?= $color ?>"><?= htmlspecialchars($type) ?></span>
-                                                <h2 class="event-title"><?= htmlspecialchars($event['name'] ?? 'Ingen titel') ?></h2>
+                                                <span class="event-type" style="background: <?= $color ?>20; color: <?= $color ?>"><?= $icon ?> <?= htmlspecialchars($type) ?></span>
+                                                <a href="?location=<?= urlencode($location) ?>&view=<?= $currentView ?>" class="event-location-link"><?= htmlspecialchars($location) ?></a>
                                             </div>
                                         </div>
                                         <p class="event-summary"><?= htmlspecialchars($event['summary'] ?? '') ?></p>
                                         <div class="event-meta">
-                                            <div class="event-meta-item"><span>📍</span> <?= htmlspecialchars($event['location']['name'] ?? 'Okänd') ?></div>
-                                            <div class="event-meta-item"><span>🗓️</span> <time datetime="<?= $date['iso'] ?>"><?= ucfirst($date['weekday']) ?> <?= $date['full'] ?></time></div>
                                             <?php if (!empty($event['url'])): ?>
-                                                <a href="https://polisen.se<?= htmlspecialchars($event['url']) ?>" target="_blank" rel="noopener noreferrer" class="read-more-link"><span>🔗</span> Läs mer</a>
+                                                <a href="https://polisen.se<?= htmlspecialchars($event['url']) ?>" target="_blank" rel="noopener noreferrer" class="read-more-link">Läs mer på polisen.se →</a>
                                             <?php endif; ?>
                                         </div>
                                     </div>
@@ -719,7 +735,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                 const card = document.createElement('article');
                 card.className = 'event-card';
                 card.style.animationDelay = `${i * 0.02}s`;
-                card.innerHTML = `<div class="event-card-inner"><div class="event-date"><div class="day">${e.date.day}</div><div class="month">${e.date.month}</div><div class="time">${e.date.time}</div><div class="relative">${e.date.relative}</div></div><div class="event-content"><div class="event-header"><span class="event-icon">${e.icon}</span><div class="event-title-group"><span class="event-type" style="background:${e.color}20;color:${e.color}">${e.type}</span><h2 class="event-title">${escHtml(e.name)}</h2></div></div><p class="event-summary">${escHtml(e.summary)}</p><div class="event-meta"><div class="event-meta-item"><span>📍</span> ${escHtml(e.location)}</div><div class="event-meta-item"><span>🗓️</span> <time>${e.date.weekday} ${e.date.full}</time></div>${e.url ? `<a href="https://polisen.se${escHtml(e.url)}" target="_blank" rel="noopener noreferrer" class="read-more-link"><span>🔗</span> Läs mer</a>` : ''}</div></div></div>`;
+                card.innerHTML = `<div class="event-card-inner"><div class="event-date"><div class="day">${e.date.day}</div><div class="month">${e.date.month}</div><div class="time">${e.date.time}</div><div class="relative">${e.date.relative}</div></div><div class="event-content"><div class="event-header"><div class="event-title-group"><span class="event-type" style="background:${e.color}20;color:${e.color}">${e.icon} ${escHtml(e.type)}</span><a href="?location=${encodeURIComponent(e.location)}&view=${viewInput.value}" class="event-location-link">${escHtml(e.location)}</a></div></div><p class="event-summary">${escHtml(e.summary)}</p><div class="event-meta">${e.url ? `<a href="https://polisen.se${escHtml(e.url)}" target="_blank" rel="noopener noreferrer" class="read-more-link">Läs mer på polisen.se →</a>` : ''}</div></div></div>`;
                 eventsGrid.appendChild(card);
             });
         } catch (err) { console.error(err); } finally { loading = false; loadingEl.style.display = 'none'; }
