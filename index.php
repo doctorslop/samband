@@ -1002,7 +1002,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
             .event-date .relative { margin-top: 0; }
             .event-meta { flex-direction: column; align-items: flex-start; gap: 5px; }
             .read-more-link { margin-left: 0; margin-top: 6px; }
-            .map-container { height: 350px; }
+            .map-container { height: calc(100vh - 180px); min-height: 400px; }
             .view-toggle button span.label { display: none; }
             .live-indicator { display: none; }
         }
@@ -1207,7 +1207,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                     <div class="logo-icon">👮</div>
                     <div class="logo-text">
                         <h1>Sambandscentralen</h1>
-                        <p>Svenska Polisens händelsenotiser</p>
+                        <p>Polisens händelsenotiser i realtid</p>
                     </div>
                 </a>
                 
@@ -1322,8 +1322,8 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
             <aside class="stats-sidebar <?= $currentView === 'stats' ? 'active' : '' ?>" id="statsSidebar">
                 <?php if ($stats): ?>
                 <div class="stats-card">
-                    <h3>📊 Översikt</h3>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <h3 style="text-align: center;">📊 Översikt</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; text-align: center;">
                         <div><div class="stat-number"><?= $stats['last24h'] ?></div><div class="stat-label">Senaste 24h</div></div>
                         <div><div class="stat-number"><?= $stats['last7days'] ?></div><div class="stat-label">Senaste 7 dagar</div></div>
                     </div>
@@ -1357,7 +1357,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
             <section class="press-section <?= $currentView === 'press' ? 'active' : '' ?>" id="pressSection">
                 <div class="press-header">
                     <h2>📰 Pressmeddelanden</h2>
-                    <p>Samlade pressmeddelanden från alla polisregioner i Sverige</p>
+                    <p>Samlade från alla polisregioner i Sverige</p>
                 </div>
                 <div class="press-filters">
                     <div class="press-search-wrapper">
@@ -1379,7 +1379,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
             </section>
         </div>
 
-        <footer><p>Data från <a href="https://polisen.se" target="_blank" rel="noopener">Polisens öppna API</a> • Uppdateras var 5:e minut • <?= date('Y-m-d H:i') ?></p></footer>
+        <footer><p>Data hämtas ifrån <a href="https://polisen.se" target="_blank" rel="noopener">Polisen</a> • Uppdateras var 5:e minut • <?= date('Y-m-d H:i') ?></p></footer>
     </div>
 
     <button class="scroll-top" id="scrollTop" aria-label="Till toppen">↑</button>
