@@ -395,7 +395,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
 <html lang="sv">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="description" content="Sambandscentralen - Aktuella händelsenotiser från Svenska Polisen i realtid">
     <meta name="theme-color" content="#0a1628" id="theme-color-meta">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -466,7 +466,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
             flex-wrap: wrap; gap: 16px; max-width: 1320px; margin: 0 auto;
         }
 
-        .logo { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+        .logo { display: flex; align-items: center; gap: 12px; flex-shrink: 0; text-decoration: none; color: inherit; }
         .logo-icon {
             width: 44px; height: 44px; min-width: 44px; min-height: 44px;
             background: linear-gradient(135deg, var(--accent), var(--accent-dark));
@@ -593,6 +593,13 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
         .read-more-link span { opacity: 0.7; }
         .read-more-link:hover { text-decoration: underline; }
 
+        .gps-link {
+            display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted);
+            text-decoration: none; font-size: 11px; font-weight: 500; transition: all 0.2s;
+            padding: 4px 8px; background: var(--primary); border-radius: 4px; border: 1px solid var(--border);
+        }
+        .gps-link:hover { color: var(--accent); border-color: var(--accent); }
+
         .show-details-btn {
             background: transparent; border: 1px solid var(--border); color: var(--text-muted);
             padding: 4px 10px; border-radius: 4px; font-size: 11px; cursor: pointer;
@@ -624,11 +631,18 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
         #map { height: 100%; width: 100%; }
         .leaflet-popup-content-wrapper { background: var(--surface); color: var(--text); border-radius: var(--radius-sm); }
         .leaflet-popup-tip { background: var(--surface); }
-        .map-popup { max-width: 260px; }
+        .map-popup { max-width: 280px; }
         .map-popup h3 { font-size: 13px; margin-bottom: 5px; }
         .map-popup p { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
-        .map-popup .badge { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: 600; text-transform: uppercase; margin-bottom: 6px; }
+        .map-popup .badge { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: 600; text-transform: uppercase; margin-bottom: 4px; }
+        .map-popup .popup-time { font-size: 10px; color: var(--success); margin-bottom: 6px; }
+        .map-popup .popup-links { display: flex; gap: 10px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+        .map-popup .popup-links a { color: var(--accent); text-decoration: none; font-size: 11px; font-weight: 500; }
+        .map-popup .popup-links a:hover { text-decoration: underline; }
         .map-popup a { color: var(--accent); text-decoration: none; font-size: 11px; }
+        .map-info { background: var(--surface); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); box-shadow: 0 4px 12px var(--shadow); }
+        .map-info-content { color: var(--text); font-size: 13px; font-weight: 600; text-align: center; }
+        .map-info-content small { font-size: 10px; color: var(--text-muted); font-weight: 400; }
 
         .stats-sidebar { width: 300px; flex-shrink: 0; display: none; }
         .stats-sidebar.active { display: block; }
@@ -729,13 +743,13 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
     <div class="container">
         <header>
             <div class="header-content">
-                <div class="logo">
+                <a href="/" class="logo" id="logoLink">
                     <div class="logo-icon">🚔</div>
                     <div class="logo-text">
                         <h1>Sambandscentralen</h1>
                         <p>Svenska Polisens händelsenotiser</p>
                     </div>
-                </div>
+                </a>
                 
                 <div class="header-controls">
                     <div class="live-indicator"><span class="live-dot"></span><span>Live</span></div>
@@ -797,6 +811,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                             $color = getEventColor($type);
                             $icon = getEventIcon($type);
                             $location = $event['location']['name'] ?? 'Okänd';
+                            $gps = $event['location']['gps'] ?? null;
                             $cleanedName = cleanEventName($event['name'] ?? '', $type, $location);
                         ?>
                             <article class="event-card" style="animation-delay: <?= min($i * 0.02, 0.2) ?>s">
@@ -816,6 +831,14 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                                         </div>
                                         <p class="event-summary"><?= htmlspecialchars($event['summary'] ?? '') ?></p>
                                         <div class="event-meta">
+                                            <?php if ($gps):
+                                                $coords = explode(',', $gps);
+                                                if (count($coords) === 2):
+                                                    $lat = trim($coords[0]);
+                                                    $lng = trim($coords[1]);
+                                            ?>
+                                                <a href="https://www.google.com/maps/search/?api=1&query=<?= $lat ?>,<?= $lng ?>" target="_blank" rel="noopener noreferrer" class="gps-link">🗺️ <?= $lat ?>, <?= $lng ?></a>
+                                            <?php endif; endif; ?>
                                             <?php if (!empty($event['url'])): ?>
                                                 <button type="button" class="show-details-btn" data-url="<?= htmlspecialchars($event['url']) ?>">📖 Visa detaljer</button>
                                                 <a href="https://polisen.se<?= htmlspecialchars($event['url']) ?>" target="_blank" rel="noopener noreferrer" class="read-more-link"><span>🔗</span> polisen.se</a>
@@ -910,25 +933,56 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
     viewBtns.forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
 
     // Map
-    const eventsData = <?= json_encode(is_array($events) && !isset($events['error']) ? array_map(fn($e) => ['name' => $e['name'] ?? '', 'summary' => $e['summary'] ?? '', 'type' => $e['type'] ?? '', 'url' => $e['url'] ?? '', 'location' => $e['location']['name'] ?? '', 'gps' => $e['location']['gps'] ?? null, 'icon' => getEventIcon($e['type'] ?? ''), 'color' => getEventColor($e['type'] ?? '')], $events) : []) ?>;
+    const eventsData = <?= json_encode(is_array($events) && !isset($events['error']) ? array_map(fn($e) => ['name' => $e['name'] ?? '', 'summary' => $e['summary'] ?? '', 'type' => $e['type'] ?? '', 'url' => $e['url'] ?? '', 'location' => $e['location']['name'] ?? '', 'gps' => $e['location']['gps'] ?? null, 'datetime' => $e['datetime'] ?? '', 'icon' => getEventIcon($e['type'] ?? ''), 'color' => getEventColor($e['type'] ?? '')], $events) : []) ?>;
 
     function initMap() {
         if (mapInit) return; mapInit = true;
         map = L.map('map').setView([62.5, 17.5], 5);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '© OpenStreetMap', maxZoom: 18 }).addTo(map);
-        
+
+        // Filter events to last 24 hours only
+        const now = new Date();
+        const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        const recentEvents = eventsData.filter(e => {
+            if (!e.datetime) return false;
+            const eventDate = new Date(e.datetime);
+            return eventDate >= yesterday && eventDate <= now;
+        });
+
         const markers = L.layerGroup();
-        eventsData.forEach(e => {
+        let eventCount = 0;
+        recentEvents.forEach(e => {
             if (e.gps) {
                 const [lat, lng] = e.gps.split(',').map(Number);
                 if (!isNaN(lat) && !isNaN(lng)) {
-                    const m = L.circleMarker([lat, lng], { radius: 7, fillColor: e.color, color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.8 });
-                    m.bindPopup(`<div class="map-popup"><span class="badge" style="background:${e.color}20;color:${e.color}">${e.icon} ${e.type}</span><h3>${e.name}</h3><p>${e.summary.substring(0, 120)}${e.summary.length > 120 ? '...' : ''}</p><p><strong>📍 ${e.location}</strong></p>${e.url ? `<a href="https://polisen.se${e.url}" target="_blank" rel="noopener">Läs mer →</a>` : ''}</div>`);
+                    eventCount++;
+                    // Calculate relative time
+                    const eventDate = new Date(e.datetime);
+                    const diffMs = now - eventDate;
+                    const diffMins = Math.floor(diffMs / 60000);
+                    const diffHours = Math.floor(diffMs / 3600000);
+                    let relTime = diffMins <= 1 ? 'Just nu' : diffMins < 60 ? `${diffMins} min sedan` : `${diffHours} timmar sedan`;
+
+                    // Google Maps link
+                    const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+
+                    const m = L.circleMarker([lat, lng], { radius: 8, fillColor: e.color, color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.85 });
+                    m.bindPopup(`<div class="map-popup"><span class="badge" style="background:${e.color}20;color:${e.color}">${e.icon} ${e.type}</span><div class="popup-time">🕐 ${relTime}</div><h3>${e.name}</h3><p>${e.summary.substring(0, 120)}${e.summary.length > 120 ? '...' : ''}</p><p><strong>📍 ${e.location}</strong></p><div class="popup-links"><a href="${googleMapsUrl}" target="_blank" rel="noopener">🗺️ Google Maps</a>${e.url ? `<a href="https://polisen.se${e.url}" target="_blank" rel="noopener">📄 Läs mer</a>` : ''}</div></div>`);
                     markers.addLayer(m);
                 }
             }
         });
         map.addLayer(markers);
+
+        // Add info control showing event count
+        const info = L.control({position: 'topright'});
+        info.onAdd = function() {
+            const div = L.DomUtil.create('div', 'map-info');
+            div.innerHTML = `<div class="map-info-content">📍 ${eventCount} händelser<br><small>senaste 24 timmarna</small></div>`;
+            return div;
+        };
+        info.addTo(map);
+
         if (markers.getLayers().length) map.fitBounds(markers.getBounds(), { padding: [40, 40] });
     }
 
@@ -948,7 +1002,14 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                 const card = document.createElement('article');
                 card.className = 'event-card';
                 card.style.animationDelay = `${i * 0.02}s`;
-                card.innerHTML = `<div class="event-card-inner"><div class="event-date"><div class="day">${e.date.day}</div><div class="month">${e.date.month}</div><div class="time">${e.date.time}</div><div class="relative">${e.date.relative}</div></div><div class="event-content"><div class="event-header"><div class="event-title-group"><a href="?type=${encodeURIComponent(e.type)}&view=${viewInput.value}" class="event-type" style="background:${e.color}20;color:${e.color}">${e.icon} ${escHtml(e.type)}</a><a href="?location=${encodeURIComponent(e.location)}&view=${viewInput.value}" class="event-location-link">${escHtml(e.location)}</a></div></div><p class="event-summary">${escHtml(e.summary)}</p><div class="event-meta">${e.url ? `<button type="button" class="show-details-btn" data-url="${escHtml(e.url)}">📖 Visa detaljer</button><a href="https://polisen.se${escHtml(e.url)}" target="_blank" rel="noopener noreferrer" class="read-more-link"><span>🔗</span> polisen.se</a>` : ''}</div><div class="event-details"></div></div></div>`;
+                let gpsLink = '';
+                if (e.gps) {
+                    const [lat, lng] = e.gps.split(',').map(s => s.trim());
+                    if (lat && lng) {
+                        gpsLink = `<a href="https://www.google.com/maps/search/?api=1&query=${lat},${lng}" target="_blank" rel="noopener noreferrer" class="gps-link">🗺️ ${lat}, ${lng}</a>`;
+                    }
+                }
+                card.innerHTML = `<div class="event-card-inner"><div class="event-date"><div class="day">${e.date.day}</div><div class="month">${e.date.month}</div><div class="time">${e.date.time}</div><div class="relative">${e.date.relative}</div></div><div class="event-content"><div class="event-header"><div class="event-title-group"><a href="?type=${encodeURIComponent(e.type)}&view=${viewInput.value}" class="event-type" style="background:${e.color}20;color:${e.color}">${e.icon} ${escHtml(e.type)}</a><a href="?location=${encodeURIComponent(e.location)}&view=${viewInput.value}" class="event-location-link">${escHtml(e.location)}</a></div></div><p class="event-summary">${escHtml(e.summary)}</p><div class="event-meta">${gpsLink}${e.url ? `<button type="button" class="show-details-btn" data-url="${escHtml(e.url)}">📖 Visa detaljer</button><a href="https://polisen.se${escHtml(e.url)}" target="_blank" rel="noopener noreferrer" class="read-more-link"><span>🔗</span> polisen.se</a>` : ''}</div><div class="event-details"></div></div></div>`;
                 eventsGrid.appendChild(card);
             });
         } catch (err) { console.error(err); } finally { loading = false; loadingEl.style.display = 'none'; }
@@ -1037,7 +1098,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
         }
     });
 
-    // Radio easter egg
+    // Radio easter egg (only on logo icon, not text)
     (function() {
         const logoIcon = document.querySelector('.logo-icon');
         let audio = null;
@@ -1045,6 +1106,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
         logoIcon.title = '';
         logoIcon.addEventListener('click', function(e) {
             e.preventDefault();
+            e.stopPropagation();
             if (!audio) {
                 audio = new Audio('radio.mp3');
                 audio.volume = 0.5;
