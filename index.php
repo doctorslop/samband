@@ -1203,7 +1203,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
     <div class="container">
         <header>
             <div class="header-content">
-                <a href="/" class="logo" id="logoLink">
+                <a href="./" class="logo" id="logoLink">
                     <div class="logo-icon">👮</div>
                     <div class="logo-text">
                         <h1>Sambandscentralen</h1>

@@ -2,12 +2,12 @@
     "name": "Sambandscentralen",
     "short_name": "Samband",
     "description": "Aktuella händelsenotiser från Svenska Polisen i realtid",
-    "start_url": "/",
+    "start_url": ".",
     "display": "standalone",
     "background_color": "#0a1628",
     "theme_color": "#0a1628",
     "orientation": "portrait-primary",
-    "scope": "/",
+    "scope": ".",
     "lang": "sv-SE",
     "categories": ["news", "utilities"],
     "icons": [
@@ -40,21 +40,21 @@
             "name": "Visa på karta",
             "short_name": "Karta",
             "description": "Öppna kartvy",
-            "url": "/?view=map",
+            "url": "./?view=map",
             "icons": [{ "src": "icons/favicon-32x32.png", "sizes": "32x32" }]
         },
         {
             "name": "Visa statistik",
             "short_name": "Statistik",
             "description": "Öppna statistikvy",
-            "url": "/?view=stats",
+            "url": "./?view=stats",
             "icons": [{ "src": "icons/favicon-32x32.png", "sizes": "32x32" }]
         },
         {
             "name": "Pressmeddelanden",
             "short_name": "Press",
             "description": "Polisens pressmeddelanden",
-            "url": "/?view=press",
+            "url": "./?view=press",
             "icons": [{ "src": "icons/favicon-32x32.png", "sizes": "32x32" }]
         }
     ],
