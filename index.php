@@ -204,7 +204,7 @@ function getEventIcon($type) {
         'Brand' => '🔥', 'Rån' => '💰', 'Skottlossning' => '🔫', 'Knivlagen' => '🔪',
         'Narkotikabrott' => '💊', 'Bedrägeri' => '📝', 'Rattfylleri' => '🍺',
         'Ordningslagen' => '📢', 'Trafikhinder' => '🚧', 'Motorfordon' => '🏍️',
-        'Polisinsats' => '🚔', 'Mord' => '⚠️', 'Olaga hot' => '⚡', 'Våld' => '🛑',
+        'Polisinsats' => '🚔', 'Mord' => '💀', 'Olaga hot' => '⚡', 'Våld' => '🛑',
         'Försvunnen' => '🔍', 'Sammanfattning' => '📋', 'Larm' => '🔔', 'Detonation' => '💥',
         'Trafikkontroll' => '🚦', 'Djur' => '🐾', 'Fylleri' => '🍻',
     ];
