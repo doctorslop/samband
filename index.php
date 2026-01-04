@@ -8,7 +8,7 @@
 
 date_default_timezone_set('Europe/Stockholm');
 define('CACHE_TIME', 300);
-define('EVENTS_PER_PAGE', 20);
+define('EVENTS_PER_PAGE', 40);
 
 function getCacheFilePath($filters) {
     $cacheKey = md5(serialize($filters));
