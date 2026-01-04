@@ -4,17 +4,20 @@
  */
 
 const CACHE_NAME = 'sambandscentralen-v3';
-const OFFLINE_URL = '/offline.html';
 
-// Resurser att cacha vid installation
+// Get the base path from service worker location (supports subdirectory deployment)
+const BASE_PATH = self.location.pathname.replace(/\/sw\.js$/, '');
+const OFFLINE_URL = BASE_PATH + '/offline.html';
+
+// Resurser att cacha vid installation (relative to base path)
 const STATIC_ASSETS = [
-    '/',
-    '/manifest.json',
-    '/icons/favicon.ico',
-    '/icons/favicon-16x16.png',
-    '/icons/favicon-32x32.png',
-    '/icons/apple-touch-icon.png',
-    '/icons/android-chrome-512x512.png',
+    BASE_PATH + '/',
+    BASE_PATH + '/manifest.json',
+    BASE_PATH + '/icons/favicon.ico',
+    BASE_PATH + '/icons/favicon-16x16.png',
+    BASE_PATH + '/icons/favicon-32x32.png',
+    BASE_PATH + '/icons/apple-touch-icon.png',
+    BASE_PATH + '/icons/android-chrome-512x512.png',
     'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap',
     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
@@ -192,11 +195,11 @@ self.addEventListener('push', (event) => {
     
     const options = {
         body: data.body || 'Ny händelse rapporterad',
-        icon: '/icons/android-chrome-512x512.png',
-        badge: '/icons/favicon-32x32.png',
+        icon: BASE_PATH + '/icons/android-chrome-512x512.png',
+        badge: BASE_PATH + '/icons/favicon-32x32.png',
         vibrate: [100, 50, 100],
         data: {
-            url: data.url || '/'
+            url: data.url || BASE_PATH + '/'
         },
         actions: [
             { action: 'open', title: 'Visa händelse' },
@@ -214,8 +217,8 @@ self.addEventListener('notificationclick', (event) => {
     event.notification.close();
     
     if (event.action === 'close') return;
-    
-    const url = event.notification.data?.url || '/';
+
+    const url = event.notification.data?.url || BASE_PATH + '/';
     
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true })
