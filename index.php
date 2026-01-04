@@ -593,12 +593,45 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
         .read-more-link span { opacity: 0.7; }
         .read-more-link:hover { text-decoration: underline; }
 
-        .gps-link {
+        .show-map-btn {
             display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted);
-            text-decoration: none; font-size: 11px; font-weight: 500; transition: all 0.2s;
+            font-size: 11px; font-weight: 500; transition: all 0.2s; cursor: pointer;
             padding: 4px 8px; background: var(--primary); border-radius: 4px; border: 1px solid var(--border);
         }
-        .gps-link:hover { color: var(--accent); border-color: var(--accent); }
+        .show-map-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+        /* Kartmodal */
+        .map-modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.8); z-index: 1000; backdrop-filter: blur(4px);
+        }
+        .map-modal-overlay.active { display: flex; align-items: center; justify-content: center; }
+        .map-modal {
+            background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border);
+            width: 90%; max-width: 700px; max-height: 90vh; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+        .map-modal-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 14px 18px; border-bottom: 1px solid var(--border); background: var(--primary);
+        }
+        .map-modal-header h3 { font-size: 14px; font-weight: 600; margin: 0; }
+        .map-modal-close {
+            background: transparent; border: none; color: var(--text-muted); font-size: 20px;
+            cursor: pointer; padding: 4px 8px; line-height: 1; transition: color 0.2s;
+        }
+        .map-modal-close:hover { color: var(--accent); }
+        .map-modal-body { height: 400px; position: relative; }
+        #modalMap { height: 100%; width: 100%; }
+        .map-modal-footer {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 18px; border-top: 1px solid var(--border); background: var(--primary);
+        }
+        .map-modal-footer .coords { font-size: 11px; color: var(--text-muted); font-family: monospace; }
+        .map-modal-footer a {
+            display: inline-flex; align-items: center; gap: 6px;
+            color: var(--accent); text-decoration: none; font-size: 12px; font-weight: 500;
+        }
+        .map-modal-footer a:hover { text-decoration: underline; }
 
         .show-details-btn {
             background: transparent; border: 1px solid var(--border); color: var(--text-muted);
@@ -837,7 +870,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                                                     $lat = trim($coords[0]);
                                                     $lng = trim($coords[1]);
                                             ?>
-                                                <a href="https://www.google.com/maps/search/?api=1&query=<?= $lat ?>,<?= $lng ?>" target="_blank" rel="noopener noreferrer" class="gps-link">🗺️ <?= $lat ?>, <?= $lng ?></a>
+                                                <button type="button" class="show-map-btn" data-lat="<?= $lat ?>" data-lng="<?= $lng ?>" data-location="<?= htmlspecialchars($event['location']['name'] ?? '') ?>">🗺️ Visa karta</button>
                                             <?php endif; endif; ?>
                                             <?php if (!empty($event['url'])): ?>
                                                 <button type="button" class="show-details-btn" data-url="<?= htmlspecialchars($event['url']) ?>">📖 Visa detaljer</button>
@@ -904,6 +937,22 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
         <div class="install-prompt-buttons">
             <button class="install-btn" id="installBtn">Installera</button>
             <button class="dismiss-btn" id="dismissInstall">Inte nu</button>
+        </div>
+    </div>
+
+    <div class="map-modal-overlay" id="mapModalOverlay">
+        <div class="map-modal">
+            <div class="map-modal-header">
+                <h3 id="mapModalTitle">📍 Plats</h3>
+                <button class="map-modal-close" id="mapModalClose" aria-label="Stäng">&times;</button>
+            </div>
+            <div class="map-modal-body">
+                <div id="modalMap"></div>
+            </div>
+            <div class="map-modal-footer">
+                <span class="coords" id="mapModalCoords"></span>
+                <a id="mapModalGoogleLink" href="#" target="_blank" rel="noopener noreferrer">🗺️ Öppna i Google Maps</a>
+            </div>
         </div>
     </div>
 
@@ -1002,14 +1051,14 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                 const card = document.createElement('article');
                 card.className = 'event-card';
                 card.style.animationDelay = `${i * 0.02}s`;
-                let gpsLink = '';
+                let gpsBtn = '';
                 if (e.gps) {
                     const [lat, lng] = e.gps.split(',').map(s => s.trim());
                     if (lat && lng) {
-                        gpsLink = `<a href="https://www.google.com/maps/search/?api=1&query=${lat},${lng}" target="_blank" rel="noopener noreferrer" class="gps-link">🗺️ ${lat}, ${lng}</a>`;
+                        gpsBtn = `<button type="button" class="show-map-btn" data-lat="${lat}" data-lng="${lng}" data-location="${escHtml(e.location)}">🗺️ Visa karta</button>`;
                     }
                 }
-                card.innerHTML = `<div class="event-card-inner"><div class="event-date"><div class="day">${e.date.day}</div><div class="month">${e.date.month}</div><div class="time">${e.date.time}</div><div class="relative">${e.date.relative}</div></div><div class="event-content"><div class="event-header"><div class="event-title-group"><a href="?type=${encodeURIComponent(e.type)}&view=${viewInput.value}" class="event-type" style="background:${e.color}20;color:${e.color}">${e.icon} ${escHtml(e.type)}</a><a href="?location=${encodeURIComponent(e.location)}&view=${viewInput.value}" class="event-location-link">${escHtml(e.location)}</a></div></div><p class="event-summary">${escHtml(e.summary)}</p><div class="event-meta">${gpsLink}${e.url ? `<button type="button" class="show-details-btn" data-url="${escHtml(e.url)}">📖 Visa detaljer</button><a href="https://polisen.se${escHtml(e.url)}" target="_blank" rel="noopener noreferrer" class="read-more-link"><span>🔗</span> polisen.se</a>` : ''}</div><div class="event-details"></div></div></div>`;
+                card.innerHTML = `<div class="event-card-inner"><div class="event-date"><div class="day">${e.date.day}</div><div class="month">${e.date.month}</div><div class="time">${e.date.time}</div><div class="relative">${e.date.relative}</div></div><div class="event-content"><div class="event-header"><div class="event-title-group"><a href="?type=${encodeURIComponent(e.type)}&view=${viewInput.value}" class="event-type" style="background:${e.color}20;color:${e.color}">${e.icon} ${escHtml(e.type)}</a><a href="?location=${encodeURIComponent(e.location)}&view=${viewInput.value}" class="event-location-link">${escHtml(e.location)}</a></div></div><p class="event-summary">${escHtml(e.summary)}</p><div class="event-meta">${gpsBtn}${e.url ? `<button type="button" class="show-details-btn" data-url="${escHtml(e.url)}">📖 Visa detaljer</button><a href="https://polisen.se${escHtml(e.url)}" target="_blank" rel="noopener noreferrer" class="read-more-link"><span>🔗</span> polisen.se</a>` : ''}</div><div class="event-details"></div></div></div>`;
                 eventsGrid.appendChild(card);
             });
         } catch (err) { console.error(err); } finally { loading = false; loadingEl.style.display = 'none'; }
@@ -1096,6 +1145,68 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
         } finally {
             btn.classList.remove('loading');
         }
+    });
+
+    // Map Modal
+    const mapModalOverlay = document.getElementById('mapModalOverlay');
+    const mapModalTitle = document.getElementById('mapModalTitle');
+    const mapModalCoords = document.getElementById('mapModalCoords');
+    const mapModalGoogleLink = document.getElementById('mapModalGoogleLink');
+    const mapModalClose = document.getElementById('mapModalClose');
+    let modalMap = null;
+    let modalMarker = null;
+
+    function openMapModal(lat, lng, location) {
+        mapModalTitle.textContent = '📍 ' + (location || 'Plats');
+        mapModalCoords.textContent = `${lat}, ${lng}`;
+        mapModalGoogleLink.href = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+        mapModalOverlay.classList.add('active');
+        document.body.style.overflow = 'hidden';
+
+        setTimeout(() => {
+            if (!modalMap) {
+                modalMap = L.map('modalMap').setView([lat, lng], 14);
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                    attribution: '© OpenStreetMap', maxZoom: 18
+                }).addTo(modalMap);
+            } else {
+                modalMap.setView([lat, lng], 14);
+            }
+
+            if (modalMarker) {
+                modalMarker.setLatLng([lat, lng]);
+            } else {
+                modalMarker = L.circleMarker([lat, lng], {
+                    radius: 12, fillColor: '#3b82f6', color: '#fff', weight: 3, opacity: 1, fillOpacity: 0.9
+                }).addTo(modalMap);
+            }
+            modalMap.invalidateSize();
+        }, 50);
+    }
+
+    function closeMapModal() {
+        mapModalOverlay.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('.show-map-btn');
+        if (btn) {
+            const lat = parseFloat(btn.dataset.lat);
+            const lng = parseFloat(btn.dataset.lng);
+            const location = btn.dataset.location || '';
+            if (!isNaN(lat) && !isNaN(lng)) {
+                openMapModal(lat, lng, location);
+            }
+        }
+    });
+
+    mapModalClose.addEventListener('click', closeMapModal);
+    mapModalOverlay.addEventListener('click', (e) => {
+        if (e.target === mapModalOverlay) closeMapModal();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && mapModalOverlay.classList.contains('active')) closeMapModal();
     });
 
     // Radio easter egg (only on logo icon, not text)
