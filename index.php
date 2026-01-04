@@ -501,9 +501,14 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
         }
         .live-dot {
             width: 7px; height: 7px; background: var(--success); border-radius: 50%;
-            animation: pulse 2s infinite;
+            animation: livePulse 2s ease-in-out infinite;
+            box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
         }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; transform: scale(1.3); } }
+        @keyframes livePulse {
+            0% { opacity: 1; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            50% { opacity: 0.85; box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+            100% { opacity: 1; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
 
         .filters-section { margin-bottom: 20px; }
         .search-bar {
@@ -777,7 +782,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
         <header>
             <div class="header-content">
                 <a href="/" class="logo" id="logoLink">
-                    <div class="logo-icon">🚔</div>
+                    <div class="logo-icon">👮</div>
                     <div class="logo-text">
                         <h1>Sambandscentralen</h1>
                         <p>Svenska Polisens händelsenotiser</p>
@@ -864,6 +869,9 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                                         </div>
                                         <p class="event-summary"><?= htmlspecialchars($event['summary'] ?? '') ?></p>
                                         <div class="event-meta">
+                                            <?php if (!empty($event['url'])): ?>
+                                                <button type="button" class="show-details-btn" data-url="<?= htmlspecialchars($event['url']) ?>">📖 Visa detaljer</button>
+                                            <?php endif; ?>
                                             <?php if ($gps):
                                                 $coords = explode(',', $gps);
                                                 if (count($coords) === 2):
@@ -873,7 +881,6 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                                                 <button type="button" class="show-map-btn" data-lat="<?= $lat ?>" data-lng="<?= $lng ?>" data-location="<?= htmlspecialchars($event['location']['name'] ?? '') ?>">🗺️ Visa karta</button>
                                             <?php endif; endif; ?>
                                             <?php if (!empty($event['url'])): ?>
-                                                <button type="button" class="show-details-btn" data-url="<?= htmlspecialchars($event['url']) ?>">📖 Visa detaljer</button>
                                                 <a href="https://polisen.se<?= htmlspecialchars($event['url']) ?>" target="_blank" rel="noopener noreferrer" class="read-more-link"><span>🔗</span> polisen.se</a>
                                             <?php endif; ?>
                                         </div>
@@ -951,7 +958,10 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
             </div>
             <div class="map-modal-footer">
                 <span class="coords" id="mapModalCoords"></span>
-                <a id="mapModalGoogleLink" href="#" target="_blank" rel="noopener noreferrer">🗺️ Öppna i Google Maps</a>
+                <div style="display: flex; gap: 16px;">
+                    <a id="mapModalGoogleLink" href="#" target="_blank" rel="noopener noreferrer">🗺️ Google Maps</a>
+                    <a id="mapModalAppleLink" href="#" target="_blank" rel="noopener noreferrer">🍎 Apple Maps</a>
+                </div>
             </div>
         </div>
     </div>
@@ -1058,7 +1068,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                         gpsBtn = `<button type="button" class="show-map-btn" data-lat="${lat}" data-lng="${lng}" data-location="${escHtml(e.location)}">🗺️ Visa karta</button>`;
                     }
                 }
-                card.innerHTML = `<div class="event-card-inner"><div class="event-date"><div class="day">${e.date.day}</div><div class="month">${e.date.month}</div><div class="time">${e.date.time}</div><div class="relative">${e.date.relative}</div></div><div class="event-content"><div class="event-header"><div class="event-title-group"><a href="?type=${encodeURIComponent(e.type)}&view=${viewInput.value}" class="event-type" style="background:${e.color}20;color:${e.color}">${e.icon} ${escHtml(e.type)}</a><a href="?location=${encodeURIComponent(e.location)}&view=${viewInput.value}" class="event-location-link">${escHtml(e.location)}</a></div></div><p class="event-summary">${escHtml(e.summary)}</p><div class="event-meta">${gpsBtn}${e.url ? `<button type="button" class="show-details-btn" data-url="${escHtml(e.url)}">📖 Visa detaljer</button><a href="https://polisen.se${escHtml(e.url)}" target="_blank" rel="noopener noreferrer" class="read-more-link"><span>🔗</span> polisen.se</a>` : ''}</div><div class="event-details"></div></div></div>`;
+                card.innerHTML = `<div class="event-card-inner"><div class="event-date"><div class="day">${e.date.day}</div><div class="month">${e.date.month}</div><div class="time">${e.date.time}</div><div class="relative">${e.date.relative}</div></div><div class="event-content"><div class="event-header"><div class="event-title-group"><a href="?type=${encodeURIComponent(e.type)}&view=${viewInput.value}" class="event-type" style="background:${e.color}20;color:${e.color}">${e.icon} ${escHtml(e.type)}</a><a href="?location=${encodeURIComponent(e.location)}&view=${viewInput.value}" class="event-location-link">${escHtml(e.location)}</a></div></div><p class="event-summary">${escHtml(e.summary)}</p><div class="event-meta">${e.url ? `<button type="button" class="show-details-btn" data-url="${escHtml(e.url)}">📖 Visa detaljer</button>` : ''}${gpsBtn}${e.url ? `<a href="https://polisen.se${escHtml(e.url)}" target="_blank" rel="noopener noreferrer" class="read-more-link"><span>🔗</span> polisen.se</a>` : ''}</div><div class="event-details"></div></div></div>`;
                 eventsGrid.appendChild(card);
             });
         } catch (err) { console.error(err); } finally { loading = false; loadingEl.style.display = 'none'; }
@@ -1152,6 +1162,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
     const mapModalTitle = document.getElementById('mapModalTitle');
     const mapModalCoords = document.getElementById('mapModalCoords');
     const mapModalGoogleLink = document.getElementById('mapModalGoogleLink');
+    const mapModalAppleLink = document.getElementById('mapModalAppleLink');
     const mapModalClose = document.getElementById('mapModalClose');
     let modalMap = null;
     let modalMarker = null;
@@ -1160,6 +1171,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
         mapModalTitle.textContent = '📍 ' + (location || 'Plats');
         mapModalCoords.textContent = `${lat}, ${lng}`;
         mapModalGoogleLink.href = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+        mapModalAppleLink.href = `https://maps.apple.com/?ll=${lat},${lng}&q=${encodeURIComponent(location || 'Plats')}`;
         mapModalOverlay.classList.add('active');
         document.body.style.overflow = 'hidden';
 
