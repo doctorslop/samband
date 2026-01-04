@@ -522,6 +522,82 @@ if (isset($_GET['ajax'])) {
         ]);
         exit;
     }
+
+    if ($_GET['ajax'] === 'pressdetails') {
+        $pressUrl = $_GET['url'] ?? '';
+        if (empty($pressUrl)) {
+            echo json_encode(['error' => 'No URL provided']);
+            exit;
+        }
+
+        // Validate URL is from polisen.se
+        if (strpos($pressUrl, 'https://polisen.se/') !== 0) {
+            echo json_encode(['error' => 'Invalid URL']);
+            exit;
+        }
+
+        // Check cache (cache for 1 hour)
+        $cacheFile = sys_get_temp_dir() . '/police_press_detail_' . md5($pressUrl) . '.json';
+        if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 3600) {
+            $cached = json_decode(file_get_contents($cacheFile), true);
+            if ($cached !== null) {
+                echo json_encode(['success' => true, 'details' => $cached]);
+                exit;
+            }
+        }
+
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 10,
+                'header' => "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36\r\nAccept: text/html,application/xhtml+xml\r\nAccept-Language: sv-SE,sv;q=0.9,en;q=0.8"
+            ],
+            'ssl' => ['verify_peer' => true, 'verify_peer_name' => true]
+        ]);
+
+        $html = @file_get_contents($pressUrl, false, $context);
+        if ($html === false) {
+            echo json_encode(['error' => 'Could not fetch press release']);
+            exit;
+        }
+
+        $details = ['content' => ''];
+
+        // Pattern 1: Look for article body content
+        if (preg_match('/<div[^>]*class="[^"]*(?:text-body|body-content|article-body|editorial-body|news-body|hpt-body)[^"]*"[^>]*>(.*?)<\/div>/is', $html, $matches)) {
+            $content = $matches[1];
+            $content = preg_replace('/<(script|style)[^>]*>.*?<\/\1>/is', '', $content);
+            $content = strip_tags($content);
+            $content = html_entity_decode($content, ENT_QUOTES, 'UTF-8');
+            $content = preg_replace('/\s+/', ' ', $content);
+            $details['content'] = trim($content);
+        }
+
+        // Pattern 2: Look for main content with paragraphs
+        if (empty($details['content'])) {
+            if (preg_match_all('/<p[^>]*>(.*?)<\/p>/is', $html, $pMatches)) {
+                $paragraphs = [];
+                foreach ($pMatches[1] as $p) {
+                    $text = strip_tags($p);
+                    $text = html_entity_decode($text, ENT_QUOTES, 'UTF-8');
+                    $text = trim(preg_replace('/\s+/', ' ', $text));
+                    if (strlen($text) > 50) { // Only include substantial paragraphs
+                        $paragraphs[] = $text;
+                    }
+                }
+                if (!empty($paragraphs)) {
+                    $details['content'] = implode("\n\n", array_slice($paragraphs, 0, 5));
+                }
+            }
+        }
+
+        if (!empty($details['content'])) {
+            file_put_contents($cacheFile, json_encode($details));
+            echo json_encode(['success' => true, 'details' => $details]);
+        } else {
+            echo json_encode(['error' => 'Could not extract content']);
+        }
+        exit;
+    }
 }
 
 // Main page
@@ -1001,8 +1077,9 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
         .press-card-region {
             display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;
             text-transform: uppercase; letter-spacing: 0.3px; background: rgba(59, 130, 246, 0.15);
-            color: #3b82f6; margin-bottom: 8px;
+            color: #3b82f6; margin-bottom: 8px; border: none; cursor: pointer; transition: all 0.2s;
         }
+        .press-card-region:hover { background: rgba(59, 130, 246, 0.3); transform: scale(1.05); }
         .press-card-title {
             font-size: 16px; font-weight: 600; color: var(--text); line-height: 1.4;
             margin-bottom: 8px; text-decoration: none; display: block; transition: color 0.2s;
@@ -1013,13 +1090,28 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
             display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
         }
 
-        .press-card-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+        .press-card-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); flex-wrap: wrap; gap: 8px; }
         .press-card-relative { font-size: 11px; color: var(--success); }
+        .press-card-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         .press-card-link {
             display: inline-flex; align-items: center; gap: 4px; color: var(--accent);
             text-decoration: none; font-size: 12px; font-weight: 500; transition: all 0.2s;
         }
         .press-card-link:hover { text-decoration: underline; }
+        .show-press-details-btn {
+            display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 4px;
+            background: var(--card); border: 1px solid var(--border); color: var(--text); font-size: 12px;
+            cursor: pointer; transition: all 0.2s; font-weight: 500;
+        }
+        .show-press-details-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .show-press-details-btn.loading { opacity: 0.6; cursor: wait; }
+        .show-press-details-btn.expanded { background: var(--accent); color: white; border-color: var(--accent); }
+        .press-card-details {
+            margin-top: 12px; padding: 12px; background: var(--bg); border-radius: 6px; font-size: 13px;
+            line-height: 1.7; color: var(--text-muted); display: none; white-space: pre-wrap;
+        }
+        .press-card-details.visible { display: block; }
+        .press-card-details.error { color: var(--warning); background: rgba(245, 158, 11, 0.1); }
 
         .press-loading { text-align: center; padding: 40px 20px; color: var(--text-muted); }
         .press-loading .spinner { margin: 0 auto 16px; }
@@ -1067,7 +1159,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                     <div class="live-indicator"><span class="live-dot"></span><span>Live</span></div>
                     
                     <div class="view-toggle">
-                        <button type="button" data-view="list" class="<?= $currentView === 'list' ? 'active' : '' ?>">📋 <span class="label">Lista</span></button>
+                        <button type="button" data-view="list" class="<?= $currentView === 'list' ? 'active' : '' ?>">📋 <span class="label">Händelser</span></button>
                         <button type="button" data-view="map" class="<?= $currentView === 'map' ? 'active' : '' ?>">🗺️ <span class="label">Karta</span></button>
                         <button type="button" data-view="stats" class="<?= $currentView === 'stats' ? 'active' : '' ?>">📊 <span class="label">Statistik</span></button>
                         <button type="button" data-view="press" class="<?= $currentView === 'press' ? 'active' : '' ?>">📰 <span class="label">Press</span></button>
@@ -1426,14 +1518,18 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                                 <div class="time">${item.date.time}</div>
                             </div>
                             <div class="press-card-content">
-                                <span class="press-card-region">📍 ${escHtml(item.region)}</span>
+                                <button type="button" class="press-card-region" data-region="${escHtml(item.regionSlug)}">📍 ${escHtml(item.region)}</button>
                                 <a href="${escHtml(item.link)}" target="_blank" rel="noopener noreferrer" class="press-card-title">${escHtml(item.title)}</a>
                                 <p class="press-card-description">${escHtml(item.description)}</p>
+                                <div class="press-card-details"></div>
                             </div>
                         </div>
                         <div class="press-card-footer">
                             <span class="press-card-relative">${item.date.relative}</span>
-                            <a href="${escHtml(item.link)}" target="_blank" rel="noopener noreferrer" class="press-card-link">🔗 Läs på polisen.se</a>
+                            <div class="press-card-actions">
+                                <button type="button" class="show-press-details-btn" data-url="${escHtml(item.link)}">📖 Visa detaljer</button>
+                                <a href="${escHtml(item.link)}" target="_blank" rel="noopener noreferrer" class="press-card-link">🔗 Läs på polisen.se</a>
+                            </div>
                         </div>
                     `;
                     pressGrid.appendChild(card);
@@ -1478,6 +1574,76 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
     pressLoadMoreBtn.addEventListener('click', () => {
         pressPage++;
         loadPressReleases(false);
+    });
+
+    // Click on region tag to filter
+    document.addEventListener('click', (e) => {
+        const regionBtn = e.target.closest('.press-card-region');
+        if (!regionBtn) return;
+        const region = regionBtn.dataset.region;
+        if (region) {
+            pressRegionSelect.value = region;
+            loadPressReleases(true);
+            window.scrollTo({ top: document.getElementById('pressSection').offsetTop - 20, behavior: 'smooth' });
+        }
+    });
+
+    // Press details expansion
+    const pressDetailsCache = {};
+    document.addEventListener('click', async (e) => {
+        const btn = e.target.closest('.show-press-details-btn');
+        if (!btn) return;
+
+        const pressUrl = btn.dataset.url;
+        const detailsDiv = btn.closest('.press-card-content').querySelector('.press-card-details');
+        if (!pressUrl || !detailsDiv) return;
+
+        // Toggle if already visible
+        if (detailsDiv.classList.contains('visible')) {
+            detailsDiv.classList.remove('visible');
+            btn.classList.remove('expanded');
+            btn.innerHTML = '📖 Visa detaljer';
+            return;
+        }
+
+        // Check cache first
+        if (pressDetailsCache[pressUrl]) {
+            detailsDiv.textContent = pressDetailsCache[pressUrl];
+            detailsDiv.classList.add('visible');
+            detailsDiv.classList.remove('error');
+            btn.classList.add('expanded');
+            btn.innerHTML = '📖 Dölj detaljer';
+            return;
+        }
+
+        // Fetch details
+        btn.classList.add('loading');
+        btn.innerHTML = '⏳ Laddar...';
+
+        try {
+            const res = await fetch(`?ajax=pressdetails&url=${encodeURIComponent(pressUrl)}`);
+            const data = await res.json();
+
+            if (data.success && data.details?.content) {
+                pressDetailsCache[pressUrl] = data.details.content;
+                detailsDiv.textContent = data.details.content;
+                detailsDiv.classList.add('visible');
+                detailsDiv.classList.remove('error');
+                btn.classList.add('expanded');
+                btn.innerHTML = '📖 Dölj detaljer';
+            } else {
+                detailsDiv.textContent = 'Kunde inte hämta detaljer. Klicka på polisen.se-länken för att läsa mer.';
+                detailsDiv.classList.add('visible', 'error');
+                btn.innerHTML = '📖 Visa detaljer';
+            }
+        } catch (err) {
+            console.error('Failed to fetch press details:', err);
+            detailsDiv.textContent = 'Kunde inte hämta detaljer. Klicka på polisen.se-länken för att läsa mer.';
+            detailsDiv.classList.add('visible', 'error');
+            btn.innerHTML = '📖 Visa detaljer';
+        } finally {
+            btn.classList.remove('loading');
+        }
     });
 
     // Filter auto-submit
