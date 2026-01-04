@@ -41,7 +41,7 @@ function fetchPoliceEvents($filters = []) {
     $url = $baseUrl . (!empty($queryParams) ? '?' . http_build_query($queryParams) : '');
 
     $context = stream_context_create([
-        'http' => ['timeout' => 15, 'header' => "User-Agent: Sambandscentralen/3.0\r\nAccept: application/json"]
+        'http' => ['timeout' => 15, 'header' => "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36\r\nAccept: application/json"]
     ]);
 
     $response = @file_get_contents($url, false, $context);
@@ -279,6 +279,138 @@ function calculateStats($events) {
     return $stats;
 }
 
+// Press releases RSS feeds configuration
+define('PRESS_CACHE_TIME', 600); // 10 minutes cache for press releases
+
+function getPressRegions() {
+    return [
+        'blekinge' => 'Blekinge',
+        'dalarna' => 'Dalarna',
+        'gotland' => 'Gotland',
+        'gavleborg' => 'Gävleborg',
+        'halland' => 'Halland',
+        'jamtland' => 'Jämtland',
+        'jonkopings-lan' => 'Jönköpings län',
+        'kalmar-lan' => 'Kalmar län',
+        'kronoberg' => 'Kronoberg',
+        'norrbotten' => 'Norrbotten',
+        'skane' => 'Skåne',
+        'stockholms-lan' => 'Stockholms län',
+        'sodermanland' => 'Södermanland',
+        'uppsala-lan' => 'Uppsala län',
+        'varmland' => 'Värmland',
+        'vasterbotten' => 'Västerbotten',
+        'vasternorrland' => 'Västernorrland',
+        'vastmanland' => 'Västmanland',
+        'vastra-gotaland' => 'Västra Götaland',
+        'orebro-lan' => 'Örebro län',
+        'ostergotland' => 'Östergötland'
+    ];
+}
+
+function getPressCacheFilePath($region = 'all') {
+    return sys_get_temp_dir() . '/police_press_' . md5($region) . '.json';
+}
+
+function fetchPressReleases($regionFilter = null) {
+    $cacheKey = $regionFilter ?: 'all';
+    $cacheFile = getPressCacheFilePath($cacheKey);
+
+    // Check cache
+    if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < PRESS_CACHE_TIME) {
+        $cached = json_decode(file_get_contents($cacheFile), true);
+        if ($cached !== null) return $cached;
+    }
+
+    $regions = getPressRegions();
+    $allItems = [];
+
+    // If specific region requested, only fetch that one
+    $regionsToFetch = $regionFilter ? [$regionFilter => $regions[$regionFilter] ?? $regionFilter] : $regions;
+
+    $context = stream_context_create([
+        'http' => [
+            'timeout' => 10,
+            'header' => "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36\r\nAccept: application/rss+xml, application/xml, text/xml"
+        ],
+        'ssl' => ['verify_peer' => true, 'verify_peer_name' => true]
+    ]);
+
+    foreach ($regionsToFetch as $slug => $name) {
+        $url = "https://polisen.se/aktuellt/rss/{$slug}/press-rss---{$slug}/";
+        $xml = @file_get_contents($url, false, $context);
+
+        if ($xml === false) continue;
+
+        // Suppress warnings for malformed XML
+        libxml_use_internal_errors(true);
+        $feed = @simplexml_load_string($xml);
+        libxml_clear_errors();
+
+        if ($feed === false || !isset($feed->channel->item)) continue;
+
+        foreach ($feed->channel->item as $item) {
+            $pubDate = (string)$item->pubDate;
+            $timestamp = strtotime($pubDate);
+
+            $allItems[] = [
+                'title' => (string)$item->title,
+                'description' => strip_tags((string)$item->description),
+                'link' => (string)$item->link,
+                'pubDate' => $pubDate,
+                'timestamp' => $timestamp,
+                'region' => $name,
+                'regionSlug' => $slug
+            ];
+        }
+    }
+
+    // Sort by date, newest first
+    usort($allItems, fn($a, $b) => $b['timestamp'] - $a['timestamp']);
+
+    // Cache the results
+    file_put_contents($cacheFile, json_encode($allItems));
+
+    return $allItems;
+}
+
+function formatPressDate($timestamp) {
+    $date = new DateTime('@' . $timestamp);
+    $date->setTimezone(new DateTimeZone('Europe/Stockholm'));
+
+    $months = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
+    $days = ['söndag', 'måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag', 'lördag'];
+
+    $now = new DateTime();
+    $diff = $now->diff($date);
+
+    if ($diff->invert == 0) {
+        $relative = 'Kommande';
+    } elseif ($diff->days == 0) {
+        if ($diff->h == 0) {
+            $relative = $diff->i <= 1 ? 'Just nu' : $diff->i . ' min sedan';
+        } else {
+            $relative = $diff->h == 1 ? '1 timme sedan' : $diff->h . ' timmar sedan';
+        }
+    } elseif ($diff->days == 1) {
+        $relative = 'Igår';
+    } elseif ($diff->days < 7) {
+        $relative = $diff->days . ' dagar sedan';
+    } else {
+        $relative = $date->format('d M');
+    }
+
+    return [
+        'day' => $date->format('d'),
+        'month' => $months[(int)$date->format('n') - 1],
+        'weekday' => $days[(int)$date->format('w')],
+        'time' => $date->format('H:i'),
+        'full' => $date->format('Y-m-d H:i'),
+        'relative' => $relative,
+        'iso' => $date->format('c')
+    ];
+}
+
 // AJAX endpoints
 if (isset($_GET['ajax'])) {
     header('Content-Type: application/json');
@@ -345,6 +477,49 @@ if (isset($_GET['ajax'])) {
         } else {
             echo json_encode(['error' => 'Could not fetch details']);
         }
+        exit;
+    }
+
+    if ($_GET['ajax'] === 'press') {
+        $page = max(1, intval($_GET['page'] ?? 1));
+        $regionFilter = !empty($_GET['region']) ? $_GET['region'] : null;
+        $searchFilter = trim($_GET['search'] ?? '');
+
+        $allPress = fetchPressReleases($regionFilter);
+
+        // Apply search filter
+        if ($searchFilter) {
+            $allPress = array_values(array_filter($allPress, function($item) use ($searchFilter) {
+                return mb_stripos($item['title'], $searchFilter) !== false ||
+                       mb_stripos($item['description'], $searchFilter) !== false ||
+                       mb_stripos($item['region'], $searchFilter) !== false;
+            }));
+        }
+
+        $total = count($allPress);
+        $perPage = 20;
+        $totalPages = ceil($total / $perPage);
+        $items = array_slice($allPress, ($page - 1) * $perPage, $perPage);
+
+        $formatted = array_map(function($item) {
+            return [
+                'title' => $item['title'],
+                'description' => $item['description'],
+                'link' => $item['link'],
+                'region' => $item['region'],
+                'regionSlug' => $item['regionSlug'],
+                'date' => formatPressDate($item['timestamp'])
+            ];
+        }, $items);
+
+        echo json_encode([
+            'items' => $formatted,
+            'page' => $page,
+            'totalPages' => $totalPages,
+            'total' => $total,
+            'hasMore' => $page < $totalPages,
+            'regions' => getPressRegions()
+        ]);
         exit;
     }
 }
@@ -772,7 +947,106 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
             body.view-stats .stats-sidebar .stats-card { width: 100%; margin-right: 0; }
         }
 
-        @media print { body::before, .scroll-top, .refresh-btn, .search-bar, .stats-sidebar, .view-toggle, .theme-toggle, .install-prompt { display: none !important; } }
+        /* Press releases section */
+        .press-section { display: none; width: 100%; }
+        .press-section.active { display: block; }
+
+        .press-header { text-align: center; margin-bottom: 24px; }
+        .press-header h2 { font-family: 'Playfair Display', serif; font-size: 28px; margin-bottom: 8px; }
+        .press-header p { color: var(--text-muted); font-size: 14px; }
+
+        .press-filters {
+            display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;
+            background: var(--surface); padding: 12px; border-radius: var(--radius);
+            border: 1px solid var(--border);
+        }
+        .press-search-wrapper { flex: 1; min-width: 200px; position: relative; }
+        .press-search-wrapper::before {
+            content: '🔍'; position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+            font-size: 13px; opacity: 0.6; pointer-events: none;
+        }
+        .press-search {
+            width: 100%; padding: 10px 12px 10px 38px; background: var(--primary);
+            border: 1px solid var(--border); border-radius: var(--radius-sm);
+            color: var(--text); font-size: 13px; font-family: inherit; transition: all 0.2s;
+        }
+        .press-search:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+        .press-search::placeholder { color: var(--text-muted); }
+
+        .press-region-select {
+            padding: 10px 32px 10px 12px; background: var(--primary); border: 1px solid var(--border);
+            border-radius: var(--radius-sm); color: var(--text); font-size: 13px; font-family: inherit;
+            cursor: pointer; appearance: none; min-width: 180px; transition: all 0.2s;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 10px center;
+        }
+        .press-region-select:focus { outline: none; border-color: var(--accent); }
+        .press-region-select option { background: var(--primary); color: var(--text); }
+
+        .press-grid { display: grid; gap: 12px; }
+
+        .press-card {
+            background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border);
+            padding: 18px; transition: all 0.3s; animation: slideIn 0.4s ease-out backwards;
+        }
+        .press-card:hover { border-color: var(--accent-glow); transform: translateY(-2px); box-shadow: 0 8px 24px var(--shadow); }
+
+        .press-card-header { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 12px; }
+        .press-card-date { flex-shrink: 0; text-align: center; min-width: 50px; }
+        .press-card-date .day { font-size: 24px; font-weight: 700; color: var(--accent); line-height: 1; }
+        .press-card-date .month { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+        .press-card-date .time { font-size: 10px; color: var(--text-muted); margin-top: 6px; }
+
+        .press-card-content { flex: 1; min-width: 0; }
+        .press-card-region {
+            display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.3px; background: rgba(59, 130, 246, 0.15);
+            color: #3b82f6; margin-bottom: 8px;
+        }
+        .press-card-title {
+            font-size: 16px; font-weight: 600; color: var(--text); line-height: 1.4;
+            margin-bottom: 8px; text-decoration: none; display: block; transition: color 0.2s;
+        }
+        .press-card-title:hover { color: var(--accent); }
+        .press-card-description {
+            color: var(--text-muted); font-size: 13px; line-height: 1.6;
+            display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+        }
+
+        .press-card-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+        .press-card-relative { font-size: 11px; color: var(--success); }
+        .press-card-link {
+            display: inline-flex; align-items: center; gap: 4px; color: var(--accent);
+            text-decoration: none; font-size: 12px; font-weight: 500; transition: all 0.2s;
+        }
+        .press-card-link:hover { text-decoration: underline; }
+
+        .press-loading { text-align: center; padding: 40px 20px; color: var(--text-muted); }
+        .press-loading .spinner { margin: 0 auto 16px; }
+        .press-loading p { font-size: 14px; }
+
+        .press-empty { text-align: center; padding: 50px 20px; color: var(--text-muted); }
+        .press-empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+        .press-empty h3 { font-size: 18px; color: var(--text); margin-bottom: 8px; }
+
+        .press-load-more { text-align: center; margin-top: 20px; padding: 20px; }
+
+        /* Press view body class */
+        body.view-press .filters-section { display: none; }
+        body.view-press .content-area { display: none; }
+        body.view-press .stats-sidebar { display: none !important; }
+        body.view-press .press-section { display: block; }
+
+        @media (max-width: 768px) {
+            .press-filters { flex-direction: column; }
+            .press-region-select { width: 100%; }
+            .press-card-header { flex-direction: column; gap: 10px; }
+            .press-card-date { display: flex; align-items: center; gap: 12px; text-align: left; }
+            .press-card-date .time { margin-top: 0; }
+            .press-header h2 { font-size: 22px; }
+        }
+
+        @media print { body::before, .scroll-top, .refresh-btn, .search-bar, .stats-sidebar, .view-toggle, .theme-toggle, .install-prompt, .press-section { display: none !important; } }
         @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
         .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
     </style>
@@ -796,6 +1070,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                         <button type="button" data-view="list" class="<?= $currentView === 'list' ? 'active' : '' ?>">📋 <span class="label">Lista</span></button>
                         <button type="button" data-view="map" class="<?= $currentView === 'map' ? 'active' : '' ?>">🗺️ <span class="label">Karta</span></button>
                         <button type="button" data-view="stats" class="<?= $currentView === 'stats' ? 'active' : '' ?>">📊 <span class="label">Statistik</span></button>
+                        <button type="button" data-view="press" class="<?= $currentView === 'press' ? 'active' : '' ?>">📰 <span class="label">Press</span></button>
                     </div>
                 </div>
             </div>
@@ -878,7 +1153,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                                                     $lat = trim($coords[0]);
                                                     $lng = trim($coords[1]);
                                             ?>
-                                                <button type="button" class="show-map-btn" data-lat="<?= $lat ?>" data-lng="<?= $lng ?>" data-location="<?= htmlspecialchars($event['location']['name'] ?? '') ?>">🗺️ Visa karta</button>
+                                                <button type="button" class="show-map-btn" data-lat="<?= $lat ?>" data-lng="<?= $lng ?>" data-location="<?= htmlspecialchars($event['location']['name'] ?? '') ?>">🗺️ Visa på karta</button>
                                             <?php endif; endif; ?>
                                             <?php if (!empty($event['url'])): ?>
                                                 <a href="https://polisen.se<?= htmlspecialchars($event['url']) ?>" target="_blank" rel="noopener noreferrer" class="read-more-link"><span>🔗</span> polisen.se</a>
@@ -930,6 +1205,30 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                 </div>
                 <?php endif; ?>
             </aside>
+
+            <section class="press-section <?= $currentView === 'press' ? 'active' : '' ?>" id="pressSection">
+                <div class="press-header">
+                    <h2>📰 Pressmeddelanden</h2>
+                    <p>Samlade pressmeddelanden från alla polisregioner i Sverige</p>
+                </div>
+                <div class="press-filters">
+                    <div class="press-search-wrapper">
+                        <input type="search" class="press-search" id="pressSearch" placeholder="Sök pressmeddelanden...">
+                    </div>
+                    <select class="press-region-select" id="pressRegionSelect">
+                        <option value="">Alla regioner</option>
+                        <?php foreach (getPressRegions() as $slug => $name): ?>
+                            <option value="<?= htmlspecialchars($slug) ?>"><?= htmlspecialchars($name) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="press-grid" id="pressGrid">
+                    <div class="press-loading"><div class="spinner"></div><p>Laddar pressmeddelanden...</p></div>
+                </div>
+                <div class="press-load-more" id="pressLoadMore" style="display: none;">
+                    <button class="btn" id="pressLoadMoreBtn">Ladda fler</button>
+                </div>
+            </section>
         </div>
 
         <footer><p>Data från <a href="https://polisen.se" target="_blank" rel="noopener">Polisens öppna API</a> • Uppdateras var 5:e minut • <?= date('Y-m-d H:i') ?></p></footer>
@@ -976,8 +1275,9 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
     const eventsGrid = document.getElementById('eventsGrid');
     const mapContainer = document.getElementById('mapContainer');
     const statsSidebar = document.getElementById('statsSidebar');
+    const pressSection = document.getElementById('pressSection');
     const viewInput = document.getElementById('viewInput');
-    let map = null, mapInit = false;
+    let map = null, mapInit = false, pressInit = false;
 
     const setView = (v) => {
         viewBtns.forEach(b => b.classList.toggle('active', b.dataset.view === v));
@@ -986,7 +1286,9 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
         eventsGrid.style.display = v === 'list' ? 'grid' : 'none';
         mapContainer.classList.toggle('active', v === 'map');
         statsSidebar.classList.toggle('active', v === 'stats');
+        pressSection.classList.toggle('active', v === 'press');
         if (v === 'map' && !mapInit) initMap();
+        if (v === 'press' && !pressInit) loadPressReleases();
         history.replaceState(null, '', `?view=${v}${CONFIG.filters.location ? '&location=' + encodeURIComponent(CONFIG.filters.location) : ''}${CONFIG.filters.type ? '&type=' + encodeURIComponent(CONFIG.filters.type) : ''}${CONFIG.filters.search ? '&search=' + encodeURIComponent(CONFIG.filters.search) : ''}`);
     };
     viewBtns.forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
@@ -1065,7 +1367,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                 if (e.gps) {
                     const [lat, lng] = e.gps.split(',').map(s => s.trim());
                     if (lat && lng) {
-                        gpsBtn = `<button type="button" class="show-map-btn" data-lat="${lat}" data-lng="${lng}" data-location="${escHtml(e.location)}">🗺️ Visa karta</button>`;
+                        gpsBtn = `<button type="button" class="show-map-btn" data-lat="${lat}" data-lng="${lng}" data-location="${escHtml(e.location)}">🗺️ Visa på karta</button>`;
                     }
                 }
                 card.innerHTML = `<div class="event-card-inner"><div class="event-date"><div class="day">${e.date.day}</div><div class="month">${e.date.month}</div><div class="time">${e.date.time}</div><div class="relative">${e.date.relative}</div></div><div class="event-content"><div class="event-header"><div class="event-title-group"><a href="?type=${encodeURIComponent(e.type)}&view=${viewInput.value}" class="event-type" style="background:${e.color}20;color:${e.color}">${e.icon} ${escHtml(e.type)}</a><a href="?location=${encodeURIComponent(e.location)}&view=${viewInput.value}" class="event-location-link">${escHtml(e.location)}</a></div></div><p class="event-summary">${escHtml(e.summary)}</p><div class="event-meta">${e.url ? `<button type="button" class="show-details-btn" data-url="${escHtml(e.url)}">📖 Visa detaljer</button>` : ''}${gpsBtn}${e.url ? `<a href="https://polisen.se${escHtml(e.url)}" target="_blank" rel="noopener noreferrer" class="read-more-link"><span>🔗</span> polisen.se</a>` : ''}</div><div class="event-details"></div></div></div>`;
@@ -1077,6 +1379,106 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
     function escHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
 
     new IntersectionObserver((e) => { if (e[0].isIntersecting && eventsGrid.style.display !== 'none') loadMore(); }, { rootMargin: '150px' }).observe(loadingEl);
+
+    // Press Releases
+    const pressGrid = document.getElementById('pressGrid');
+    const pressSearch = document.getElementById('pressSearch');
+    const pressRegionSelect = document.getElementById('pressRegionSelect');
+    const pressLoadMore = document.getElementById('pressLoadMore');
+    const pressLoadMoreBtn = document.getElementById('pressLoadMoreBtn');
+    let pressPage = 1, pressLoading = false, pressHasMore = false;
+
+    async function loadPressReleases(reset = true) {
+        if (pressLoading) return;
+        pressLoading = true;
+
+        if (reset) {
+            pressPage = 1;
+            pressGrid.innerHTML = '<div class="press-loading"><div class="spinner"></div><p>Laddar pressmeddelanden...</p></div>';
+            pressLoadMore.style.display = 'none';
+        } else {
+            pressLoadMoreBtn.disabled = true;
+            pressLoadMoreBtn.textContent = 'Laddar...';
+        }
+
+        const region = pressRegionSelect.value;
+        const search = pressSearch.value.trim();
+
+        try {
+            const res = await fetch(`?ajax=press&page=${pressPage}&region=${encodeURIComponent(region)}&search=${encodeURIComponent(search)}`);
+            const data = await res.json();
+
+            if (reset) {
+                pressGrid.innerHTML = '';
+                pressInit = true;
+            }
+
+            if (data.items && data.items.length > 0) {
+                data.items.forEach((item, i) => {
+                    const card = document.createElement('article');
+                    card.className = 'press-card';
+                    card.style.animationDelay = `${i * 0.03}s`;
+                    card.innerHTML = `
+                        <div class="press-card-header">
+                            <div class="press-card-date">
+                                <div class="day">${item.date.day}</div>
+                                <div class="month">${item.date.month}</div>
+                                <div class="time">${item.date.time}</div>
+                            </div>
+                            <div class="press-card-content">
+                                <span class="press-card-region">📍 ${escHtml(item.region)}</span>
+                                <a href="${escHtml(item.link)}" target="_blank" rel="noopener noreferrer" class="press-card-title">${escHtml(item.title)}</a>
+                                <p class="press-card-description">${escHtml(item.description)}</p>
+                            </div>
+                        </div>
+                        <div class="press-card-footer">
+                            <span class="press-card-relative">${item.date.relative}</span>
+                            <a href="${escHtml(item.link)}" target="_blank" rel="noopener noreferrer" class="press-card-link">🔗 Läs på polisen.se</a>
+                        </div>
+                    `;
+                    pressGrid.appendChild(card);
+                });
+
+                pressHasMore = data.hasMore;
+                pressLoadMore.style.display = pressHasMore ? 'block' : 'none';
+            } else if (reset) {
+                pressGrid.innerHTML = `
+                    <div class="press-empty">
+                        <div class="press-empty-icon">📭</div>
+                        <h3>Inga pressmeddelanden</h3>
+                        <p>Inga pressmeddelanden hittades${search ? ' för "' + escHtml(search) + '"' : ''}${region ? ' i vald region' : ''}.</p>
+                    </div>
+                `;
+            }
+        } catch (err) {
+            console.error('Failed to load press releases:', err);
+            if (reset) {
+                pressGrid.innerHTML = `
+                    <div class="press-empty">
+                        <div class="press-empty-icon">⚠️</div>
+                        <h3>Kunde inte ladda pressmeddelanden</h3>
+                        <p>Försök igen senare.</p>
+                    </div>
+                `;
+            }
+        } finally {
+            pressLoading = false;
+            pressLoadMoreBtn.disabled = false;
+            pressLoadMoreBtn.textContent = 'Ladda fler';
+        }
+    }
+
+    // Press filters
+    let pressSearchTimeout;
+    pressSearch.addEventListener('input', () => {
+        clearTimeout(pressSearchTimeout);
+        pressSearchTimeout = setTimeout(() => loadPressReleases(true), 400);
+    });
+    pressRegionSelect.addEventListener('change', () => loadPressReleases(true));
+    pressLoadMoreBtn.addEventListener('click', () => {
+        pressPage++;
+        loadPressReleases(false);
+    });
 
     // Filter auto-submit
     document.querySelectorAll('.filter-select').forEach(s => s.addEventListener('change', () => s.form.submit()));
