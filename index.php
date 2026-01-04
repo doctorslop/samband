@@ -1,7 +1,7 @@
 <?php
 /**
- * Sambandscentralen - Polisens Händelsenotiser
- * En modern och responsiv app för att visa polisens utryckningar i Sverige
+ * Sambandscentralen
+ * Geten Claude bräker nytt från utryckningens rytt
  * 
  * @version 3.0
  */
