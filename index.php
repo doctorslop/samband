@@ -656,7 +656,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
     <meta property="og:description" content="Aktuella händelsenotiser från Svenska Polisen i realtid">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://<?= $_SERVER['HTTP_HOST'] ?? 'sambandscentralen.se' ?><?= $_SERVER['REQUEST_URI'] ?? '/' ?>">
-    <meta property="og:image" content="https://<?= $_SERVER['HTTP_HOST'] ?? 'sambandscentralen.se' ?>/og-image.php">
+    <meta property="og:image" content="https://<?= $_SERVER['HTTP_HOST'] ?? 'sambandscentralen.se' ?><?= rtrim(dirname($_SERVER['SCRIPT_NAME']), '/') ?>/og-image.php">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:site_name" content="Sambandscentralen">
@@ -664,7 +664,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Sambandscentralen">
     <meta name="twitter:description" content="Aktuella händelsenotiser från Svenska Polisen i realtid">
-    <meta name="twitter:image" content="https://<?= $_SERVER['HTTP_HOST'] ?? 'sambandscentralen.se' ?>/og-image.php">
+    <meta name="twitter:image" content="https://<?= $_SERVER['HTTP_HOST'] ?? 'sambandscentralen.se' ?><?= rtrim(dirname($_SERVER['SCRIPT_NAME']), '/') ?>/og-image.php">
     
     <title>Sambandscentralen</title>
     
@@ -1203,7 +1203,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
     <div class="container">
         <header>
             <div class="header-content">
-                <a href="/" class="logo" id="logoLink">
+                <a href="./" class="logo" id="logoLink">
                     <div class="logo-icon">👮</div>
                     <div class="logo-text">
                         <h1>Sambandscentralen</h1>
