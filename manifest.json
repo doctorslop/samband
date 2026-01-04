@@ -37,7 +37,7 @@
     "screenshots": [],
     "shortcuts": [
         {
-            "name": "Visa karta",
+            "name": "Visa på karta",
             "short_name": "Karta",
             "description": "Öppna kartvy",
             "url": "/?view=map",
@@ -48,6 +48,13 @@
             "short_name": "Statistik",
             "description": "Öppna statistikvy",
             "url": "/?view=stats",
+            "icons": [{ "src": "icons/favicon-32x32.png", "sizes": "32x32" }]
+        },
+        {
+            "name": "Pressmeddelanden",
+            "short_name": "Press",
+            "description": "Polisens pressmeddelanden",
+            "url": "/?view=press",
             "icons": [{ "src": "icons/favicon-32x32.png", "sizes": "32x32" }]
         }
     ],
