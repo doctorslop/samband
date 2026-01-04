@@ -3,18 +3,18 @@
  * Ger offline-stöd och caching för bättre prestanda
  */
 
-const CACHE_NAME = 'sambandscentralen-v3';
-const OFFLINE_URL = '/offline.html';
+const CACHE_NAME = 'sambandscentralen-v4';
+const OFFLINE_URL = './offline.html';
 
 // Resurser att cacha vid installation
 const STATIC_ASSETS = [
-    '/',
-    '/manifest.json',
-    '/icons/favicon.ico',
-    '/icons/favicon-16x16.png',
-    '/icons/favicon-32x32.png',
-    '/icons/apple-touch-icon.png',
-    '/icons/android-chrome-512x512.png',
+    './',
+    './manifest.json',
+    './icons/favicon.ico',
+    './icons/favicon-16x16.png',
+    './icons/favicon-32x32.png',
+    './icons/apple-touch-icon.png',
+    './icons/android-chrome-512x512.png',
     'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap',
     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
@@ -192,11 +192,11 @@ self.addEventListener('push', (event) => {
     
     const options = {
         body: data.body || 'Ny händelse rapporterad',
-        icon: '/icons/android-chrome-512x512.png',
-        badge: '/icons/favicon-32x32.png',
+        icon: './icons/android-chrome-512x512.png',
+        badge: './icons/favicon-32x32.png',
         vibrate: [100, 50, 100],
         data: {
-            url: data.url || '/'
+            url: data.url || './'
         },
         actions: [
             { action: 'open', title: 'Visa händelse' },
@@ -214,8 +214,8 @@ self.addEventListener('notificationclick', (event) => {
     event.notification.close();
     
     if (event.action === 'close') return;
-    
-    const url = event.notification.data?.url || '/';
+
+    const url = event.notification.data?.url || './';
     
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true })
