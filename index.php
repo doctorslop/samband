@@ -744,6 +744,11 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
         }
         .view-toggle button.active { background: var(--accent); color: var(--primary); }
         .view-toggle button:hover:not(.active) { color: var(--text); background: var(--surface-light); }
+        /* On desktop: only show text label for active menu item */
+        @media (min-width: 769px) {
+            .view-toggle button span.label { display: none; }
+            .view-toggle button.active span.label { display: inline; }
+        }
 
         .live-indicator {
             display: flex; align-items: center; gap: 5px; padding: 5px 10px;
@@ -953,17 +958,14 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
         footer a { color: var(--accent); text-decoration: none; }
         footer a:hover { text-decoration: underline; }
 
-        .scroll-top, .refresh-btn {
-            position: fixed; bottom: 20px; width: 40px; height: 40px; border-radius: 50%;
+        .scroll-top {
+            position: fixed; bottom: 20px; right: 20px; width: 40px; height: 40px; border-radius: 50%;
             border: none; cursor: pointer; transition: all 0.3s; z-index: 100;
             display: flex; align-items: center; justify-content: center; font-size: 16px;
+            background: var(--accent); color: var(--primary); opacity: 0; visibility: hidden; box-shadow: 0 4px 12px var(--accent-glow);
         }
-        .scroll-top { right: 20px; background: var(--accent); color: var(--primary); opacity: 0; visibility: hidden; box-shadow: 0 4px 12px var(--accent-glow); }
         .scroll-top.visible { opacity: 1; visibility: visible; }
         .scroll-top:hover { transform: translateY(-3px); }
-        .refresh-btn { left: 20px; background: var(--surface); color: var(--text); border: 1px solid var(--border); }
-        .refresh-btn:hover { background: var(--surface-light); transform: rotate(180deg); }
-        .refresh-btn.loading { animation: spin 1s linear infinite; }
 
         .install-prompt {
             display: none; position: fixed; bottom: 70px; left: 20px; right: 20px; max-width: 360px;
@@ -1005,22 +1007,76 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
             .live-indicator { display: none; }
         }
 
-        /* Stats view: hide search, show full width stats */
+        /* Map view: hide search */
+        body.view-map .filters-section { display: none; }
+
+        /* Stats view: hide search, show full width stats with improved layout */
         body.view-stats .filters-section { display: none; }
-        body.view-stats .stats-sidebar { display: block !important; width: 100%; max-width: 100%; }
-        body.view-stats .stats-sidebar .stats-card { display: inline-block; vertical-align: top; width: calc(25% - 12px); margin-right: 14px; margin-bottom: 14px; }
-        body.view-stats .stats-sidebar .stats-card:nth-child(4n) { margin-right: 0; }
+        body.view-stats .stats-sidebar {
+            display: grid !important;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            width: 100%;
+            max-width: 100%;
+        }
+        body.view-stats .stats-sidebar .stats-card {
+            margin: 0;
+            padding: 24px;
+            min-height: 200px;
+        }
+        body.view-stats .stats-sidebar .stats-card:first-child {
+            grid-column: 1 / -1;
+            background: linear-gradient(135deg, var(--surface) 0%, var(--surface-light) 100%);
+            border: 1px solid var(--accent-glow);
+        }
+        body.view-stats .stats-sidebar .stats-card:first-child h3 {
+            font-size: 18px;
+            margin-bottom: 24px;
+        }
+        body.view-stats .stats-sidebar .stats-card:first-child .stat-number {
+            font-size: 48px;
+        }
+        body.view-stats .stats-sidebar .stats-card:first-child .stat-label {
+            font-size: 14px;
+        }
+        body.view-stats .stats-sidebar .stats-card h3 {
+            font-size: 15px;
+            margin-bottom: 18px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+        body.view-stats .stats-sidebar .stats-card:last-child {
+            grid-column: span 1;
+        }
+        body.view-stats .stats-sidebar .hour-chart {
+            height: 100px;
+            margin-top: 16px;
+        }
+        body.view-stats .stats-sidebar .hour-bar {
+            background: linear-gradient(to top, var(--accent-dark), var(--accent));
+        }
         body.view-stats .content-area { display: none; }
         body.view-stats .main-content { display: block; }
 
         @media (max-width: 1200px) {
-            body.view-stats .stats-sidebar .stats-card { width: calc(50% - 8px); }
-            body.view-stats .stats-sidebar .stats-card:nth-child(4n) { margin-right: 14px; }
-            body.view-stats .stats-sidebar .stats-card:nth-child(2n) { margin-right: 0; }
+            body.view-stats .stats-sidebar {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            body.view-stats .stats-sidebar .stats-card:last-child {
+                grid-column: span 2;
+            }
         }
 
         @media (max-width: 768px) {
-            body.view-stats .stats-sidebar .stats-card { width: 100%; margin-right: 0; }
+            body.view-stats .stats-sidebar {
+                grid-template-columns: 1fr;
+            }
+            body.view-stats .stats-sidebar .stats-card:last-child {
+                grid-column: span 1;
+            }
+            body.view-stats .stats-sidebar .stats-card {
+                min-height: auto;
+            }
         }
 
         /* Press releases section */
@@ -1327,7 +1383,6 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
     </div>
 
     <button class="scroll-top" id="scrollTop" aria-label="Till toppen">↑</button>
-    <button class="refresh-btn" id="refreshBtn" aria-label="Uppdatera">🔄</button>
 
     <div class="install-prompt" id="installPrompt">
         <h4>📱 Installera Sambandscentralen</h4>
@@ -1653,7 +1708,6 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
     const scrollTop = document.getElementById('scrollTop');
     window.addEventListener('scroll', () => scrollTop.classList.toggle('visible', window.scrollY > 300), { passive: true });
     scrollTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
-    document.getElementById('refreshBtn').addEventListener('click', function() { this.classList.add('loading'); location.reload(); });
     setInterval(() => { if (!document.hidden) location.reload(); }, 300000);
 
     // PWA Install
