@@ -1595,7 +1595,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
         if (!btn) return;
 
         const pressUrl = btn.dataset.url;
-        const detailsDiv = btn.closest('.press-card-content').querySelector('.press-card-details');
+        const detailsDiv = btn.closest('.press-card').querySelector('.press-card-details');
         if (!pressUrl || !detailsDiv) return;
 
         // Toggle if already visible
