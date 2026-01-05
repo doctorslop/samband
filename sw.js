@@ -3,7 +3,8 @@
  * Ger offline-stöd och caching för bättre prestanda
  */
 
-const CACHE_NAME = 'sambandscentralen-v3';
+const CACHE_NAME = 'sambandscentralen-v4';
+const ASSET_VERSION = '1.0.0';
 
 // Get the base path from service worker location (supports subdirectory deployment)
 const BASE_PATH = self.location.pathname.replace(/\/sw\.js$/, '');
@@ -13,6 +14,8 @@ const OFFLINE_URL = BASE_PATH + '/offline.html';
 const STATIC_ASSETS = [
     BASE_PATH + '/',
     BASE_PATH + '/manifest.json',
+    BASE_PATH + '/styles.css?v=' + ASSET_VERSION,
+    BASE_PATH + '/app.js?v=' + ASSET_VERSION,
     BASE_PATH + '/icons/favicon.ico',
     BASE_PATH + '/icons/favicon-16x16.png',
     BASE_PATH + '/icons/favicon-32x32.png',
