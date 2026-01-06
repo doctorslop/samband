@@ -301,7 +301,7 @@
 
     // Service Worker registration with relative path
     if ('serviceWorker' in navigator) {
-        const swPath = (window.CONFIG.basePath || '') + '/sw.js';
+        const swPath = (window.CONFIG.basePath || '') + '/js/sw.js';
         navigator.serviceWorker.register(swPath).catch(() => {});
     }
 

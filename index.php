@@ -792,7 +792,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
-    <link rel="stylesheet" href="styles.css?v=<?= ASSET_VERSION ?>">
+    <link rel="stylesheet" href="css/styles.css?v=<?= ASSET_VERSION ?>">
 </head>
 <body class="view-<?= htmlspecialchars($currentView) ?>">
     <div class="container">
@@ -1024,6 +1024,6 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
     };
     window.eventsData = <?= json_encode(is_array($events) && !isset($events['error']) ? array_map(fn($e) => ['name' => $e['name'] ?? '', 'summary' => $e['summary'] ?? '', 'type' => $e['type'] ?? '', 'url' => $e['url'] ?? '', 'location' => $e['location']['name'] ?? '', 'gps' => $e['location']['gps'] ?? null, 'datetime' => $e['datetime'] ?? '', 'icon' => getEventIcon($e['type'] ?? ''), 'color' => getEventColor($e['type'] ?? '')], $events) : []) ?>;
     </script>
-    <script src="app.js?v=<?= ASSET_VERSION ?>" defer></script>
+    <script src="js/app.js?v=<?= ASSET_VERSION ?>" defer></script>
 </body>
 </html>
