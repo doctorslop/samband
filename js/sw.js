@@ -11,16 +11,13 @@ const BASE_PATH = self.location.pathname.replace(/\/js\/sw\.js$/, '');
 const OFFLINE_URL = BASE_PATH + '/offline.html';
 
 // Resurser att cacha vid installation (relative to base path)
+// Note: Favicon is now an inline SVG data URI, no external file needed
 const STATIC_ASSETS = [
     BASE_PATH + '/',
     BASE_PATH + '/manifest.json',
     BASE_PATH + '/css/styles.css?v=' + ASSET_VERSION,
     BASE_PATH + '/js/app.js?v=' + ASSET_VERSION,
-    BASE_PATH + '/icons/favicon.ico',
-    BASE_PATH + '/icons/favicon-16x16.png',
-    BASE_PATH + '/icons/favicon-32x32.png',
-    BASE_PATH + '/icons/apple-touch-icon.png',
-    BASE_PATH + '/icons/android-chrome-512x512.png',
+    BASE_PATH + '/offline.html',
     'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap',
     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
