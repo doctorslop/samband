@@ -1,11 +1,209 @@
 /**
  * Sambandscentralen App
- * Optimized for caching - version 1.0
+ * Version 1.1 - Enhanced user engagement
  */
 
 // App initialization (CONFIG and eventsData must be defined before this script)
 (function() {
     'use strict';
+
+    // ========================================
+    // Watched Regions System
+    // ========================================
+    const WatchedRegions = {
+        STORAGE_KEY: 'sambandscentralen_watched_regions',
+
+        get() {
+            try {
+                return JSON.parse(localStorage.getItem(this.STORAGE_KEY)) || [];
+            } catch { return []; }
+        },
+
+        save(regions) {
+            localStorage.setItem(this.STORAGE_KEY, JSON.stringify(regions));
+            this.updateUI();
+        },
+
+        add(region) {
+            const regions = this.get();
+            if (!regions.includes(region)) {
+                regions.push(region);
+                this.save(regions);
+                return true;
+            }
+            return false;
+        },
+
+        remove(region) {
+            const regions = this.get().filter(r => r !== region);
+            this.save(regions);
+        },
+
+        toggle(region) {
+            if (this.get().includes(region)) {
+                this.remove(region);
+                return false;
+            } else {
+                this.add(region);
+                return true;
+            }
+        },
+
+        isWatching(region) {
+            return this.get().includes(region);
+        },
+
+        updateUI() {
+            const regions = this.get();
+            const countEl = document.getElementById('watchedCount');
+            if (countEl) {
+                countEl.textContent = regions.length;
+                countEl.dataset.count = regions.length;
+            }
+
+            // Update all watch buttons
+            document.querySelectorAll('.watch-region-btn').forEach(btn => {
+                const region = btn.dataset.region;
+                btn.classList.toggle('watching', regions.includes(region));
+            });
+
+            // Update modal list
+            const listEl = document.getElementById('watchedRegionsList');
+            const emptyEl = document.getElementById('watchedEmpty');
+            if (listEl && emptyEl) {
+                if (regions.length === 0) {
+                    listEl.innerHTML = '';
+                    emptyEl.style.display = 'block';
+                } else {
+                    emptyEl.style.display = 'none';
+                    listEl.innerHTML = regions.map(region => `
+                        <div class="watched-region-item">
+                            <span class="watched-region-name">📍 ${escHtml(region)}</span>
+                            <button class="watched-region-filter" data-region="${escHtml(region)}">Filtrera</button>
+                            <button class="watched-region-remove" data-region="${escHtml(region)}">&times;</button>
+                        </div>
+                    `).join('');
+                }
+            }
+        }
+    };
+
+    // ========================================
+    // New Events Checker
+    // ========================================
+    const NewEventsChecker = {
+        lastEventId: null,
+        checkInterval: 60000, // Check every 60 seconds
+        intervalId: null,
+
+        init() {
+            // Store the ID of the first event as reference
+            if (window.eventsData && window.eventsData.length > 0) {
+                this.lastEventId = this.getEventId(window.eventsData[0]);
+            }
+            this.startChecking();
+        },
+
+        getEventId(event) {
+            // Create a unique ID from event properties
+            return `${event.datetime}_${event.location}_${event.type}`;
+        },
+
+        startChecking() {
+            if (this.intervalId) clearInterval(this.intervalId);
+            this.intervalId = setInterval(() => this.check(), this.checkInterval);
+        },
+
+        async check() {
+            if (document.hidden) return; // Don't check when tab is hidden
+
+            try {
+                const res = await fetch(`?ajax=events&page=1&location=&type=&search=`);
+                const data = await res.json();
+
+                if (data.events && data.events.length > 0) {
+                    const newFirstId = this.getEventId(data.events[0]);
+                    if (this.lastEventId && newFirstId !== this.lastEventId) {
+                        // Count how many new events
+                        let newCount = 0;
+                        for (const event of data.events) {
+                            if (this.getEventId(event) === this.lastEventId) break;
+                            newCount++;
+                        }
+                        if (newCount > 0) {
+                            this.showToast(newCount);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to check for new events:', err);
+            }
+        },
+
+        showToast(count) {
+            const toast = document.getElementById('newEventsToast');
+            const message = document.getElementById('toastMessage');
+            if (toast && message) {
+                message.textContent = `${count} ${count === 1 ? 'ny händelse' : 'nya händelser'}`;
+                toast.classList.add('show');
+            }
+        },
+
+        hideToast() {
+            const toast = document.getElementById('newEventsToast');
+            if (toast) toast.classList.remove('show');
+        },
+
+        refresh() {
+            this.hideToast();
+            location.reload();
+        }
+    };
+
+    // ========================================
+    // Share Functionality
+    // ========================================
+    async function shareEvent(title, text, url) {
+        const shareData = { title, text };
+        if (url) shareData.url = url;
+
+        if (navigator.share) {
+            try {
+                await navigator.share(shareData);
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    fallbackShare(title, text, url);
+                }
+            }
+        } else {
+            fallbackShare(title, text, url);
+        }
+    }
+
+    function fallbackShare(title, text, url) {
+        // Fallback: copy to clipboard
+        const shareText = `${title}\n${text}${url ? '\n' + url : ''}`;
+        navigator.clipboard.writeText(shareText).then(() => {
+            showCopiedFeedback();
+        }).catch(() => {
+            // Last resort: show in prompt
+            prompt('Kopiera texten:', shareText);
+        });
+    }
+
+    function showCopiedFeedback() {
+        const feedback = document.createElement('div');
+        feedback.className = 'copy-feedback';
+        feedback.textContent = 'Kopierat till urklipp!';
+        feedback.style.cssText = `
+            position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
+            background: var(--accent); color: var(--primary); padding: 10px 20px;
+            border-radius: 8px; font-size: 13px; font-weight: 600; z-index: 1000;
+            animation: fadeInOut 2s ease-out forwards;
+        `;
+        document.body.appendChild(feedback);
+        setTimeout(() => feedback.remove(), 2000);
+    }
 
     // Views
     const viewBtns = document.querySelectorAll('.view-toggle button');
@@ -102,7 +300,9 @@
                         gpsBtn = `<button type="button" class="show-map-btn" data-lat="${lat}" data-lng="${lng}" data-location="${escHtml(e.location)}">🗺️ Visa på karta</button>`;
                     }
                 }
-                card.innerHTML = `<div class="event-card-inner"><div class="event-date"><div class="day">${e.date.day}</div><div class="month">${e.date.month}</div><div class="time">${e.date.time}</div><div class="relative">${e.date.relative}</div></div><div class="event-content"><div class="event-header"><div class="event-title-group"><a href="?type=${encodeURIComponent(e.type)}&view=${viewInput.value}" class="event-type" style="background:${e.color}20;color:${e.color}">${e.icon} ${escHtml(e.type)}</a><a href="?location=${encodeURIComponent(e.location)}&view=${viewInput.value}" class="event-location-link">${escHtml(e.location)}</a></div></div><p class="event-summary">${escHtml(e.summary)}</p><div class="event-meta">${e.url ? `<button type="button" class="show-details-btn" data-url="${escHtml(e.url)}">📖 Visa detaljer</button>` : ''}${gpsBtn}${e.url ? `<a href="https://polisen.se${escHtml(e.url)}" target="_blank" rel="noopener noreferrer" class="read-more-link"><span>🔗</span> polisen.se</a>` : ''}</div><div class="event-details"></div></div></div>`;
+                const isWatching = WatchedRegions.isWatching(e.location);
+                const shareUrl = e.url ? `https://polisen.se${e.url}` : '';
+                card.innerHTML = `<div class="event-card-inner"><div class="event-date"><div class="day">${e.date.day}</div><div class="month">${e.date.month}</div><div class="time">${e.date.time}</div><div class="relative">${e.date.relative}</div></div><div class="event-content"><div class="event-header"><div class="event-title-group"><a href="?type=${encodeURIComponent(e.type)}&view=${viewInput.value}" class="event-type" style="background:${e.color}20;color:${e.color}">${e.icon} ${escHtml(e.type)}</a><div class="event-location-row"><a href="?location=${encodeURIComponent(e.location)}&view=${viewInput.value}" class="event-location-link">${escHtml(e.location)}</a><button type="button" class="watch-region-btn ${isWatching ? 'watching' : ''}" data-region="${escHtml(e.location)}" title="Bevaka ${escHtml(e.location)}">👁️</button></div></div></div><p class="event-summary">${escHtml(e.summary)}</p><div class="event-meta">${e.url ? `<button type="button" class="show-details-btn" data-url="${escHtml(e.url)}">📖 Visa detaljer</button>` : ''}${gpsBtn}${e.url ? `<a href="https://polisen.se${escHtml(e.url)}" target="_blank" rel="noopener noreferrer" class="read-more-link"><span>🔗</span> polisen.se</a>` : ''}<button type="button" class="share-event-btn" data-title="${escHtml(e.type + ' i ' + e.location)}" data-text="${escHtml(e.summary)}" data-url="${escHtml(shareUrl)}" title="Dela händelse">📤</button></div><div class="event-details"></div></div></div>`;
                 eventsGrid.appendChild(card);
             });
         } catch (err) { console.error(err); } finally { loading = false; loadingEl.style.display = 'none'; }
@@ -286,11 +486,11 @@
     // Filter auto-submit
     document.querySelectorAll('.filter-select').forEach(s => s.addEventListener('change', () => s.form.submit()));
 
-    // Scroll & Refresh
+    // Scroll to top
     const scrollTop = document.getElementById('scrollTop');
     window.addEventListener('scroll', () => scrollTop.classList.toggle('visible', window.scrollY > 300), { passive: true });
     scrollTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
-    setInterval(() => { if (!document.hidden) location.reload(); }, 300000);
+    // Note: Auto-reload replaced with NewEventsChecker toast notification system
 
     // PWA Install
     let deferredPrompt;
@@ -449,6 +649,101 @@
             }
         });
     })();
+
+    // ========================================
+    // Watch Region Event Handlers
+    // ========================================
+    // Watch region button click
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('.watch-region-btn');
+        if (btn) {
+            e.preventDefault();
+            e.stopPropagation();
+            const region = btn.dataset.region;
+            if (region) {
+                WatchedRegions.toggle(region);
+            }
+        }
+    });
+
+    // Watched regions modal
+    const watchedModalOverlay = document.getElementById('watchedModalOverlay');
+    const watchedRegionsBtn = document.getElementById('watchedRegionsBtn');
+    const watchedModalClose = document.getElementById('watchedModalClose');
+
+    if (watchedRegionsBtn && watchedModalOverlay) {
+        watchedRegionsBtn.addEventListener('click', () => {
+            watchedModalOverlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        });
+
+        watchedModalClose?.addEventListener('click', () => {
+            watchedModalOverlay.classList.remove('active');
+            document.body.style.overflow = '';
+        });
+
+        watchedModalOverlay.addEventListener('click', (e) => {
+            if (e.target === watchedModalOverlay) {
+                watchedModalOverlay.classList.remove('active');
+                document.body.style.overflow = '';
+            }
+        });
+    }
+
+    // Watched region modal actions
+    document.addEventListener('click', (e) => {
+        const filterBtn = e.target.closest('.watched-region-filter');
+        if (filterBtn) {
+            const region = filterBtn.dataset.region;
+            if (region) {
+                window.location.href = `?location=${encodeURIComponent(region)}&view=${viewInput.value}`;
+            }
+            return;
+        }
+
+        const removeBtn = e.target.closest('.watched-region-remove');
+        if (removeBtn) {
+            const region = removeBtn.dataset.region;
+            if (region) {
+                WatchedRegions.remove(region);
+            }
+        }
+    });
+
+    // ========================================
+    // Share Event Handler
+    // ========================================
+    document.addEventListener('click', (e) => {
+        const shareBtn = e.target.closest('.share-event-btn');
+        if (shareBtn) {
+            const title = shareBtn.dataset.title || 'Polishändelse';
+            const text = shareBtn.dataset.text || '';
+            const url = shareBtn.dataset.url || '';
+            shareEvent(title, text, url);
+        }
+    });
+
+    // ========================================
+    // New Events Toast Handlers
+    // ========================================
+    const toastRefreshBtn = document.getElementById('toastRefreshBtn');
+    const toastDismissBtn = document.getElementById('toastDismissBtn');
+
+    if (toastRefreshBtn) {
+        toastRefreshBtn.addEventListener('click', () => NewEventsChecker.refresh());
+    }
+    if (toastDismissBtn) {
+        toastDismissBtn.addEventListener('click', () => NewEventsChecker.hideToast());
+    }
+
+    // ========================================
+    // Initialize Systems
+    // ========================================
+    // Initialize watched regions UI
+    WatchedRegions.updateUI();
+
+    // Initialize new events checker
+    NewEventsChecker.init();
 
     // Init view
     if (window.CONFIG.currentView !== 'list') setView(window.CONFIG.currentView);
