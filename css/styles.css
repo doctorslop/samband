@@ -38,8 +38,17 @@ header {
 
 /* Desktop collapsible header states */
 @media (min-width: 769px) {
+    header {
+        padding: 20px 40px 16px;
+    }
+    .logo-icon {
+        width: 40px; height: 40px; min-width: 40px; min-height: 40px;
+        font-size: 20px;
+    }
+    .logo-text h1 { font-size: 20px; }
+
     header.header-compact {
-        padding: 12px 40px 10px;
+        padding: 10px 40px 8px;
     }
     header.header-compact .logo-icon {
         width: 36px; height: 36px; min-width: 36px; min-height: 36px;
