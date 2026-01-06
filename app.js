@@ -79,27 +79,13 @@
         if (markers.getLayers().length) map.fitBounds(markers.getBounds(), { padding: [40, 40] });
     }
 
-    // Skeleton loader HTML generators
-    function createSkeletonCards(count = 3) {
-        return Array(count).fill(`<article class="skeleton-card"><div class="skeleton-card-inner"><div class="skeleton-date"><div class="skeleton-line"></div><div class="skeleton-line"></div><div class="skeleton-line"></div></div><div class="skeleton-content"><div class="skeleton-line skeleton-badge"></div><div class="skeleton-line skeleton-title"></div><div class="skeleton-line skeleton-text"></div><div class="skeleton-line skeleton-text"></div><div class="skeleton-meta"><div class="skeleton-line skeleton-btn"></div><div class="skeleton-line skeleton-btn"></div></div></div></div></article>`).join('');
-    }
-
-    function createPressSkeletonCards(count = 4) {
-        return Array(count).fill(`<article class="skeleton-card press-skeleton"><div class="skeleton-card-inner"><div class="skeleton-date"><div class="skeleton-line"></div><div class="skeleton-line"></div><div class="skeleton-line"></div></div><div class="skeleton-content"><div class="skeleton-line skeleton-badge" style="width:100px"></div><div class="skeleton-line skeleton-title" style="width:85%"></div><div class="skeleton-line skeleton-text"></div><div class="skeleton-line skeleton-text" style="width:90%"></div><div class="skeleton-meta"><div class="skeleton-line skeleton-btn" style="width:110px"></div></div></div></div></article>`).join('');
-    }
-
     // Infinite Scroll
     let page = 1, loading = false, hasMore = window.CONFIG.hasMore;
     const loadingEl = document.getElementById('loadingMore');
 
     async function loadMore() {
         if (loading || !hasMore) return;
-        loading = true; page++;
-        // Show skeleton cards while loading
-        const skeletonContainer = document.createElement('div');
-        skeletonContainer.className = 'skeleton-container';
-        skeletonContainer.innerHTML = createSkeletonCards(3);
-        eventsGrid.appendChild(skeletonContainer);
+        loading = true; loadingEl.style.display = 'flex'; page++;
         try {
             const res = await fetch(`?ajax=events&page=${page}&location=${encodeURIComponent(window.CONFIG.filters.location)}&type=${encodeURIComponent(window.CONFIG.filters.type)}&search=${encodeURIComponent(window.CONFIG.filters.search)}`);
             const data = await res.json();
@@ -119,7 +105,7 @@
                 card.innerHTML = `<div class="event-card-inner"><div class="event-date"><div class="day">${e.date.day}</div><div class="month">${e.date.month}</div><div class="time">${e.date.time}</div><div class="relative">${e.date.relative}</div></div><div class="event-content"><div class="event-header"><div class="event-title-group"><a href="?type=${encodeURIComponent(e.type)}&view=${viewInput.value}" class="event-type" style="background:${e.color}20;color:${e.color}">${e.icon} ${escHtml(e.type)}</a><a href="?location=${encodeURIComponent(e.location)}&view=${viewInput.value}" class="event-location-link">${escHtml(e.location)}</a></div></div><p class="event-summary">${escHtml(e.summary)}</p><div class="event-meta">${e.url ? `<button type="button" class="show-details-btn" data-url="${escHtml(e.url)}">📖 Visa detaljer</button>` : ''}${gpsBtn}${e.url ? `<a href="https://polisen.se${escHtml(e.url)}" target="_blank" rel="noopener noreferrer" class="read-more-link"><span>🔗</span> polisen.se</a>` : ''}</div><div class="event-details"></div></div></div>`;
                 eventsGrid.appendChild(card);
             });
-        } catch (err) { console.error(err); } finally { loading = false; skeletonContainer.remove(); }
+        } catch (err) { console.error(err); } finally { loading = false; loadingEl.style.display = 'none'; }
     }
 
     function escHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
@@ -140,7 +126,7 @@
 
         if (reset) {
             pressPage = 1;
-            pressGrid.innerHTML = createPressSkeletonCards(4);
+            pressGrid.innerHTML = '<div class="press-loading"><div class="spinner"></div><p>Laddar pressmeddelanden...</p></div>';
             pressLoadMore.style.display = 'none';
         } else {
             pressLoadMoreBtn.disabled = true;
