@@ -288,7 +288,62 @@
 
     // Scroll & Refresh
     const scrollTop = document.getElementById('scrollTop');
-    window.addEventListener('scroll', () => scrollTop.classList.toggle('visible', window.scrollY > 300), { passive: true });
+    const header = document.querySelector('header');
+    let lastScrollY = 0;
+    let ticking = false;
+    const compactThreshold = 50;   // Start compacting after 50px scroll
+    const collapseThreshold = 150; // Start hiding after 150px scroll
+    const scrollUpBuffer = 10;     // Scroll up this much before showing header
+
+    function updateHeader() {
+        const currentScrollY = window.scrollY;
+        const scrollingDown = currentScrollY > lastScrollY;
+        const isDesktop = window.innerWidth >= 769;
+
+        // Show scroll-to-top button
+        scrollTop.classList.toggle('visible', currentScrollY > 300);
+
+        // Header behavior only on desktop
+        if (isDesktop) {
+            if (currentScrollY <= 10) {
+                // At top of page - full header
+                header.classList.remove('header-compact', 'header-collapsed');
+            } else if (scrollingDown) {
+                // Scrolling down
+                if (currentScrollY > compactThreshold) {
+                    header.classList.add('header-compact');
+                }
+                if (currentScrollY > collapseThreshold) {
+                    header.classList.add('header-collapsed');
+                    header.classList.remove('header-show');
+                }
+            } else {
+                // Scrolling up - show header
+                if (lastScrollY - currentScrollY > scrollUpBuffer || currentScrollY < collapseThreshold) {
+                    header.classList.remove('header-collapsed');
+                    header.classList.add('header-show');
+                }
+                // Only remove compact when near top
+                if (currentScrollY <= compactThreshold) {
+                    header.classList.remove('header-compact');
+                }
+            }
+        } else {
+            // On mobile, remove desktop scroll classes
+            header.classList.remove('header-compact', 'header-collapsed', 'header-show');
+        }
+
+        lastScrollY = currentScrollY;
+        ticking = false;
+    }
+
+    window.addEventListener('scroll', () => {
+        if (!ticking) {
+            requestAnimationFrame(updateHeader);
+            ticking = true;
+        }
+    }, { passive: true });
+
     scrollTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
     setInterval(() => { if (!document.hidden) location.reload(); }, 300000);
 
