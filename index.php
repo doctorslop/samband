@@ -10,7 +10,7 @@ date_default_timezone_set('Europe/Stockholm');
 define('CACHE_TIME', 300);           // 5 minutes for events
 define('STALE_CACHE_TIME', 600);     // 10 minutes stale-while-revalidate window
 define('EVENTS_PER_PAGE', 40);
-define('ASSET_VERSION', '1.1.0');    // Bump this to bust browser cache
+define('ASSET_VERSION', '1.0.0');    // Bump this to bust browser cache
 
 /**
  * Get cache file path for filters
@@ -844,31 +844,6 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                     <?php endif; ?>
                 </form>
             </div>
-
-            <!-- Quick region filters -->
-            <div class="quick-filters" id="quickFilters">
-                <div class="quick-filters-label">Snabbval:</div>
-                <div class="quick-filters-list" id="quickFiltersList">
-                    <?php
-                    // Get top 6 most active regions from stats
-                    $topRegions = array_slice(array_keys($stats['byLocation'] ?? []), 0, 6);
-                    foreach ($topRegions as $region):
-                    ?>
-                        <a href="?location=<?= urlencode($region) ?>&view=<?= $currentView ?>"
-                           class="quick-filter-btn <?= $locationFilter === $region ? 'active' : '' ?>"
-                           data-region="<?= htmlspecialchars($region) ?>">
-                            <?= htmlspecialchars($region) ?>
-                            <span class="quick-filter-count"><?= $stats['byLocation'][$region] ?? 0 ?></span>
-                        </a>
-                    <?php endforeach; ?>
-                </div>
-                <button type="button" class="watched-regions-btn" id="watchedRegionsBtn" title="Dina bevakade regioner">
-                    <span class="watch-icon">👁️</span>
-                    <span class="watch-label">Mina regioner</span>
-                    <span class="watch-count" id="watchedCount">0</span>
-                </button>
-            </div>
-
             <?php if ($locationFilter || $typeFilter || $searchFilter): ?>
                 <div class="active-filters">
                     <?php if ($searchFilter): ?><span class="filter-tag">"<?= htmlspecialchars($searchFilter) ?>" <a href="?view=<?= $currentView ?>&<?= http_build_query(array_filter(['location' => $locationFilter, 'type' => $typeFilter])) ?>">×</a></span><?php endif; ?>
@@ -877,35 +852,6 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                 </div>
             <?php endif; ?>
         </section>
-
-        <!-- Watched Regions Modal -->
-        <div class="watched-modal-overlay" id="watchedModalOverlay">
-            <div class="watched-modal">
-                <div class="watched-modal-header">
-                    <h3>👁️ Bevakade regioner</h3>
-                    <button class="watched-modal-close" id="watchedModalClose">&times;</button>
-                </div>
-                <div class="watched-modal-body">
-                    <p class="watched-description">Bevaka regioner för att snabbt filtrera händelser. Klicka på <span class="watch-demo-btn">👁️</span> vid en plats för att lägga till den.</p>
-                    <div class="watched-regions-list" id="watchedRegionsList">
-                        <!-- Populated by JS -->
-                    </div>
-                    <div class="watched-empty" id="watchedEmpty">
-                        <div class="watched-empty-icon">📍</div>
-                        <p>Du har inga bevakade regioner än.</p>
-                        <p class="watched-empty-hint">Klicka på 👁️ vid en plats i händelselistan för att börja bevaka.</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- New Events Toast -->
-        <div class="new-events-toast" id="newEventsToast">
-            <span class="toast-icon">🔔</span>
-            <span class="toast-message" id="toastMessage">3 nya händelser</span>
-            <button class="toast-btn" id="toastRefreshBtn">Visa</button>
-            <button class="toast-dismiss" id="toastDismissBtn">&times;</button>
-        </div>
 
         <div class="main-content">
             <main class="content-area" id="main-content">
@@ -936,10 +882,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                                         <div class="event-header">
                                             <div class="event-title-group">
                                                 <a href="?type=<?= urlencode($type) ?>&view=<?= $currentView ?>" class="event-type" style="background: <?= $color ?>20; color: <?= $color ?>"><?= $icon ?> <?= htmlspecialchars($type) ?></a>
-                                                <div class="event-location-row">
-                                                    <a href="?location=<?= urlencode($location) ?>&view=<?= $currentView ?>" class="event-location-link"><?= htmlspecialchars($location) ?></a>
-                                                    <button type="button" class="watch-region-btn" data-region="<?= htmlspecialchars($location) ?>" title="Bevaka <?= htmlspecialchars($location) ?>">👁️</button>
-                                                </div>
+                                                <a href="?location=<?= urlencode($location) ?>&view=<?= $currentView ?>" class="event-location-link"><?= htmlspecialchars($location) ?></a>
                                             </div>
                                         </div>
                                         <p class="event-summary"><?= htmlspecialchars($event['summary'] ?? '') ?></p>
@@ -958,7 +901,6 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                                             <?php if (!empty($event['url'])): ?>
                                                 <a href="https://polisen.se<?= htmlspecialchars($event['url']) ?>" target="_blank" rel="noopener noreferrer" class="read-more-link"><span>🔗</span> polisen.se</a>
                                             <?php endif; ?>
-                                            <button type="button" class="share-event-btn" data-title="<?= htmlspecialchars($type . ' i ' . $location) ?>" data-text="<?= htmlspecialchars($event['summary'] ?? '') ?>" data-url="<?= !empty($event['url']) ? 'https://polisen.se' . htmlspecialchars($event['url']) : '' ?>" title="Dela händelse">📤</button>
                                         </div>
                                         <div class="event-details"></div>
                                     </div>
