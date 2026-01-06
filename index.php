@@ -155,6 +155,11 @@ function getDetailCacheFilePath($eventUrl) {
 function fetchEventDetails($eventUrl) {
     if (empty($eventUrl)) return null;
 
+    // Validate URL format - must be a relative path starting with /
+    if (!preg_match('#^/[a-zA-Z0-9/_\-\.]+$#', $eventUrl)) {
+        return null;
+    }
+
     // Check cache first (cache details for 1 hour)
     $cacheFile = getDetailCacheFilePath($eventUrl);
     if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 3600) {
@@ -781,11 +786,9 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
     <meta name="twitter:image" content="<?= htmlspecialchars($ogCanonicalUrl) ?>og-image.php">
     
     <title>Sambandscentralen</title>
-    
-    <link rel="icon" type="image/x-icon" href="icons/favicon.ico">
-    <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16x16.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32x32.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%23fcd34d' rx='20' width='100' height='100'/><text x='50' y='70' font-size='60' text-anchor='middle'>👮</text></svg>">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%23fcd34d' rx='20' width='100' height='100'/><text x='50' y='70' font-size='60' text-anchor='middle'>👮</text></svg>">
     <link rel="manifest" href="manifest.json">
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -974,7 +977,7 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
             </section>
         </div>
 
-        <footer><p>Data hämtas ifrån <a href="https://polisen.se" target="_blank" rel="noopener">Polisen</a> • Uppdateras var 5:e minut • <?= date('Y-m-d H:i') ?></p></footer>
+        <footer><p>Data hämtas ifrån <a href="https://polisen.se" target="_blank" rel="noopener">Polisen</a> • Uppdateras var 5:e minut • <?= date('Y-m-d H:i') ?> • v<?= ASSET_VERSION ?></p></footer>
     </div>
 
     <button class="scroll-top" id="scrollTop" aria-label="Till toppen">↑</button>
@@ -1013,14 +1016,14 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
     window.CONFIG = {
         perPage: <?= EVENTS_PER_PAGE ?>,
         filters: {
-            location: '<?= addslashes($locationFilter) ?>',
-            type: '<?= addslashes($typeFilter) ?>',
-            search: '<?= addslashes($searchFilter) ?>'
+            location: <?= json_encode($locationFilter) ?>,
+            type: <?= json_encode($typeFilter) ?>,
+            search: <?= json_encode($searchFilter) ?>
         },
         total: <?= $eventCount ?>,
         hasMore: <?= $hasMorePages ? 'true' : 'false' ?>,
-        currentView: '<?= addslashes($currentView) ?>',
-        basePath: '<?= rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/index.php'), '/') ?>'
+        currentView: <?= json_encode($currentView) ?>,
+        basePath: <?= json_encode(rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/index.php'), '/')) ?>
     };
     window.eventsData = <?= json_encode(is_array($events) && !isset($events['error']) ? array_map(fn($e) => ['name' => $e['name'] ?? '', 'summary' => $e['summary'] ?? '', 'type' => $e['type'] ?? '', 'url' => $e['url'] ?? '', 'location' => $e['location']['name'] ?? '', 'gps' => $e['location']['gps'] ?? null, 'datetime' => $e['datetime'] ?? '', 'icon' => getEventIcon($e['type'] ?? ''), 'color' => getEventColor($e['type'] ?? '')], $events) : []) ?>;
     </script>
