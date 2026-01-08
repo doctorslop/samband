@@ -30,6 +30,29 @@
     };
     viewBtns.forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
 
+    // Custom location input toggle
+    const locationSelect = document.getElementById('locationSelect');
+    const customLocationWrapper = document.getElementById('customLocationWrapper');
+    const customLocationInput = document.getElementById('customLocationInput');
+    const customLocationCancel = document.getElementById('customLocationCancel');
+
+    if (locationSelect && customLocationWrapper && customLocationInput && customLocationCancel) {
+        locationSelect.addEventListener('change', function() {
+            if (this.value === '__custom__') {
+                locationSelect.style.display = 'none';
+                customLocationWrapper.style.display = 'flex';
+                customLocationInput.focus();
+            }
+        });
+
+        customLocationCancel.addEventListener('click', function() {
+            customLocationWrapper.style.display = 'none';
+            locationSelect.style.display = '';
+            locationSelect.value = '';
+            customLocationInput.value = '';
+        });
+    }
+
     // Map
     function initMap() {
         if (mapInit) return; mapInit = true;
