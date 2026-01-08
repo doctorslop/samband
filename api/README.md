@@ -5,50 +5,73 @@ Backend-API för att samla och servera polishändelser med historik.
 ## Funktioner
 
 - Samlar händelser från Polisens API var 5:e minut
-- Sparar all data lokalt för historik (1+ år)
+- Sparar all data för evigt (ingen automatisk radering)
+- Daglig automatisk backup
 - Samma dataformat som Polisens API
 - Utökad filtrering (datumintervall, paginering)
 - API-nyckel-autentisering
 - Rate limiting
+- WAL-mode för databas (robust mot krascher)
 
-## Krav
-
-- Python 3.11+
-- pip
-
-## Installation
+## Snabbstart
 
 ```bash
-# Klona repo
-git clone https://github.com/doctorslop/samband-api.git
-cd samband-api
+# Kopiera api/-mappen till VPS
+scp -r api/ user@din-vps:/opt/samband-api/
+
+# SSH till VPS och starta
+ssh user@din-vps
+cd /opt/samband-api
+./start.sh
+```
+
+Startscriptet skapar automatiskt:
+- Virtuell Python-miljö
+- API-nyckel (visas i terminalen)
+- Datakataloger
+
+## Manuell installation
+
+```bash
+cd /opt/samband-api
 
 # Skapa virtuell miljö
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# eller: venv\Scripts\activate  # Windows
+python3 -m venv venv
+source venv/bin/activate
 
 # Installera beroenden
 pip install -r requirements.txt
 
-# Kopiera och konfigurera
+# Konfigurera
 cp .env.example .env
 nano .env  # Ändra API_KEY och ALLOWED_ORIGINS
+
+# Starta
+./start.sh
 ```
 
 ## Konfiguration (.env)
 
 ```env
-# Generera en stark nyckel: python -c "import secrets; print(secrets.token_urlsafe(32))"
+# Generera: python -c "import secrets; print(secrets.token_urlsafe(32))"
 API_KEY=din-hemliga-nyckel
 
-# Tillåtna origins (din frontend)
+# Tillåtna origins
 ALLOWED_ORIGINS=https://sambandscentralen.se
 
-# Övriga inställningar (standardvärden fungerar)
+# Databas och backup
 DATABASE_PATH=./data/events.db
+BACKUP_PATH=./data/backups
+
+# Schemaläggning
 FETCH_INTERVAL_MINUTES=5
+BACKUP_INTERVAL_HOURS=24
+
+# Rate limiting
 RATE_LIMIT_PER_MINUTE=60
+
+# Miljö (development visar /docs)
+ENVIRONMENT=production
 ```
 
 ## Körning
@@ -56,81 +79,64 @@ RATE_LIMIT_PER_MINUTE=60
 ### Utveckling
 
 ```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+./start.sh dev
 ```
 
 ### Produktion
 
 ```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+./start.sh
 ```
 
 ### Med systemd (rekommenderat)
 
-```ini
-# /etc/systemd/system/samband-api.service
-[Unit]
-Description=Samband API
-After=network.target
-
-[Service]
-Type=simple
-User=www-data
-WorkingDirectory=/opt/samband-api
-Environment="PATH=/opt/samband-api/venv/bin"
-ExecStart=/opt/samband-api/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
 ```bash
+sudo cp samband-api.service /etc/systemd/system/
+sudo systemctl daemon-reload
 sudo systemctl enable samband-api
 sudo systemctl start samband-api
+
+# Visa loggar
+sudo journalctl -u samband-api -f
 ```
 
 ## API-endpoints
 
-Alla endpoints kräver `X-API-Key` header.
+Alla endpoints utom `/health` kräver `X-API-Key` header.
+
+### GET /health
+
+Hälsokontroll (ingen auth).
+
+```bash
+curl http://localhost:8000/health
+```
 
 ### GET /api/events
 
-Hämta händelser (samma format som Polisen + metadata).
+Hämta händelser med metadata.
 
 ```bash
-curl -H "X-API-Key: din-nyckel" "https://api.din-domain.se/api/events?location=Stockholm&from=2025-06-01&to=2025-06-30"
+curl -H "X-API-Key: KEY" "http://localhost:8000/api/events?location=Stockholm"
 ```
 
 **Parametrar:**
-- `location` - Filtrera på plats
-- `type` - Filtrera på händelsetyp
-- `date` - Filtrera på datum (YYYY, YYYY-MM, YYYY-MM-DD)
-- `from` - Från datum (YYYY-MM-DD)
-- `to` - Till datum (YYYY-MM-DD)
-- `limit` - Max antal (1-1000, default 500)
-- `offset` - Hoppa över N resultat
-- `sort` - `desc` (nyast först) eller `asc`
-
-**Svar:**
-```json
-{
-  "events": [...],
-  "total": 1234,
-  "limit": 500,
-  "offset": 0,
-  "has_more": true
-}
-```
+- `location` - Plats
+- `type` - Händelsetyp
+- `date` - Datum (YYYY, YYYY-MM, YYYY-MM-DD)
+- `from` - Från datum
+- `to` - Till datum
+- `limit` - Max antal (1-1000)
+- `offset` - Hoppa över N
+- `sort` - `desc` eller `asc`
 
 ### GET /api/events/raw
 
-Samma som ovan men returnerar endast array (exakt som Polisens API).
+Samma som ovan, men returnerar endast array (kompatibelt med Polisens API).
 
 ### GET /api/locations
 
-Lista alla platser med antal händelser.
+Alla platser med antal händelser.
 
 ```json
 [
@@ -141,28 +147,44 @@ Lista alla platser med antal händelser.
 
 ### GET /api/types
 
-Lista alla händelsetyper med antal.
+Alla händelsetyper med antal.
 
 ### GET /api/stats
 
-Statistik, valfritt per plats (`?location=Uppsala`).
+Statistik, valfritt filtrerat på plats.
 
-```json
-{
-  "total": 847,
-  "by_type": {"Trafikolycka": 203, "Stöld": 156},
-  "by_month": {"2025-06": 89, "2025-05": 102},
-  "date_range": {"oldest": "2025-01-01...", "latest": "2025-06-15..."}
-}
+```bash
+curl -H "X-API-Key: KEY" "http://localhost:8000/api/stats?location=Uppsala"
 ```
+
+### GET /api/database
+
+Databasinfo: antal händelser, storlek, senaste backup.
 
 ### POST /api/fetch
 
 Trigga manuell hämtning (max 6/minut).
 
-### GET /health
+### POST /api/backup
 
-Hälsokontroll (ingen auth krävs).
+Trigga manuell backup (max 2/timme).
+
+## Datalagring
+
+```
+data/
+├── events.db          # Huvuddatabas (SQLite, WAL-mode)
+├── events.db-wal      # Write-ahead log
+├── events.db-shm      # Shared memory
+└── backups/
+    ├── events_backup_20260108_030000.db
+    ├── events_backup_20260109_030000.db
+    └── ...
+```
+
+- **Händelser**: Sparas för evigt, ingen automatisk radering
+- **Loggar**: Rensas efter 30 dagar
+- **Backups**: Behålls 30 dagar, sedan automatisk rensning
 
 ## Nginx reverse proxy
 
@@ -184,50 +206,30 @@ server {
 }
 ```
 
-## Anrop från PHP (shared hosting)
+## Felsökning
 
-```php
-function fetchFromSambandAPI($endpoint, $params = []) {
-    $baseUrl = 'https://api.din-domain.se';
-    $apiKey = 'din-hemliga-nyckel';
+### API startar inte
+```bash
+# Kontrollera loggar
+sudo journalctl -u samband-api -n 50
 
-    $url = $baseUrl . $endpoint;
-    if ($params) {
-        $url .= '?' . http_build_query($params);
-    }
-
-    $ctx = stream_context_create([
-        'http' => [
-            'header' => "X-API-Key: $apiKey",
-            'timeout' => 10
-        ]
-    ]);
-
-    $response = @file_get_contents($url, false, $ctx);
-    if ($response === false) {
-        return null; // Fallback till Polisens API
-    }
-
-    return json_decode($response, true);
-}
-
-// Användning
-$events = fetchFromSambandAPI('/api/events', [
-    'location' => 'Uppsala',
-    'from' => '2025-06-01',
-    'to' => '2025-06-30'
-]);
-
-$locations = fetchFromSambandAPI('/api/locations');
+# Kontrollera port
+sudo lsof -i :8000
 ```
 
-## Backup
-
-Databasen ligger i `./data/events.db`. Säkerhetskopiera regelbundet:
-
+### Databasproblem
 ```bash
-# Cron: daglig backup
-0 3 * * * cp /opt/samband-api/data/events.db /backup/events-$(date +\%Y\%m\%d).db
+# Kontrollera integritet
+sqlite3 data/events.db "PRAGMA integrity_check;"
+
+# Återställ från backup
+cp data/backups/events_backup_LATEST.db data/events.db
+```
+
+### Hög minnesanvändning
+```bash
+# Komprimera databas
+sqlite3 data/events.db "VACUUM;"
 ```
 
 ## Licens

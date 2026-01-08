@@ -1,30 +1,37 @@
-import os
+"""
+Configuration module for Samband API.
+All settings can be overridden via environment variables or .env file.
+"""
+
 import secrets
 from functools import lru_cache
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    """Applikationsinställningar med säkra standardvärden."""
+    """Application settings with secure defaults."""
 
-    # API-säkerhet
-    api_key: str = secrets.token_urlsafe(32)  # Generera om ingen finns
+    # API security
+    api_key: str = secrets.token_urlsafe(32)
     allowed_origins: str = ""
 
-    # Databas
+    # Database
     database_path: str = "./data/events.db"
+    backup_path: str = "./data/backups"
 
-    # Polisens API
+    # Police API
     police_api_url: str = "https://polisen.se/api/events"
     police_api_timeout: int = 30
 
-    # Schemaläggning
+    # Scheduling
     fetch_interval_minutes: int = 5
+    backup_interval_hours: int = 24
+    cleanup_interval_hours: int = 24
 
     # Rate limiting
     rate_limit_per_minute: int = 60
 
-    # Miljö
+    # Environment
     environment: str = "production"
 
     class Config:
@@ -33,7 +40,7 @@ class Settings(BaseSettings):
 
     @property
     def allowed_origins_list(self) -> list[str]:
-        """Returnera origins som lista."""
+        """Return origins as list."""
         if not self.allowed_origins:
             return []
         return [origin.strip() for origin in self.allowed_origins.split(",")]
@@ -45,5 +52,5 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    """Cachad settings-instans."""
+    """Cached settings instance."""
     return Settings()

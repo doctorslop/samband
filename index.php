@@ -152,6 +152,45 @@ function fetchLocationsFromVps() {
 }
 
 /**
+ * Check VPS API health status
+ * Returns: ['online' => bool, 'latency_ms' => int|null, 'total_events' => int|null]
+ */
+function checkVpsHealth() {
+    $cacheFile = sys_get_temp_dir() . '/samband_health.json';
+
+    // Check cache (30 seconds)
+    if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 30) {
+        $cached = json_decode(file_get_contents($cacheFile), true);
+        if ($cached) return $cached;
+    }
+
+    $start = microtime(true);
+    $data = fetchFromVpsApi('/health');
+    $latency = round((microtime(true) - $start) * 1000);
+
+    if ($data && isset($data['status']) && $data['status'] === 'ok') {
+        // Get stats for total events count
+        $stats = fetchFromVpsApi('/api/stats');
+        $result = [
+            'online' => true,
+            'latency_ms' => $latency,
+            'total_events' => $stats['total'] ?? null,
+            'checked_at' => date('Y-m-d H:i:s')
+        ];
+    } else {
+        $result = [
+            'online' => false,
+            'latency_ms' => null,
+            'total_events' => null,
+            'checked_at' => date('Y-m-d H:i:s')
+        ];
+    }
+
+    file_put_contents($cacheFile, json_encode($result));
+    return $result;
+}
+
+/**
  * Force fetch from API (bypass cache)
  * Tries VPS API first, falls back to Police API
  */
@@ -857,6 +896,7 @@ $eventCount = is_array($events) && !isset($events['error']) ? count($events) : 0
 $stats = calculateStats($allEvents);
 $initialEvents = is_array($events) ? array_slice($events, 0, EVENTS_PER_PAGE) : [];
 $hasMorePages = $eventCount > EVENTS_PER_PAGE;
+$apiHealth = checkVpsHealth();
 ?>
 <!DOCTYPE html>
 <html lang="sv">
@@ -1092,7 +1132,19 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
             </section>
         </div>
 
-        <footer><p>Data hämtas ifrån <a href="https://polisen.se" target="_blank" rel="noopener">Polisen</a> • Uppdateras var 5:e minut • <?= date('Y-m-d H:i') ?> • v<?= ASSET_VERSION ?></p></footer>
+        <footer>
+            <p>
+                <span class="api-status <?= $apiHealth['online'] ? 'online' : 'offline' ?>">
+                    <?= $apiHealth['online'] ? '🟢' : '🔴' ?> API <?= $apiHealth['online'] ? 'online' : 'offline' ?>
+                </span>
+                <?php if ($apiHealth['online'] && $apiHealth['total_events']): ?>
+                    • <?= number_format($apiHealth['total_events'], 0, ',', ' ') ?> händelser i arkivet
+                <?php endif; ?>
+                • Uppdateras var 5:e minut
+                • <?= date('Y-m-d H:i') ?>
+                • v<?= ASSET_VERSION ?>
+            </p>
+        </footer>
     </div>
 
     <button class="scroll-top" id="scrollTop" aria-label="Till toppen">↑</button>
