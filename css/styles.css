@@ -333,6 +333,9 @@ header {
 footer { margin-top: 40px; padding: 20px 0; border-top: 1px solid var(--border); text-align: center; color: var(--text-muted); font-size: 11px; }
 footer a { color: var(--accent); text-decoration: none; }
 footer a:hover { text-decoration: underline; }
+footer .api-status { font-weight: 500; }
+footer .api-status.online { color: #22c55e; }
+footer .api-status.offline { color: #ef4444; }
 
 .scroll-top {
     position: fixed; bottom: 20px; right: 20px; width: 40px; height: 40px; border-radius: 50%;

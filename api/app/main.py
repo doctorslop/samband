@@ -1,3 +1,8 @@
+"""
+Samband API - Main application module.
+FastAPI-based backend for collecting and serving police events.
+"""
+
 import logging
 from contextlib import asynccontextmanager
 from typing import Annotated
@@ -13,6 +18,9 @@ from slowapi.util import get_remote_address
 
 from app.config import get_settings
 from app.database import (
+    cleanup_old_logs,
+    create_backup,
+    get_database_stats,
     get_event_count,
     get_events,
     get_locations,
@@ -21,7 +29,7 @@ from app.database import (
     init_database,
 )
 from app.fetcher import fetch_and_store_events
-from app.security import get_client_ip, verify_api_key
+from app.security import verify_api_key
 
 # Logging
 logging.basicConfig(
@@ -30,22 +38,41 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Rate limiter
+# Settings
 settings = get_settings()
+
+# Rate limiter
 limiter = Limiter(key_func=get_remote_address)
 
 # Scheduler
 scheduler = AsyncIOScheduler()
 
 
+async def scheduled_backup():
+    """Run scheduled backup."""
+    logger.info("Running scheduled backup...")
+    result = create_backup()
+    if result["success"]:
+        logger.info(f"Backup created: {result['filename']} ({result['size_bytes']} bytes)")
+    else:
+        logger.error(f"Backup failed: {result.get('error')}")
+
+
+async def scheduled_cleanup():
+    """Run scheduled cleanup of old logs."""
+    logger.info("Running scheduled cleanup...")
+    deleted = cleanup_old_logs()
+    logger.info(f"Cleaned up {deleted} old log entries")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup och shutdown logik."""
+    """Application startup and shutdown."""
     # Startup
     logger.info("Starting Samband API...")
     init_database()
 
-    # Schemalägg regelbunden hämtning
+    # Schedule event fetching
     scheduler.add_job(
         fetch_and_store_events,
         trigger=IntervalTrigger(minutes=settings.fetch_interval_minutes),
@@ -53,12 +80,40 @@ async def lifespan(app: FastAPI):
         name="Fetch events from Police API",
         replace_existing=True
     )
-    scheduler.start()
-    logger.info(f"Scheduler started, fetching every {settings.fetch_interval_minutes} minutes")
 
-    # Initial hämtning vid uppstart
+    # Schedule daily backup
+    scheduler.add_job(
+        scheduled_backup,
+        trigger=IntervalTrigger(hours=settings.backup_interval_hours),
+        id="backup",
+        name="Daily database backup",
+        replace_existing=True
+    )
+
+    # Schedule daily cleanup
+    scheduler.add_job(
+        scheduled_cleanup,
+        trigger=IntervalTrigger(hours=settings.cleanup_interval_hours),
+        id="cleanup",
+        name="Daily log cleanup",
+        replace_existing=True
+    )
+
+    scheduler.start()
+    logger.info(f"Scheduler started:")
+    logger.info(f"  - Fetching every {settings.fetch_interval_minutes} minutes")
+    logger.info(f"  - Backup every {settings.backup_interval_hours} hours")
+    logger.info(f"  - Cleanup every {settings.cleanup_interval_hours} hours")
+
+    # Initial fetch on startup
     logger.info("Running initial fetch...")
     await fetch_and_store_events()
+
+    # Create initial backup if none exists
+    db_stats = get_database_stats()
+    if db_stats["last_backup"]["at"] is None:
+        logger.info("No backup found, creating initial backup...")
+        await scheduled_backup()
 
     yield
 
@@ -70,9 +125,11 @@ async def lifespan(app: FastAPI):
 # App
 app = FastAPI(
     title="Samband API",
-    description="API för polishändelser med historik",
+    description="API for police events with historical data",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    docs_url="/docs" if settings.is_development else None,
+    redoc_url="/redoc" if settings.is_development else None,
 )
 
 # Rate limit error handler
@@ -80,7 +137,7 @@ app = FastAPI(
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
     return JSONResponse(
         status_code=429,
-        content={"error": "För många förfrågningar. Försök igen senare."}
+        content={"error": "Too many requests. Try again later."}
     )
 
 app.state.limiter = limiter
@@ -90,37 +147,38 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins_list if settings.allowed_origins_list else ["*"],
     allow_credentials=True,
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["X-API-Key"],
 )
 
 
-# Health check (ingen auth krävs)
+# === PUBLIC ENDPOINTS ===
+
 @app.get("/health")
 async def health_check():
-    """Hälsokontroll för monitoring."""
+    """Health check for monitoring."""
     return {"status": "ok"}
 
 
-# === SKYDDADE ENDPOINTS ===
+# === PROTECTED ENDPOINTS ===
 
 @app.get("/api/events")
 @limiter.limit(f"{settings.rate_limit_per_minute}/minute")
 async def list_events(
     request: Request,
     api_key: Annotated[str, Depends(verify_api_key)],
-    location: Annotated[str | None, Query(description="Filtrera på plats")] = None,
-    type: Annotated[str | None, Query(description="Filtrera på händelsetyp")] = None,
-    date: Annotated[str | None, Query(description="Filtrera på datum (YYYY, YYYY-MM, eller YYYY-MM-DD)")] = None,
-    from_date: Annotated[str | None, Query(alias="from", description="Från datum (YYYY-MM-DD)")] = None,
-    to_date: Annotated[str | None, Query(alias="to", description="Till datum (YYYY-MM-DD)")] = None,
-    limit: Annotated[int, Query(ge=1, le=1000, description="Max antal resultat")] = 500,
-    offset: Annotated[int, Query(ge=0, description="Hoppa över N resultat")] = 0,
-    sort: Annotated[str, Query(description="Sortering: desc (nyast först) eller asc")] = "desc"
+    location: Annotated[str | None, Query(description="Filter by location")] = None,
+    type: Annotated[str | None, Query(description="Filter by event type")] = None,
+    date: Annotated[str | None, Query(description="Filter by date (YYYY, YYYY-MM, or YYYY-MM-DD)")] = None,
+    from_date: Annotated[str | None, Query(alias="from", description="From date (YYYY-MM-DD)")] = None,
+    to_date: Annotated[str | None, Query(alias="to", description="To date (YYYY-MM-DD)")] = None,
+    limit: Annotated[int, Query(ge=1, le=1000, description="Max results")] = 500,
+    offset: Annotated[int, Query(ge=0, description="Skip N results")] = 0,
+    sort: Annotated[str, Query(description="Sort: desc (newest first) or asc")] = "desc"
 ):
     """
-    Hämta händelser med valfria filter.
-    Returnerar data i samma format som Polisens API.
+    Get events with optional filters.
+    Returns data in same format as Police API.
     """
     events = get_events(
         location=location,
@@ -154,9 +212,9 @@ async def list_events(
 async def list_events_raw(
     request: Request,
     api_key: Annotated[str, Depends(verify_api_key)],
-    location: Annotated[str | None, Query(description="Filtrera på plats")] = None,
-    type: Annotated[str | None, Query(description="Filtrera på händelsetyp")] = None,
-    date: Annotated[str | None, Query(description="Filtrera på datum")] = None,
+    location: Annotated[str | None, Query()] = None,
+    type: Annotated[str | None, Query()] = None,
+    date: Annotated[str | None, Query()] = None,
     from_date: Annotated[str | None, Query(alias="from")] = None,
     to_date: Annotated[str | None, Query(alias="to")] = None,
     limit: Annotated[int, Query(ge=1, le=1000)] = 500,
@@ -164,8 +222,8 @@ async def list_events_raw(
     sort: Annotated[str, Query()] = "desc"
 ):
     """
-    Hämta händelser i exakt samma format som Polisens API (endast array).
-    För kompatibilitet med befintlig kod.
+    Get events in exact same format as Police API (array only).
+    For compatibility with existing code.
     """
     return get_events(
         location=location,
@@ -186,8 +244,8 @@ async def list_locations(
     api_key: Annotated[str, Depends(verify_api_key)]
 ):
     """
-    Hämta alla unika platser med antal händelser.
-    Sorterat på antal (flest först).
+    Get all unique locations with event counts.
+    Sorted by count (most first).
     """
     return get_locations()
 
@@ -198,9 +256,7 @@ async def list_types(
     request: Request,
     api_key: Annotated[str, Depends(verify_api_key)]
 ):
-    """
-    Hämta alla unika händelsetyper med antal.
-    """
+    """Get all unique event types with counts."""
     return get_types()
 
 
@@ -209,24 +265,51 @@ async def list_types(
 async def get_statistics(
     request: Request,
     api_key: Annotated[str, Depends(verify_api_key)],
-    location: Annotated[str | None, Query(description="Filtrera statistik på plats")] = None
+    location: Annotated[str | None, Query(description="Filter stats by location")] = None
 ):
     """
-    Hämta statistik, valfritt för en specifik plats.
-    Inkluderar fördelning per typ och månad.
+    Get statistics, optionally for a specific location.
+    Includes breakdown by type and month.
     """
     return get_stats(location=location)
 
 
+@app.get("/api/database")
+@limiter.limit(f"{settings.rate_limit_per_minute}/minute")
+async def database_info(
+    request: Request,
+    api_key: Annotated[str, Depends(verify_api_key)]
+):
+    """
+    Get database statistics and health info.
+    Includes event count, date range, last fetch, last backup.
+    """
+    return get_database_stats()
+
+
 @app.post("/api/fetch")
-@limiter.limit("6/minute")  # Max 6 manuella hämtningar per minut
+@limiter.limit("6/minute")
 async def trigger_fetch(
     request: Request,
     api_key: Annotated[str, Depends(verify_api_key)]
 ):
     """
-    Trigga manuell hämtning från Polisens API.
-    Använd sparsamt - automatisk hämtning sker var 5:e minut.
+    Trigger manual fetch from Police API.
+    Use sparingly - automatic fetch runs every 5 minutes.
     """
     result = await fetch_and_store_events()
+    return result
+
+
+@app.post("/api/backup")
+@limiter.limit("2/hour")
+async def trigger_backup(
+    request: Request,
+    api_key: Annotated[str, Depends(verify_api_key)]
+):
+    """
+    Trigger manual database backup.
+    Use sparingly - automatic backup runs every 24 hours.
+    """
+    result = create_backup()
     return result
