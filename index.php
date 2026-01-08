@@ -716,6 +716,13 @@ if (isset($_GET['ajax'])) {
 
 // Main page
 $locationFilter = trim($_GET['location'] ?? '');
+$customLocation = trim($_GET['customLocation'] ?? '');
+// Use custom location if provided, otherwise use dropdown selection
+if ($customLocation) {
+    $locationFilter = $customLocation;
+} elseif ($locationFilter === '__custom__') {
+    $locationFilter = ''; // Reset if __custom__ was selected but no custom value provided
+}
 $typeFilter = trim($_GET['type'] ?? '');
 $searchFilter = trim($_GET['search'] ?? '');
 $currentView = $_GET['view'] ?? 'list';
@@ -829,12 +836,17 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                     <div class="search-input-wrapper">
                         <input type="search" name="search" class="search-input" placeholder="Sök händelser..." value="<?= htmlspecialchars($searchFilter) ?>" id="searchInput">
                     </div>
-                    <select name="location" class="filter-select" id="locationSelect">
+                    <select name="location" class="filter-select" id="locationSelect" <?= ($locationFilter && !in_array($locationFilter, $locations)) ? 'style="display:none"' : '' ?>>
                         <option value="">Alla platser</option>
                         <?php foreach ($locations as $loc): ?>
                             <option value="<?= htmlspecialchars($loc) ?>" <?= $locationFilter === $loc ? 'selected' : '' ?>><?= htmlspecialchars($loc) ?></option>
                         <?php endforeach; ?>
+                        <option value="__custom__">Annan plats...</option>
                     </select>
+                    <div class="custom-location-wrapper" id="customLocationWrapper" <?= ($locationFilter && !in_array($locationFilter, $locations)) ? '' : 'style="display:none"' ?>>
+                        <input type="text" name="customLocation" class="filter-input" id="customLocationInput" placeholder="Skriv platsnamn..." value="<?= ($locationFilter && !in_array($locationFilter, $locations)) ? htmlspecialchars($locationFilter) : '' ?>">
+                        <button type="button" class="custom-location-cancel" id="customLocationCancel" title="Tillbaka till lista">×</button>
+                    </div>
                     <select name="type" class="filter-select" id="typeSelect">
                         <option value="">Alla typer</option>
                         <?php foreach ($types as $type): ?>
@@ -862,7 +874,15 @@ $hasMorePages = $eventCount > EVENTS_PER_PAGE;
                     <?php if (isset($events['error'])): ?>
                         <div class="empty-state"><div class="empty-state-icon">⚠️</div><h2>Kunde inte hämta data</h2><p><?= htmlspecialchars($events['error']) ?></p></div>
                     <?php elseif (empty($initialEvents)): ?>
-                        <div class="empty-state"><div class="empty-state-icon">📭</div><h2>Inga händelser</h2><p>Ändra filter eller sök efter något annat.</p></div>
+                        <div class="empty-state"><div class="empty-state-icon">📭</div><h2>Inga händelser</h2><p><?php
+                            if ($locationFilter && !in_array($locationFilter, $locations)) {
+                                echo 'Inga händelser hittades för "' . htmlspecialchars($locationFilter) . '". Kontrollera stavningen eller prova ett annat platsnamn.';
+                            } elseif ($locationFilter || $typeFilter || $searchFilter) {
+                                echo 'Inga händelser matchar dina filter. Prova att ändra eller ta bort något filter.';
+                            } else {
+                                echo 'Inga händelser finns för tillfället.';
+                            }
+                        ?></p></div>
                     <?php else: ?>
                         <?php foreach ($initialEvents as $i => $event):
                             $date = formatDate($event['datetime'] ?? date('Y-m-d H:i:s'));

@@ -155,6 +155,23 @@ header {
 .filter-select:focus { outline: none; border-color: var(--accent); }
 .filter-select option { background: var(--primary); color: var(--text); }
 
+.custom-location-wrapper {
+    display: flex; gap: 4px; min-width: 140px;
+}
+.filter-input {
+    flex: 1; padding: 10px 12px; background: var(--primary); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text); font-size: 13px; font-family: inherit;
+    transition: all 0.2s; min-width: 120px;
+}
+.filter-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+.filter-input::placeholder { color: var(--text-muted); }
+.custom-location-cancel {
+    padding: 10px 12px; background: var(--surface-light); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text-muted); font-size: 16px; cursor: pointer;
+    transition: all 0.2s; line-height: 1;
+}
+.custom-location-cancel:hover { background: var(--primary-light); color: var(--text); }
+
 .btn {
     padding: 10px 20px; background: linear-gradient(135deg, var(--accent), var(--accent-dark));
     color: var(--primary); border: none; border-radius: var(--radius-sm);
@@ -353,6 +370,8 @@ footer a:hover { text-decoration: underline; }
     .view-toggle button { padding: 5px 8px; font-size: 12px; }
     .search-form { flex-direction: column; }
     .filter-select { width: 100%; }
+    .custom-location-wrapper { width: 100%; }
+    .filter-input { width: 100%; min-width: 0; }
     .event-card-inner { flex-direction: column; gap: 10px; }
     .event-date { display: flex; align-items: center; gap: 12px; text-align: left; padding: 0; }
     .event-date .day { font-size: 22px; }
