@@ -12,6 +12,11 @@ define('STALE_CACHE_TIME', 600);     // 10 minutes stale-while-revalidate window
 define('EVENTS_PER_PAGE', 40);
 define('ASSET_VERSION', '1.0.0');    // Bump this to bust browser cache
 
+// VPS API Configuration
+define('VPS_API_URL', 'http://193.181.23.219:8000');
+define('VPS_API_KEY', getenv('VPS_API_KEY') ?: 'CHANGE_ME_IN_PRODUCTION');
+define('VPS_API_TIMEOUT', 5);        // Short timeout for fast fallback
+
 /**
  * Get cache file path for filters
  */
@@ -95,9 +100,77 @@ function triggerAsyncRefresh($filters) {
 }
 
 /**
+ * Fetch from VPS API
+ */
+function fetchFromVpsApi($endpoint, $params = []) {
+    $url = VPS_API_URL . $endpoint;
+    if ($params) {
+        $url .= '?' . http_build_query($params);
+    }
+
+    $context = stream_context_create([
+        'http' => [
+            'timeout' => VPS_API_TIMEOUT,
+            'header' => "X-API-Key: " . VPS_API_KEY . "\r\nAccept: application/json",
+            'ignore_errors' => true
+        ]
+    ]);
+
+    $response = @file_get_contents($url, false, $context);
+    if ($response === false) {
+        return null;
+    }
+
+    $data = json_decode($response, true);
+    return $data;
+}
+
+/**
+ * Fetch locations from VPS API (all locations with event counts)
+ */
+function fetchLocationsFromVps() {
+    $cacheFile = sys_get_temp_dir() . '/samband_locations.json';
+
+    // Check cache (1 hour)
+    if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 3600) {
+        $cached = json_decode(file_get_contents($cacheFile), true);
+        if ($cached) return $cached;
+    }
+
+    $data = fetchFromVpsApi('/api/locations');
+    if ($data && is_array($data)) {
+        file_put_contents($cacheFile, json_encode($data));
+        return $data;
+    }
+
+    // Return cached even if stale
+    if (file_exists($cacheFile)) {
+        return json_decode(file_get_contents($cacheFile), true) ?: [];
+    }
+
+    return [];
+}
+
+/**
  * Force fetch from API (bypass cache)
+ * Tries VPS API first, falls back to Police API
  */
 function fetchPoliceEventsForce($filters = []) {
+    // Try VPS API first
+    $vpsParams = [];
+    if (!empty($filters['location'])) $vpsParams['location'] = $filters['location'];
+    if (!empty($filters['type'])) $vpsParams['type'] = $filters['type'];
+    if (!empty($filters['date'])) $vpsParams['date'] = $filters['date'];
+    if (!empty($filters['from'])) $vpsParams['from'] = $filters['from'];
+    if (!empty($filters['to'])) $vpsParams['to'] = $filters['to'];
+
+    $vpsResponse = fetchFromVpsApi('/api/events/raw', $vpsParams);
+    if ($vpsResponse !== null && is_array($vpsResponse) && !isset($vpsResponse['error'])) {
+        if (!isset($vpsResponse['error'])) saveToCache($filters, $vpsResponse);
+        return $vpsResponse;
+    }
+
+    // Fallback to Police API
     $baseUrl = 'https://polisen.se/api/events';
     $queryParams = [];
 
@@ -749,13 +822,35 @@ if ($searchFilter && is_array($events) && !isset($events['error'])) {
     }));
 }
 
-$locations = $types = [];
+// Fetch locations from VPS API (complete list with counts)
+$vpsLocations = fetchLocationsFromVps();
+$locations = [];
+if (!empty($vpsLocations)) {
+    // VPS returns [{"name": "Stockholm", "count": 123}, ...]
+    foreach ($vpsLocations as $loc) {
+        if (isset($loc['name'])) {
+            $locations[] = $loc['name'];
+        }
+    }
+} else {
+    // Fallback: extract from current events
+    if (is_array($allEvents) && !isset($allEvents['error'])) {
+        foreach ($allEvents as $e) {
+            if (isset($e['location']['name']) && !in_array($e['location']['name'], $locations)) {
+                $locations[] = $e['location']['name'];
+            }
+        }
+    }
+}
+sort($locations);
+
+// Extract types from events (these change rarely)
+$types = [];
 if (is_array($allEvents) && !isset($allEvents['error'])) {
     foreach ($allEvents as $e) {
-        if (isset($e['location']['name']) && !in_array($e['location']['name'], $locations)) $locations[] = $e['location']['name'];
         if (isset($e['type']) && !in_array($e['type'], $types)) $types[] = $e['type'];
     }
-    sort($locations); sort($types);
+    sort($types);
 }
 
 $eventCount = is_array($events) && !isset($events['error']) ? count($events) : 0;
