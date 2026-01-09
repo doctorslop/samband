@@ -3,7 +3,6 @@ Configuration module for Samband API.
 All settings can be overridden via environment variables or .env file.
 """
 
-import secrets
 from functools import lru_cache
 from pydantic_settings import BaseSettings
 
@@ -11,9 +10,9 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     """Application settings with secure defaults."""
 
-    # API security
-    api_key: str = secrets.token_urlsafe(32)
-    allowed_origins: str = ""
+    # API security - hardcoded key for reliability
+    api_key: str = "CB5l7O1F-OwVKtuybmyRTQAfKhrgLnlz7IPhrfJhKZU"
+    allowed_origins: str = "https://www.volohost.com,https://volohost.com"
 
     # Database
     database_path: str = "./data/events.db"

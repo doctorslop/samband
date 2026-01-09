@@ -14,7 +14,7 @@ define('ASSET_VERSION', '1.0.0');    // Bump this to bust browser cache
 
 // VPS API Configuration
 define('VPS_API_URL', 'http://193.181.23.219:8000');
-define('VPS_API_KEY', getenv('VPS_API_KEY') ?: 'CHANGE_ME_IN_PRODUCTION');
+define('VPS_API_KEY', 'CB5l7O1F-OwVKtuybmyRTQAfKhrgLnlz7IPhrfJhKZU');
 define('VPS_API_TIMEOUT', 5);        // Short timeout for fast fallback
 
 /**
