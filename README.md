@@ -6,8 +6,8 @@ Sambandscentralen visar polisens händelsenotiser med historik. Applikationen an
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Frontend      │────▶│    VPS API      │────▶│  Polisens API   │
-│  (volohost.com) │     │ (193.181.23.219)│     │  (polisen.se)   │
+│   Frontend      │────▶│    VPS API      │────▶│  Polisens API  │
+│   (example.com) │     │ (123.221.23.219)│     │  (polisen.se)   │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
                                │
                                ▼
