@@ -1,65 +1,51 @@
 # Samband API
 
-Backend-API för att samla och servera polishändelser med historik.
+Backend-API för att samla och servera polishändelser med långtidslagring.
 
 ## Funktioner
 
 - Samlar händelser från Polisens API var 5:e minut
-- Sparar all data för evigt (ingen automatisk radering)
-- Daglig automatisk backup
+- Sparar all data permanent (ingen automatisk radering)
+- Daglig automatisk backup med verifiering
 - Samma dataformat som Polisens API
 - Utökad filtrering (datumintervall, paginering)
 - API-nyckel-autentisering
-- Rate limiting
-- WAL-mode för databas (robust mot krascher)
+- Rate limiting (60 req/min)
+
+## Databassäkerhet
+
+| Skydd | Beskrivning |
+|-------|-------------|
+| **WAL-mode** | Write-Ahead Logging för kraschsäkerhet |
+| **Integritetskontroll** | Körs vid uppstart - vägrar starta om DB är korrupt |
+| **WAL checkpoint** | Automatisk tömning av WAL-fil till huvuddatabasen |
+| **Verifierad backup** | Integritetskontroll + kontroll att antal händelser stämmer |
+| **Auto-vacuum** | Inkrementell komprimering |
 
 ## Snabbstart
 
 ```bash
-# Kopiera api/-mappen till VPS
+# Kopiera till VPS
 scp -r api/ user@din-vps:/opt/samband-api/
 
-# SSH till VPS och starta
+# Starta
 ssh user@din-vps
 cd /opt/samband-api
 ./start.sh
 ```
 
-Startscriptet skapar automatiskt:
-- Virtuell Python-miljö
-- API-nyckel (visas i terminalen)
-- Datakataloger
-
-## Manuell installation
-
-```bash
-cd /opt/samband-api
-
-# Skapa virtuell miljö
-python3 -m venv venv
-source venv/bin/activate
-
-# Installera beroenden
-pip install -r requirements.txt
-
-# Konfigurera
-cp .env.example .env
-nano .env  # Ändra API_KEY och ALLOWED_ORIGINS
-
-# Starta
-./start.sh
-```
+Startscriptet skapar automatiskt virtuell miljö och datakataloger.
 
 ## Konfiguration (.env)
 
 ```env
-# Generera: python -c "import secrets; print(secrets.token_urlsafe(32))"
+# API-nyckel (statisk för stabilitet)
 API_KEY=din-hemliga-nyckel
 
-# Tillåtna origins
-ALLOWED_ORIGINS=https://sambandscentralen.se
+# Tillåtna origins (kommaseparerade)
+ALLOWED_ORIGINS=https://din-frontend.se
 
-# Databas och backup
+# Databas
 DATABASE_PATH=./data/events.db
 BACKUP_PATH=./data/backups
 
@@ -77,19 +63,16 @@ ENVIRONMENT=production
 ## Körning
 
 ### Utveckling
-
 ```bash
 ./start.sh dev
 ```
 
 ### Produktion
-
 ```bash
 ./start.sh
 ```
 
 ### Med systemd (rekommenderat)
-
 ```bash
 sudo cp samband-api.service /etc/systemd/system/
 sudo systemctl daemon-reload
@@ -105,39 +88,34 @@ sudo journalctl -u samband-api -f
 Alla endpoints utom `/health` kräver `X-API-Key` header.
 
 ### GET /health
-
 Hälsokontroll (ingen auth).
-
 ```bash
 curl http://localhost:8000/health
 ```
 
 ### GET /api/events
-
 Hämta händelser med metadata.
-
 ```bash
 curl -H "X-API-Key: KEY" "http://localhost:8000/api/events?location=Stockholm"
 ```
 
 **Parametrar:**
-- `location` - Plats
-- `type` - Händelsetyp
-- `date` - Datum (YYYY, YYYY-MM, YYYY-MM-DD)
-- `from` - Från datum
-- `to` - Till datum
-- `limit` - Max antal (1-1000)
-- `offset` - Hoppa över N
-- `sort` - `desc` eller `asc`
+| Parameter | Beskrivning |
+|-----------|-------------|
+| `location` | Plats (exakt matchning) |
+| `type` | Händelsetyp |
+| `date` | Datum (YYYY, YYYY-MM, YYYY-MM-DD) |
+| `from` | Från datum (YYYY-MM-DD) |
+| `to` | Till datum (YYYY-MM-DD) |
+| `limit` | Max antal (1-1000, default 500) |
+| `offset` | Hoppa över N |
+| `sort` | `desc` (default) eller `asc` |
 
 ### GET /api/events/raw
-
-Samma som ovan, men returnerar endast array (kompatibelt med Polisens API).
+Samma som ovan, returnerar endast array (kompatibelt med Polisens API).
 
 ### GET /api/locations
-
 Alla platser med antal händelser.
-
 ```json
 [
   {"name": "Stockholm", "count": 4521},
@@ -146,27 +124,34 @@ Alla platser med antal händelser.
 ```
 
 ### GET /api/types
-
 Alla händelsetyper med antal.
 
 ### GET /api/stats
-
-Statistik, valfritt filtrerat på plats.
-
+Statistik med datumintervall.
 ```bash
-curl -H "X-API-Key: KEY" "http://localhost:8000/api/stats?location=Uppsala"
+curl -H "X-API-Key: KEY" "http://localhost:8000/api/stats"
+```
+
+Returnerar:
+```json
+{
+  "total": 15234,
+  "by_type": {"Trafikolycka": 2341, ...},
+  "by_month": {"2026-01": 543, ...},
+  "date_range": {
+    "oldest": "2025-06-15T08:23:00",
+    "latest": "2026-01-09T14:05:00"
+  }
+}
 ```
 
 ### GET /api/database
-
-Databasinfo: antal händelser, storlek, senaste backup.
+Databasinfo: händelser, storlek, senaste backup.
 
 ### POST /api/fetch
-
 Trigga manuell hämtning (max 6/minut).
 
 ### POST /api/backup
-
 Trigga manuell backup (max 2/timme).
 
 ## Datalagring
@@ -178,13 +163,21 @@ data/
 ├── events.db-shm      # Shared memory
 └── backups/
     ├── events_backup_20260108_030000.db
-    ├── events_backup_20260109_030000.db
     └── ...
 ```
 
-- **Händelser**: Sparas för evigt, ingen automatisk radering
+- **Händelser**: Sparas permanent
 - **Loggar**: Rensas efter 30 dagar
-- **Backups**: Behålls 30 dagar, sedan automatisk rensning
+- **Backups**: Behålls 30 dagar, verifieras vid skapande
+
+## Backup-verifiering
+
+Vid varje backup:
+1. WAL checkpoint körs först (all data till huvudfil)
+2. Backup skapas med SQLite backup API
+3. Integritetskontroll på backup-filen
+4. Jämförelse av antal händelser (källa vs backup)
+5. Om något misslyckas: backup raderas, fel loggas
 
 ## Nginx reverse proxy
 
@@ -210,10 +203,7 @@ server {
 
 ### API startar inte
 ```bash
-# Kontrollera loggar
 sudo journalctl -u samband-api -n 50
-
-# Kontrollera port
 sudo lsof -i :8000
 ```
 
@@ -226,10 +216,9 @@ sqlite3 data/events.db "PRAGMA integrity_check;"
 cp data/backups/events_backup_LATEST.db data/events.db
 ```
 
-### Hög minnesanvändning
+### Manuell WAL checkpoint
 ```bash
-# Komprimera databas
-sqlite3 data/events.db "VACUUM;"
+sqlite3 data/events.db "PRAGMA wal_checkpoint(TRUNCATE);"
 ```
 
 ## Licens

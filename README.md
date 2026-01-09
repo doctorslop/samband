@@ -1,103 +1,125 @@
-## Sambandscentralen 
+# Sambandscentralen
 
-Sambandscentralen visar polisens händelsenotiser i realtid. "Applikationen" hämtar data från Polisens öppna API och presenterar information om utryckningar och händelser över hela Sverige.
+Sambandscentralen visar polisens händelsenotiser med historik. Applikationen använder en egen VPS-backend för att lagra händelser långsiktigt och presenterar information om utryckningar över hela Sverige.
+
+## Arkitektur
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   Frontend      │────▶│    VPS API      │────▶│  Polisens API   │
+│  (volohost.com) │     │ (193.181.23.219)│     │  (polisen.se)   │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+                               │
+                               ▼
+                        ┌─────────────────┐
+                        │    SQLite DB    │
+                        │  (historik)     │
+                        └─────────────────┘
+```
+
+- **Frontend**: PHP på delad hosting, anropar VPS API
+- **VPS API**: Python/FastAPI, samlar och lagrar händelser
+- **Fallback**: Om VPS är nere hämtas direkt från Polisens API
 
 ## Funktioner
 
 ### 📋 Lista-vy
-- Visar händelser som kort med datum, tid, typ och sammanfattning
-- Infinite scroll för att ladda fler händelser automatiskt
+- Händelser som kort med datum, tid, typ och sammanfattning
+- Infinite scroll för automatisk laddning
 - Animerade kort med hover-effekter
 
 ### 🗺️ Karta-vy
 - Interaktiv karta baserad på Leaflet.js
-- Händelser visas som färgkodade markörer
+- Färgkodade markörer per händelsetyp
 - Popup-rutor med händelsedetaljer
-- Stöd för ljust/mörkt karttema
+- Ljust/mörkt karttema
 
 ### 📊 Statistik-vy
-- Översikt över händelser senaste 24h och 7 dagar
+- Översikt senaste 24h och 7 dagar
 - Vanligaste händelsetyper med stapeldiagram
-- Händelser per plats
-- Timmesfördelning
+- Händelser per plats och timmesfördelning
 
 ### 🔍 Sökning & Filtrering
-- Fritextsökning i händelsernas titel, sammanfattning och plats
+- Fritextsökning i titel, sammanfattning och plats
 - Filtrera på plats (län/kommun)
 - Filtrera på händelsetyp
-- Tangentbordsgenväg: `Ctrl/Cmd + K` för snabbsökning
+- Datumfiltrering med historik
+- Snabbsökning: `Ctrl/Cmd + K`
 
-### 📱 PWA-stöd (Progressive Web App)
-- Kan installeras på hemskärmen
+### 📦 Historik
+- Alla händelser sparas på VPS (1+ år)
+- Bläddra bakåt i tiden via datumväljare
+- Footern visar antal händelser i arkivet
+
+### 📱 PWA-stöd
+- Installation på hemskärmen
 - Offline-stöd via Service Worker
-- Caching-strategier för snabbare laddning
+- Caching för snabbare laddning
 
 ## Teknisk översikt
 
-### Backend
-- **PHP 3.0** - Serverhämtning och databehandling
-- **Caching** - 5 minuters cache för API-anrop
-- **AJAX-endpoints** - Stöd för paginering och statistik
+### Frontend (index.php)
+- **PHP 8.x** - Serverhämtning och databehandling
+- **Stale-while-revalidate** - Visar cache, uppdaterar i bakgrunden
+- **VPS API-integration** - Med 5s timeout och fallback
+- **HTML5 + CSS3 + Vanilla JS**
+- **Leaflet.js 1.9.4** - Kartfunktionalitet
 
-### Frontend
-- **HTML5 + CSS3 + Vanilla JavaScript**
-- **Google Fonts** - DM Sans (brödtext), Playfair Display (rubriker)
-- **Leaflet.js 1.9.4** - Interaktiv kartfunktionalitet
-- **CartoDB tiles** - Kartbilder för ljust/mörkt tema
+### Backend (api/)
+- **Python 3.11+ / FastAPI**
+- **SQLite med WAL-mode** - Kraschsäker lagring
+- **Schemalagd hämtning** - Var 5:e minut
+- **Daglig backup** - Med integritetskontroll
+- **API-nyckel-auth** - Skyddar endpoints
 
-### API-integration
-Applikationen använder Polisens öppna API för att hämta händelsedata.
-
-**Bas-URL:** `https://polisen.se/api/events`
-
-**Filtreringsparametrar:**
-| Parameter | Beskrivning | Exempel |
-|-----------|-------------|---------|
-| `locationname` | Filtrera på plats (län/kommun) | `?locationname=Stockholm` |
-| `type` | Filtrera på händelsetyp | `?type=Misshandel` |
-| `DateTime` | Filtrera på datum/tid | `?DateTime=2026-01-03` |
-
-**Exempel på API-anrop:**
-```
-# Alla händelser
-https://polisen.se/api/events
-
-# Händelser i Stockholm
-https://polisen.se/api/events?locationname=Stockholm
-
-# Händelser av typ "Trafikolycka" i Göteborg
-https://polisen.se/api/events?locationname=Göteborg&type=Trafikolycka
-
-# Händelser från ett specifikt datum
-https://polisen.se/api/events?DateTime=2026-01-03
-```
+Se [api/README.md](api/README.md) för backend-dokumentation.
 
 ## Installation
 
-1. Placera filerna på en webbserver med PHP-stöd
-2. Säkerställ att webbservern har tillgång till `https://polisen.se`
-3. Besök applikationen via webbläsaren
+### Frontend (delad hosting)
+
+1. Ladda upp alla filer utom `api/` till webbhotell
+2. Konfigurera VPS-anslutning i `index.php`:
+   ```php
+   define('VPS_API_URL', 'http://din-vps-ip:8000');
+   define('VPS_API_KEY', 'din-api-nyckel');
+   ```
+
+### Backend (VPS)
+
+Se [api/README.md](api/README.md) för fullständig guide.
+
+```bash
+scp -r api/ user@din-vps:/opt/samband-api/
+ssh user@din-vps
+cd /opt/samband-api && ./start.sh
+```
 
 ## Filer
 
-| Fil | Beskrivning |
-|-----|-------------|
-| `index.php` | Huvudapplikation med PHP-backend, HTML, CSS och JavaScript |
-| `sw.js` | Service Worker för offline-stöd och caching |
-| `manifest.json` | PWA-manifest för installation |
-| `offline.html` | Fallback-sida vid offline |
-| `icons/` | App-ikoner för olika plattformar |
+| Fil/Katalog | Beskrivning |
+|-------------|-------------|
+| `index.php` | Huvudapplikation med frontend-logik |
+| `css/styles.css` | Stilmallar |
+| `js/app.js` | JavaScript-funktionalitet |
+| `sw.js` | Service Worker för offline/caching |
+| `manifest.json` | PWA-manifest |
+| `offline.html` | Fallback vid offline |
+| `icons/` | App-ikoner |
+| `api/` | VPS backend (separat deploy) |
 
-## Automatisk uppdatering
+## Automatik
 
-Applikationen uppdateras automatiskt var 5:e minut för att visa nya händelser.
+- **Uppdatering**: Var 5:e minut
+- **Backup**: Dagligen kl 03:00
+- **Logrensning**: Var 24:e timme (behåller 30 dagar)
 
 ## Responsiv design
 
-- **Desktop** (>1024px) - Full layout med statistik-sidebar
-- **Tablet** (768-1024px) - Anpassad layout utan sidebar
+- **Desktop** (>1024px) - Full layout med sidebar
+- **Tablet** (768-1024px) - Anpassad utan sidebar
 - **Mobil** (<768px) - Kolumnlayout, komprimerade kort
 
 ## Licens
 
-Data tillhandahålls av Polismyndigheten via deras öppna API. Se [polisen.se](https://polisen.se) för mer information.
+Data från Polismyndigheten via öppet API. Se [polisen.se](https://polisen.se).
