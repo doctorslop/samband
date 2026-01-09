@@ -14,7 +14,7 @@ define('ASSET_VERSION', '1.0.0');    // Bump this to bust browser cache
 
 // VPS API Configuration
 define('VPS_API_URL', 'http://193.181.23.219:8000');
-define('VPS_API_KEY', getenv('VPS_API_KEY') ?: 'CHANGE_ME_IN_PRODUCTION');
+define('VPS_API_KEY', 'CB5l7O1F-OwVKtuybmyRTQAfKhrgLnlz7IPhrfJhKZU');
 define('VPS_API_TIMEOUT', 5);        // Short timeout for fast fallback
 
 /**
@@ -169,12 +169,14 @@ function checkVpsHealth() {
     $latency = round((microtime(true) - $start) * 1000);
 
     if ($data && isset($data['status']) && $data['status'] === 'ok') {
-        // Get stats for total events count
+        // Get stats for total events count and date range
         $stats = fetchFromVpsApi('/api/stats');
         $result = [
             'online' => true,
             'latency_ms' => $latency,
             'total_events' => $stats['total'] ?? null,
+            'oldest_date' => $stats['date_range']['oldest'] ?? null,
+            'newest_date' => $stats['date_range']['latest'] ?? null,
             'checked_at' => date('Y-m-d H:i:s')
         ];
     } else {
@@ -182,6 +184,8 @@ function checkVpsHealth() {
             'online' => false,
             'latency_ms' => null,
             'total_events' => null,
+            'oldest_date' => null,
+            'newest_date' => null,
             'checked_at' => date('Y-m-d H:i:s')
         ];
     }
@@ -1138,10 +1142,12 @@ $apiHealth = checkVpsHealth();
                     <?= $apiHealth['online'] ? '🟢' : '🔴' ?> API <?= $apiHealth['online'] ? 'online' : 'offline' ?>
                 </span>
                 <?php if ($apiHealth['online'] && $apiHealth['total_events']): ?>
-                    • <?= number_format($apiHealth['total_events'], 0, ',', ' ') ?> händelser i arkivet
+                    • <strong><?= number_format($apiHealth['total_events'], 0, ',', ' ') ?></strong> händelser i arkivet
+                    <?php if ($apiHealth['oldest_date']): ?>
+                        (sedan <?= date('Y-m-d', strtotime($apiHealth['oldest_date'])) ?>)
+                    <?php endif; ?>
                 <?php endif; ?>
                 • Uppdateras var 5:e minut
-                • <?= date('Y-m-d H:i') ?>
                 • v<?= ASSET_VERSION ?>
             </p>
         </footer>

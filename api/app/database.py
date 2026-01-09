@@ -35,6 +35,7 @@ def init_database() -> None:
     """
     Initialize database with schema.
     Uses WAL mode for better concurrency and crash resistance.
+    Runs integrity check on startup.
     """
     db_path = get_db_path()
 
@@ -44,6 +45,13 @@ def init_database() -> None:
         conn.execute("PRAGMA synchronous=NORMAL")
         conn.execute("PRAGMA cache_size=-64000")  # 64MB cache
         conn.execute("PRAGMA temp_store=MEMORY")
+        conn.execute("PRAGMA foreign_keys=ON")
+        conn.execute("PRAGMA auto_vacuum=INCREMENTAL")
+
+        # Run integrity check
+        result = conn.execute("PRAGMA integrity_check").fetchone()
+        if result[0] != "ok":
+            raise RuntimeError(f"Database integrity check failed: {result[0]}")
 
         conn.executescript("""
             -- Events table - stores raw data from Police API forever
@@ -89,6 +97,38 @@ def init_database() -> None:
             );
         """)
         conn.commit()
+
+
+def checkpoint_wal() -> dict[str, Any]:
+    """
+    Checkpoint WAL file to main database.
+    Prevents WAL file from growing too large.
+    Returns checkpoint stats.
+    """
+    db_path = get_db_path()
+    with sqlite3.connect(db_path) as conn:
+        # TRUNCATE mode: checkpoint and truncate WAL file
+        result = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+        return {
+            "blocked": result[0],  # 0 = success, 1 = blocked
+            "pages_written": result[1],
+            "pages_remaining": result[2]
+        }
+
+
+def verify_database_integrity() -> dict[str, Any]:
+    """
+    Run full integrity check on database.
+    Returns status and any errors found.
+    """
+    db_path = get_db_path()
+    with sqlite3.connect(db_path) as conn:
+        result = conn.execute("PRAGMA integrity_check").fetchall()
+        errors = [row[0] for row in result if row[0] != "ok"]
+        return {
+            "ok": len(errors) == 0,
+            "errors": errors if errors else None
+        }
 
 
 @contextmanager
@@ -164,11 +204,15 @@ def cleanup_old_logs() -> int:
 
 def create_backup() -> dict[str, Any]:
     """
-    Create a backup of the database.
-    Returns backup info including filename and size.
+    Create a verified backup of the database.
+    Uses SQLite backup API for safe backup while database is in use.
+    Verifies backup integrity after creation.
     """
     db_path = get_db_path()
     backup_dir = get_backup_dir()
+
+    # Run WAL checkpoint before backup to ensure all data is in main DB
+    checkpoint_wal()
 
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     backup_filename = f"events_backup_{timestamp}.db"
@@ -182,7 +226,25 @@ def create_backup() -> dict[str, Any]:
 
         size_bytes = backup_path.stat().st_size
 
-        # Log backup
+        # Verify backup integrity
+        with sqlite3.connect(backup_path) as verify_conn:
+            result = verify_conn.execute("PRAGMA integrity_check").fetchone()
+            if result[0] != "ok":
+                # Delete corrupt backup
+                backup_path.unlink()
+                raise RuntimeError(f"Backup verification failed: {result[0]}")
+
+            # Verify event count matches
+            src_count = None
+            with sqlite3.connect(db_path) as src_conn:
+                src_count = src_conn.execute("SELECT COUNT(*) FROM events").fetchone()[0]
+            backup_count = verify_conn.execute("SELECT COUNT(*) FROM events").fetchone()[0]
+
+            if src_count != backup_count:
+                backup_path.unlink()
+                raise RuntimeError(f"Backup event count mismatch: {backup_count} vs {src_count}")
+
+        # Log successful backup
         with get_connection() as conn:
             conn.execute("""
                 INSERT INTO backup_log (backup_at, filename, size_bytes, success, error_message)
@@ -198,10 +260,16 @@ def create_backup() -> dict[str, Any]:
             "filename": backup_filename,
             "path": str(backup_path),
             "size_bytes": size_bytes,
+            "events_count": backup_count,
+            "verified": True,
             "created_at": datetime.utcnow().isoformat()
         }
 
     except Exception as e:
+        # Clean up failed backup file if it exists
+        if backup_path.exists():
+            backup_path.unlink()
+
         # Log failed backup
         with get_connection() as conn:
             conn.execute("""
