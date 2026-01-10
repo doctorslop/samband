@@ -1,271 +1,449 @@
 <?php
 /**
  * Sambandscentralen
- * Geten Claude bräker nytt från utryckningens rytt
+ * Polisens händelsenotiser - Self-contained with local SQLite storage
  *
- * @version 4.0 - Performance optimized
+ * @version 5.0 - Integrated API (no external VPS required)
  */
 
 date_default_timezone_set('Europe/Stockholm');
-define('CACHE_TIME', 300);           // 5 minutes for events
-define('STALE_CACHE_TIME', 600);     // 10 minutes stale-while-revalidate window
+
+// Configuration
+define('CACHE_TIME', 600);           // 10 minutes for events
+define('STALE_CACHE_TIME', 1200);    // 20 minutes stale-while-revalidate window
 define('EVENTS_PER_PAGE', 40);
-define('ASSET_VERSION', '1.0.0');    // Bump this to bust browser cache
+define('ASSET_VERSION', '5.0.0');    // Bump this to bust browser cache
+define('USER_AGENT', 'FreshRSS/1.28.0 (Linux; https://freshrss.org)');
+define('POLICE_API_URL', 'https://polisen.se/api/events');
+define('POLICE_API_TIMEOUT', 30);
 
-// VPS API Configuration
-define('VPS_API_URL', 'http://193.181.23.219:8000');
-define('VPS_API_KEY', 'CB5l7O1F-OwVKtuybmyRTQAfKhrgLnlz7IPhrfJhKZU');
-define('VPS_API_TIMEOUT', 5);        // Short timeout for fast fallback
+// Database configuration - store in a data directory
+define('DATA_DIR', __DIR__ . '/data');
+define('DB_PATH', DATA_DIR . '/events.db');
+define('BACKUP_DIR', DATA_DIR . '/backups');
+
+// ============================================================================
+// DATABASE FUNCTIONS
+// ============================================================================
 
 /**
- * Get cache file path for filters
+ * Get PDO connection to SQLite database
  */
-function getCacheFilePath($filters) {
-    $cacheKey = md5(serialize($filters));
-    return sys_get_temp_dir() . '/police_events_' . $cacheKey . '.json';
+function getDatabase(): PDO {
+    static $pdo = null;
+
+    if ($pdo === null) {
+        // Ensure data directory exists
+        if (!is_dir(DATA_DIR)) {
+            mkdir(DATA_DIR, 0755, true);
+        }
+
+        $isNew = !file_exists(DB_PATH);
+
+        $pdo = new PDO('sqlite:' . DB_PATH, null, null, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_TIMEOUT => 30
+        ]);
+
+        // Enable WAL mode for better performance and durability
+        $pdo->exec('PRAGMA journal_mode=WAL');
+        $pdo->exec('PRAGMA synchronous=NORMAL');
+        $pdo->exec('PRAGMA cache_size=-64000'); // 64MB cache
+        $pdo->exec('PRAGMA temp_store=MEMORY');
+        $pdo->exec('PRAGMA foreign_keys=ON');
+
+        if ($isNew) {
+            initDatabase($pdo);
+        }
+    }
+
+    return $pdo;
 }
 
 /**
- * Get cache metadata file path (stores last refresh time)
+ * Initialize database schema
  */
-function getCacheMetaPath($filters) {
-    $cacheKey = md5(serialize($filters));
-    return sys_get_temp_dir() . '/police_events_meta_' . $cacheKey . '.json';
+function initDatabase(PDO $pdo): void {
+    $pdo->exec("
+        -- Events table - stores raw data from Police API forever
+        CREATE TABLE IF NOT EXISTS events (
+            id INTEGER PRIMARY KEY,
+            datetime TEXT NOT NULL,
+            name TEXT NOT NULL,
+            summary TEXT,
+            url TEXT,
+            type TEXT NOT NULL,
+            location_name TEXT NOT NULL,
+            location_gps TEXT,
+            raw_data TEXT NOT NULL,
+            fetched_at TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Indexes for fast queries
+        CREATE INDEX IF NOT EXISTS idx_events_datetime ON events(datetime DESC);
+        CREATE INDEX IF NOT EXISTS idx_events_location ON events(location_name);
+        CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);
+        CREATE INDEX IF NOT EXISTS idx_events_location_datetime ON events(location_name, datetime DESC);
+        CREATE INDEX IF NOT EXISTS idx_events_type_datetime ON events(type, datetime DESC);
+
+        -- Fetch log - keeps track of API calls
+        CREATE TABLE IF NOT EXISTS fetch_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            fetched_at TEXT NOT NULL,
+            events_fetched INTEGER NOT NULL,
+            events_new INTEGER NOT NULL,
+            success INTEGER NOT NULL,
+            error_message TEXT
+        );
+
+        -- Backup log
+        CREATE TABLE IF NOT EXISTS backup_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            backup_at TEXT NOT NULL,
+            filename TEXT NOT NULL,
+            size_bytes INTEGER,
+            success INTEGER NOT NULL,
+            error_message TEXT
+        );
+    ");
 }
 
 /**
- * Get data from cache with stale-while-revalidate support
- * Returns: ['data' => ..., 'stale' => bool, 'age' => seconds]
+ * Insert event if it doesn't exist
+ * Returns true if new event was inserted
  */
-function getFromCacheWithMeta($filters) {
-    $cacheFile = getCacheFilePath($filters);
-    if (!file_exists($cacheFile)) {
-        return null;
+function insertEvent(PDO $pdo, array $event): bool {
+    $stmt = $pdo->prepare("
+        INSERT OR IGNORE INTO events
+        (id, datetime, name, summary, url, type, location_name, location_gps, raw_data, fetched_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ");
+
+    $stmt->execute([
+        $event['id'],
+        $event['datetime'],
+        $event['name'],
+        $event['summary'] ?? '',
+        $event['url'] ?? '',
+        $event['type'],
+        $event['location']['name'],
+        $event['location']['gps'] ?? '',
+        json_encode($event, JSON_UNESCAPED_UNICODE),
+        date('c')
+    ]);
+
+    return $stmt->rowCount() > 0;
+}
+
+/**
+ * Log a fetch operation
+ */
+function logFetch(PDO $pdo, int $eventsFetched, int $eventsNew, bool $success, ?string $error = null): void {
+    $stmt = $pdo->prepare("
+        INSERT INTO fetch_log (fetched_at, events_fetched, events_new, success, error_message)
+        VALUES (?, ?, ?, ?, ?)
+    ");
+    $stmt->execute([date('c'), $eventsFetched, $eventsNew, $success ? 1 : 0, $error]);
+}
+
+/**
+ * Get events from database with optional filters
+ */
+function getEventsFromDb(array $filters = [], int $limit = 500, int $offset = 0): array {
+    $pdo = getDatabase();
+
+    $query = "SELECT raw_data FROM events WHERE 1=1";
+    $params = [];
+
+    if (!empty($filters['location'])) {
+        $query .= " AND location_name = ?";
+        $params[] = $filters['location'];
     }
 
-    $age = time() - filemtime($cacheFile);
-    $data = json_decode(file_get_contents($cacheFile), true);
-
-    if ($data === null) {
-        return null;
+    if (!empty($filters['type'])) {
+        $query .= " AND type = ?";
+        $params[] = $filters['type'];
     }
+
+    if (!empty($filters['date'])) {
+        $query .= " AND datetime LIKE ?";
+        $params[] = $filters['date'] . '%';
+    }
+
+    if (!empty($filters['from'])) {
+        $query .= " AND datetime >= ?";
+        $params[] = $filters['from'];
+    }
+
+    if (!empty($filters['to'])) {
+        $query .= " AND datetime <= ?";
+        $params[] = $filters['to'] . 'T23:59:59';
+    }
+
+    $query .= " ORDER BY datetime DESC LIMIT ? OFFSET ?";
+    $params[] = $limit;
+    $params[] = $offset;
+
+    $stmt = $pdo->prepare($query);
+    $stmt->execute($params);
+
+    $events = [];
+    while ($row = $stmt->fetch()) {
+        $events[] = json_decode($row['raw_data'], true);
+    }
+
+    return $events;
+}
+
+/**
+ * Get all unique locations with event counts
+ */
+function getLocationsFromDb(): array {
+    $pdo = getDatabase();
+    $stmt = $pdo->query("
+        SELECT location_name as name, COUNT(*) as count
+        FROM events
+        GROUP BY location_name
+        ORDER BY count DESC
+    ");
+    return $stmt->fetchAll();
+}
+
+/**
+ * Get all unique event types with counts
+ */
+function getTypesFromDb(): array {
+    $pdo = getDatabase();
+    $stmt = $pdo->query("
+        SELECT type, COUNT(*) as count
+        FROM events
+        GROUP BY type
+        ORDER BY count DESC
+    ");
+    return $stmt->fetchAll();
+}
+
+/**
+ * Get database statistics
+ */
+function getDatabaseStats(): array {
+    $pdo = getDatabase();
+
+    // Total events
+    $total = $pdo->query("SELECT COUNT(*) as count FROM events")->fetch()['count'];
+
+    // Location count
+    $locationCount = $pdo->query("SELECT COUNT(DISTINCT location_name) as count FROM events")->fetch()['count'];
+
+    // Date range
+    $dateRange = $pdo->query("SELECT MIN(datetime) as oldest, MAX(datetime) as newest FROM events")->fetch();
+
+    // Database file size
+    $dbSize = file_exists(DB_PATH) ? filesize(DB_PATH) : 0;
+
+    // Last fetch
+    $lastFetch = $pdo->query("
+        SELECT fetched_at, events_new FROM fetch_log
+        WHERE success = 1 ORDER BY fetched_at DESC LIMIT 1
+    ")->fetch();
 
     return [
-        'data' => $data,
-        'stale' => $age >= CACHE_TIME,
-        'age' => $age,
-        'expired' => $age >= STALE_CACHE_TIME
+        'total_events' => $total,
+        'unique_locations' => $locationCount,
+        'date_range' => [
+            'oldest' => $dateRange['oldest'] ?? null,
+            'newest' => $dateRange['newest'] ?? null
+        ],
+        'database_size_mb' => round($dbSize / (1024 * 1024), 2),
+        'last_fetch' => $lastFetch ? [
+            'at' => $lastFetch['fetched_at'],
+            'new_events' => $lastFetch['events_new']
+        ] : null
     ];
 }
 
-/**
- * Legacy function for backwards compatibility
- */
-function getFromCache($filters) {
-    $result = getFromCacheWithMeta($filters);
-    if ($result === null || $result['expired']) {
-        return null;
-    }
-    return $result['data'];
-}
-
-function saveToCache($filters, $data) {
-    file_put_contents(getCacheFilePath($filters), json_encode($data));
-}
+// ============================================================================
+// FETCHING FUNCTIONS
+// ============================================================================
 
 /**
- * Trigger async cache refresh (non-blocking)
+ * Fetch events from Police API
  */
-function triggerAsyncRefresh($filters) {
-    $metaFile = getCacheMetaPath($filters);
-    $lockFile = $metaFile . '.lock';
-
-    // Check if refresh is already in progress
-    if (file_exists($lockFile) && (time() - filemtime($lockFile)) < 30) {
-        return; // Another process is refreshing
-    }
-
-    // Create lock
-    file_put_contents($lockFile, time());
-
-    // Perform refresh synchronously (in shared hosting we can't do true async)
-    // But we serve stale content first, then refresh
-    register_shutdown_function(function() use ($filters, $lockFile) {
-        // This runs after response is sent
-        if (connection_status() === CONNECTION_NORMAL) {
-            fetchPoliceEventsForce($filters);
-        }
-        @unlink($lockFile);
-    });
-}
-
-/**
- * Fetch from VPS API
- */
-function fetchFromVpsApi($endpoint, $params = []) {
-    $url = VPS_API_URL . $endpoint;
-    if ($params) {
-        $url .= '?' . http_build_query($params);
-    }
-
+function fetchFromPoliceApi(): ?array {
     $context = stream_context_create([
         'http' => [
-            'timeout' => VPS_API_TIMEOUT,
-            'header' => "X-API-Key: " . VPS_API_KEY . "\r\nAccept: application/json",
+            'timeout' => POLICE_API_TIMEOUT,
+            'header' => "User-Agent: " . USER_AGENT . "\r\nAccept: application/json",
             'ignore_errors' => true
+        ],
+        'ssl' => [
+            'verify_peer' => true,
+            'verify_peer_name' => true
         ]
     ]);
 
-    $response = @file_get_contents($url, false, $context);
+    $response = @file_get_contents(POLICE_API_URL, false, $context);
+
     if ($response === false) {
         return null;
     }
 
     $data = json_decode($response, true);
+
+    if (!is_array($data)) {
+        return null;
+    }
+
     return $data;
 }
 
 /**
- * Fetch locations from VPS API (all locations with event counts)
+ * Fetch events from Police API and store in database
  */
-function fetchLocationsFromVps() {
-    $cacheFile = sys_get_temp_dir() . '/samband_locations.json';
+function fetchAndStoreEvents(): array {
+    $pdo = getDatabase();
+    $events = fetchFromPoliceApi();
 
-    // Check cache (1 hour)
-    if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 3600) {
-        $cached = json_decode(file_get_contents($cacheFile), true);
-        if ($cached) return $cached;
+    if ($events === null) {
+        logFetch($pdo, 0, 0, false, 'Failed to fetch from Police API');
+        return ['success' => false, 'error' => 'Failed to fetch from Police API'];
     }
 
-    $data = fetchFromVpsApi('/api/locations');
-    if ($data && is_array($data)) {
-        file_put_contents($cacheFile, json_encode($data));
-        return $data;
-    }
+    $newCount = 0;
+    $pdo->beginTransaction();
 
-    // Return cached even if stale
-    if (file_exists($cacheFile)) {
-        return json_decode(file_get_contents($cacheFile), true) ?: [];
-    }
+    try {
+        foreach ($events as $event) {
+            // Validate required fields
+            if (!isset($event['id'], $event['datetime'], $event['name'], $event['type'], $event['location'])) {
+                continue;
+            }
 
-    return [];
-}
+            if (insertEvent($pdo, $event)) {
+                $newCount++;
+            }
+        }
 
-/**
- * Check VPS API health status
- * Returns: ['online' => bool, 'latency_ms' => int|null, 'total_events' => int|null]
- */
-function checkVpsHealth() {
-    $cacheFile = sys_get_temp_dir() . '/samband_health.json';
+        $pdo->commit();
+        logFetch($pdo, count($events), $newCount, true);
 
-    // Check cache (30 seconds)
-    if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 30) {
-        $cached = json_decode(file_get_contents($cacheFile), true);
-        if ($cached) return $cached;
-    }
-
-    $start = microtime(true);
-    $data = fetchFromVpsApi('/health');
-    $latency = round((microtime(true) - $start) * 1000);
-
-    if ($data && isset($data['status']) && $data['status'] === 'ok') {
-        // Get stats for total events count and date range
-        $stats = fetchFromVpsApi('/api/stats');
-        $result = [
-            'online' => true,
-            'latency_ms' => $latency,
-            'total_events' => $stats['total'] ?? null,
-            'oldest_date' => $stats['date_range']['oldest'] ?? null,
-            'newest_date' => $stats['date_range']['latest'] ?? null,
-            'checked_at' => date('Y-m-d H:i:s')
+        return [
+            'success' => true,
+            'events_fetched' => count($events),
+            'events_new' => $newCount
         ];
-    } else {
-        $result = [
-            'online' => false,
-            'latency_ms' => null,
-            'total_events' => null,
-            'oldest_date' => null,
-            'newest_date' => null,
-            'checked_at' => date('Y-m-d H:i:s')
-        ];
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        logFetch($pdo, count($events), 0, false, $e->getMessage());
+        return ['success' => false, 'error' => $e->getMessage()];
     }
-
-    file_put_contents($cacheFile, json_encode($result));
-    return $result;
 }
 
 /**
- * Force fetch from API (bypass cache)
- * Tries VPS API first, falls back to Police API
+ * Get last fetch time from database
  */
-function fetchPoliceEventsForce($filters = []) {
-    // Try VPS API first
-    $vpsParams = [];
-    if (!empty($filters['location'])) $vpsParams['location'] = $filters['location'];
-    if (!empty($filters['type'])) $vpsParams['type'] = $filters['type'];
-    if (!empty($filters['date'])) $vpsParams['date'] = $filters['date'];
-    if (!empty($filters['from'])) $vpsParams['from'] = $filters['from'];
-    if (!empty($filters['to'])) $vpsParams['to'] = $filters['to'];
+function getLastFetchTime(): ?int {
+    try {
+        $pdo = getDatabase();
+        $row = $pdo->query("
+            SELECT fetched_at FROM fetch_log
+            WHERE success = 1
+            ORDER BY id DESC LIMIT 1
+        ")->fetch();
 
-    $vpsResponse = fetchFromVpsApi('/api/events/raw', $vpsParams);
-    if ($vpsResponse !== null && is_array($vpsResponse) && !isset($vpsResponse['error'])) {
-        if (!isset($vpsResponse['error'])) saveToCache($filters, $vpsResponse);
-        return $vpsResponse;
+        if ($row) {
+            return strtotime($row['fetched_at']);
+        }
+    } catch (Exception $e) {
+        // Database might not exist yet
     }
 
-    // Fallback to Police API
-    $baseUrl = 'https://polisen.se/api/events';
-    $queryParams = [];
-
-    if (!empty($filters['location'])) $queryParams['locationname'] = $filters['location'];
-    if (!empty($filters['type'])) $queryParams['type'] = $filters['type'];
-    if (!empty($filters['date'])) $queryParams['DateTime'] = $filters['date'];
-
-    $url = $baseUrl . (!empty($queryParams) ? '?' . http_build_query($queryParams) : '');
-
-    $context = stream_context_create([
-        'http' => ['timeout' => 15, 'header' => "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36\r\nAccept: application/json"]
-    ]);
-
-    $response = @file_get_contents($url, false, $context);
-    if ($response === false) return ['error' => 'Kunde inte hämta data från Polisens API.'];
-
-    $data = json_decode($response, true) ?: [];
-    if (!isset($data['error'])) saveToCache($filters, $data);
-    return $data;
+    return null;
 }
 
 /**
- * Send HTTP cache headers for API responses
+ * Check if we need to fetch new data
  */
-function sendCacheHeaders($maxAge = 60, $staleWhileRevalidate = 120) {
-    header('Cache-Control: public, max-age=' . $maxAge . ', stale-while-revalidate=' . $staleWhileRevalidate);
-    header('Vary: Accept-Encoding');
+function needsFetch(): bool {
+    $lastFetch = getLastFetchTime();
+
+    if ($lastFetch === null) {
+        return true; // Never fetched
+    }
+
+    return (time() - $lastFetch) >= CACHE_TIME;
 }
 
+/**
+ * Ensure we have data - fetch if needed
+ */
+function ensureData(): void {
+    // Use lock file to prevent concurrent fetches
+    $lockFile = DATA_DIR . '/fetch.lock';
+
+    if (!is_dir(DATA_DIR)) {
+        mkdir(DATA_DIR, 0755, true);
+    }
+
+    // Check if lock exists and is recent (within 60 seconds)
+    if (file_exists($lockFile) && (time() - filemtime($lockFile)) < 60) {
+        return; // Another process is fetching
+    }
+
+    if (!needsFetch()) {
+        return; // Data is fresh
+    }
+
+    // Create lock
+    file_put_contents($lockFile, time());
+
+    try {
+        fetchAndStoreEvents();
+    } finally {
+        @unlink($lockFile);
+    }
+}
+
+// ============================================================================
+// CACHING FUNCTIONS (for file-based cache of processed data)
+// ============================================================================
+
+function getCacheFilePath($key) {
+    return sys_get_temp_dir() . '/samband_' . md5($key) . '.json';
+}
+
+function getFromFileCache($key, $maxAge = 300) {
+    $file = getCacheFilePath($key);
+    if (file_exists($file) && (time() - filemtime($file)) < $maxAge) {
+        $data = json_decode(file_get_contents($file), true);
+        if ($data !== null) return $data;
+    }
+    return null;
+}
+
+function saveToFileCache($key, $data) {
+    file_put_contents(getCacheFilePath($key), json_encode($data));
+}
+
+// ============================================================================
+// EVENT PROCESSING FUNCTIONS
+// ============================================================================
+
+/**
+ * Fetch police events - from database with auto-refresh
+ */
 function fetchPoliceEvents($filters = []) {
-    // Try to get from cache with metadata
-    $cached = getFromCacheWithMeta($filters);
+    // Ensure we have data
+    ensureData();
 
-    if ($cached !== null) {
-        // If cache is stale but not expired, serve stale and trigger background refresh
-        if ($cached['stale'] && !$cached['expired']) {
-            triggerAsyncRefresh($filters);
-            return $cached['data'];
-        }
-        // If cache is fresh, serve it
-        if (!$cached['stale']) {
-            return $cached['data'];
-        }
-    }
-
-    // Cache is expired or doesn't exist, fetch fresh
-    return fetchPoliceEventsForce($filters);
+    // Get from database
+    return getEventsFromDb($filters);
 }
 
 function getDetailCacheFilePath($eventUrl) {
-    $cacheKey = md5($eventUrl);
-    return sys_get_temp_dir() . '/police_event_detail_' . $cacheKey . '.json';
+    return sys_get_temp_dir() . '/police_event_detail_' . md5($eventUrl) . '.json';
 }
 
 function fetchEventDetails($eventUrl) {
@@ -288,7 +466,7 @@ function fetchEventDetails($eventUrl) {
     $context = stream_context_create([
         'http' => [
             'timeout' => 10,
-            'header' => "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\r\nAccept: text/html,application/xhtml+xml\r\nAccept-Language: sv-SE,sv;q=0.9,en;q=0.8"
+            'header' => "User-Agent: " . USER_AGENT . "\r\nAccept: text/html,application/xhtml+xml\r\nAccept-Language: sv-SE,sv;q=0.9,en;q=0.8"
         ],
         'ssl' => [
             'verify_peer' => true,
@@ -301,13 +479,9 @@ function fetchEventDetails($eventUrl) {
 
     $details = [];
 
-    // polisen.se event pages typically have the content in a specific structure
-    // Try multiple patterns to extract the main text content
-
-    // Pattern 1: Look for the main event body content (common polisen.se structure)
+    // Pattern 1: Look for the main event body content
     if (preg_match('/<div[^>]*class="[^"]*(?:text-body|body-content|article-body|event-body|hpt-body)[^"]*"[^>]*>(.*?)<\/div>/is', $html, $matches)) {
         $content = $matches[1];
-        // Remove script and style tags
         $content = preg_replace('/<(script|style)[^>]*>.*?<\/\1>/is', '', $content);
         $content = strip_tags($content);
         $content = html_entity_decode($content, ENT_QUOTES, 'UTF-8');
@@ -318,7 +492,6 @@ function fetchEventDetails($eventUrl) {
     // Pattern 2: Look for main content area
     if (empty($details['content'])) {
         if (preg_match('/<main[^>]*>(.*?)<\/main>/is', $html, $matches)) {
-            // Find paragraphs within main
             if (preg_match_all('/<p[^>]*class="[^"]*(?:ingress|preamble|lead|body|content)[^"]*"[^>]*>(.*?)<\/p>/is', $matches[1], $pMatches)) {
                 $paragraphs = array_map(function($p) {
                     $text = strip_tags($p);
@@ -336,7 +509,6 @@ function fetchEventDetails($eventUrl) {
     // Pattern 3: Extract from article element
     if (empty($details['content'])) {
         if (preg_match('/<article[^>]*>(.*?)<\/article>/is', $html, $matches)) {
-            // Get all paragraphs, excluding those that look like navigation or metadata
             if (preg_match_all('/<p(?:\s[^>]*)?>([^<]{20,})<\/p>/is', $matches[1], $pMatches)) {
                 $paragraphs = array_map(function($p) {
                     $text = strip_tags($p);
@@ -344,7 +516,6 @@ function fetchEventDetails($eventUrl) {
                     return trim(preg_replace('/\s+/', ' ', $text));
                 }, $pMatches[1]);
                 $paragraphs = array_filter($paragraphs, function($p) {
-                    // Filter out navigation-like text
                     return strlen($p) > 20 && !preg_match('/^(Dela|Skriv ut|Tipsa|Läs mer|Tillbaka)/i', $p);
                 });
                 if (!empty($paragraphs)) {
@@ -354,7 +525,7 @@ function fetchEventDetails($eventUrl) {
         }
     }
 
-    // Pattern 4: Last resort - find any substantial text blocks on the page
+    // Pattern 4: Last resort
     if (empty($details['content'])) {
         if (preg_match_all('/<(?:p|div)[^>]*>([^<]{50,})<\/(?:p|div)>/is', $html, $matches)) {
             $blocks = array_map(function($text) {
@@ -362,7 +533,6 @@ function fetchEventDetails($eventUrl) {
                 $text = html_entity_decode($text, ENT_QUOTES, 'UTF-8');
                 return trim(preg_replace('/\s+/', ' ', $text));
             }, $matches[1]);
-            // Filter to get only content-like blocks
             $blocks = array_filter($blocks, function($text) {
                 return strlen($text) > 50 &&
                        strlen($text) < 2000 &&
@@ -384,12 +554,12 @@ function fetchEventDetails($eventUrl) {
 }
 
 function formatDate($dateString) {
-    try { $date = new DateTime($dateString); } 
+    try { $date = new DateTime($dateString); }
     catch (Exception $e) { $date = new DateTime(); }
-    
+
     $months = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
     $days = ['söndag', 'måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag', 'lördag'];
-    
+
     return [
         'day' => $date->format('d'),
         'month' => $months[(int)$date->format('n') - 1],
@@ -443,41 +613,22 @@ function getEventColor($type) {
     return '#3498db';
 }
 
-function cleanEventName($name, $type, $location) {
-    // Remove date prefix pattern like "03 januari 08.37, " from the name
-    $cleaned = preg_replace('/^\d{1,2}\s+\w+\s+\d{1,2}[\.:]\d{2},?\s*/', '', $name);
-    // Remove the type if it's at the start
-    if (stripos($cleaned, $type) === 0) {
-        $cleaned = trim(substr($cleaned, strlen($type)));
-        $cleaned = ltrim($cleaned, ', ');
-    }
-    // Remove location if it's the only thing left
-    if (trim($cleaned) === $location || empty(trim($cleaned))) {
-        return null;
-    }
-    // Remove trailing location if present
-    if ($location && preg_match('/,\s*' . preg_quote($location, '/') . '\s*$/i', $cleaned)) {
-        $cleaned = preg_replace('/,\s*' . preg_quote($location, '/') . '\s*$/i', '', $cleaned);
-    }
-    return trim($cleaned) ?: null;
-}
-
 function calculateStats($events) {
     if (!is_array($events) || isset($events['error'])) return null;
-    
-    $stats = ['total' => count($events), 'byType' => [], 'byLocation' => [], 
+
+    $stats = ['total' => count($events), 'byType' => [], 'byLocation' => [],
               'byHour' => array_fill(0, 24, 0), 'byDay' => [], 'last24h' => 0, 'last7days' => 0];
-    
+
     $now = new DateTime();
     $yesterday = (clone $now)->modify('-24 hours');
     $lastWeek = (clone $now)->modify('-7 days');
-    
+
     foreach ($events as $event) {
         $type = $event['type'] ?? 'Okänd';
         $location = $event['location']['name'] ?? 'Okänd';
         $stats['byType'][$type] = ($stats['byType'][$type] ?? 0) + 1;
         $stats['byLocation'][$location] = ($stats['byLocation'][$location] ?? 0) + 1;
-        
+
         try {
             $eventDate = new DateTime($event['datetime']);
             $stats['byHour'][(int)$eventDate->format('H')]++;
@@ -487,7 +638,7 @@ function calculateStats($events) {
             if ($eventDate >= $lastWeek) $stats['last7days']++;
         } catch (Exception $e) {}
     }
-    
+
     arsort($stats['byType']); arsort($stats['byLocation']); krsort($stats['byDay']);
     $stats['byType'] = array_slice($stats['byType'], 0, 10, true);
     $stats['byLocation'] = array_slice($stats['byLocation'], 0, 10, true);
@@ -541,13 +692,12 @@ function fetchPressReleases($regionFilter = null) {
     $regions = getPressRegions();
     $allItems = [];
 
-    // If specific region requested, only fetch that one
     $regionsToFetch = $regionFilter ? [$regionFilter => $regions[$regionFilter] ?? $regionFilter] : $regions;
 
     $context = stream_context_create([
         'http' => [
             'timeout' => 10,
-            'header' => "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36\r\nAccept: application/rss+xml, application/xml, text/xml"
+            'header' => "User-Agent: " . USER_AGENT . "\r\nAccept: application/rss+xml, application/xml, text/xml"
         ],
         'ssl' => ['verify_peer' => true, 'verify_peer_name' => true]
     ]);
@@ -558,7 +708,6 @@ function fetchPressReleases($regionFilter = null) {
 
         if ($xml === false) continue;
 
-        // Suppress warnings for malformed XML
         libxml_use_internal_errors(true);
         $feed = @simplexml_load_string($xml);
         libxml_clear_errors();
@@ -581,10 +730,7 @@ function fetchPressReleases($regionFilter = null) {
         }
     }
 
-    // Sort by date, newest first
     usort($allItems, fn($a, $b) => $b['timestamp'] - $a['timestamp']);
-
-    // Cache the results
     file_put_contents($cacheFile, json_encode($allItems));
 
     return $allItems;
@@ -627,12 +773,22 @@ function formatPressDate($timestamp) {
     ];
 }
 
-// AJAX endpoints
+/**
+ * Send HTTP cache headers for API responses
+ */
+function sendCacheHeaders($maxAge = 60, $staleWhileRevalidate = 120) {
+    header('Cache-Control: public, max-age=' . $maxAge . ', stale-while-revalidate=' . $staleWhileRevalidate);
+    header('Vary: Accept-Encoding');
+}
+
+// ============================================================================
+// AJAX ENDPOINTS
+// ============================================================================
+
 if (isset($_GET['ajax'])) {
     header('Content-Type: application/json; charset=utf-8');
 
     if ($_GET['ajax'] === 'events') {
-        // Cache events for 60s, allow stale for 5min
         sendCacheHeaders(60, 300);
 
         $page = max(1, intval($_GET['page'] ?? 1));
@@ -643,7 +799,7 @@ if (isset($_GET['ajax'])) {
         $allEvents = fetchPoliceEvents($filters);
         if (isset($allEvents['error'])) { echo json_encode(['error' => $allEvents['error']]); exit; }
 
-        // Client-side type filtering as fallback (API may not filter correctly when no location is specified)
+        // Client-side type filtering as fallback
         $typeFilter = $filters['type'] ?? '';
         if ($typeFilter && is_array($allEvents)) {
             $allEvents = array_values(array_filter($allEvents, function($e) use ($typeFilter) {
@@ -680,14 +836,12 @@ if (isset($_GET['ajax'])) {
     }
 
     if ($_GET['ajax'] === 'stats') {
-        // Cache stats for 2 minutes
         sendCacheHeaders(120, 300);
         echo json_encode(calculateStats(fetchPoliceEvents()));
         exit;
     }
 
     if ($_GET['ajax'] === 'details') {
-        // Cache details for 1 hour (they rarely change)
         sendCacheHeaders(3600, 7200);
 
         $eventUrl = $_GET['url'] ?? '';
@@ -705,7 +859,6 @@ if (isset($_GET['ajax'])) {
     }
 
     if ($_GET['ajax'] === 'press') {
-        // Cache press releases for 2 minutes
         sendCacheHeaders(120, 600);
 
         $page = max(1, intval($_GET['page'] ?? 1));
@@ -714,7 +867,6 @@ if (isset($_GET['ajax'])) {
 
         $allPress = fetchPressReleases($regionFilter);
 
-        // Apply search filter
         if ($searchFilter) {
             $allPress = array_values(array_filter($allPress, function($item) use ($searchFilter) {
                 return mb_stripos($item['title'], $searchFilter) !== false ||
@@ -751,7 +903,6 @@ if (isset($_GET['ajax'])) {
     }
 
     if ($_GET['ajax'] === 'pressdetails') {
-        // Cache press details for 1 hour
         sendCacheHeaders(3600, 7200);
 
         $pressUrl = $_GET['url'] ?? '';
@@ -760,13 +911,11 @@ if (isset($_GET['ajax'])) {
             exit;
         }
 
-        // Validate URL is from polisen.se
         if (strpos($pressUrl, 'https://polisen.se/') !== 0) {
             echo json_encode(['error' => 'Invalid URL']);
             exit;
         }
 
-        // Check cache (cache for 1 hour)
         $cacheFile = sys_get_temp_dir() . '/police_press_detail_' . md5($pressUrl) . '.json';
         if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 3600) {
             $cached = json_decode(file_get_contents($cacheFile), true);
@@ -779,7 +928,7 @@ if (isset($_GET['ajax'])) {
         $context = stream_context_create([
             'http' => [
                 'timeout' => 10,
-                'header' => "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36\r\nAccept: text/html,application/xhtml+xml\r\nAccept-Language: sv-SE,sv;q=0.9,en;q=0.8"
+                'header' => "User-Agent: " . USER_AGENT . "\r\nAccept: text/html,application/xhtml+xml\r\nAccept-Language: sv-SE,sv;q=0.9,en;q=0.8"
             ],
             'ssl' => ['verify_peer' => true, 'verify_peer_name' => true]
         ]);
@@ -792,7 +941,6 @@ if (isset($_GET['ajax'])) {
 
         $details = ['content' => ''];
 
-        // Pattern 1: Look for article body content
         if (preg_match('/<div[^>]*class="[^"]*(?:text-body|body-content|article-body|editorial-body|news-body|hpt-body)[^"]*"[^>]*>(.*?)<\/div>/is', $html, $matches)) {
             $content = $matches[1];
             $content = preg_replace('/<(script|style)[^>]*>.*?<\/\1>/is', '', $content);
@@ -802,7 +950,6 @@ if (isset($_GET['ajax'])) {
             $details['content'] = trim($content);
         }
 
-        // Pattern 2: Look for main content with paragraphs
         if (empty($details['content'])) {
             if (preg_match_all('/<p[^>]*>(.*?)<\/p>/is', $html, $pMatches)) {
                 $paragraphs = [];
@@ -810,7 +957,7 @@ if (isset($_GET['ajax'])) {
                     $text = strip_tags($p);
                     $text = html_entity_decode($text, ENT_QUOTES, 'UTF-8');
                     $text = trim(preg_replace('/\s+/', ' ', $text));
-                    if (strlen($text) > 50) { // Only include substantial paragraphs
+                    if (strlen($text) > 50) {
                         $paragraphs[] = $text;
                     }
                 }
@@ -828,16 +975,24 @@ if (isset($_GET['ajax'])) {
         }
         exit;
     }
+
+    if ($_GET['ajax'] === 'dbstats') {
+        sendCacheHeaders(60, 300);
+        echo json_encode(getDatabaseStats());
+        exit;
+    }
 }
 
-// Main page
+// ============================================================================
+// MAIN PAGE
+// ============================================================================
+
 $locationFilter = trim($_GET['location'] ?? '');
 $customLocation = trim($_GET['customLocation'] ?? '');
-// Use custom location if provided, otherwise use dropdown selection
 if ($customLocation) {
     $locationFilter = $customLocation;
 } elseif ($locationFilter === '__custom__') {
-    $locationFilter = ''; // Reset if __custom__ was selected but no custom value provided
+    $locationFilter = '';
 }
 $typeFilter = trim($_GET['type'] ?? '');
 $searchFilter = trim($_GET['search'] ?? '');
@@ -850,7 +1005,7 @@ if ($typeFilter) $filters['type'] = $typeFilter;
 
 $events = !empty($filters) ? fetchPoliceEvents($filters) : $allEvents;
 
-// Client-side type filtering as fallback (API may not filter correctly when no location is specified)
+// Client-side type filtering as fallback
 if ($typeFilter && is_array($events) && !isset($events['error'])) {
     $events = array_values(array_filter($events, function($e) use ($typeFilter) {
         return isset($e['type']) && $e['type'] === $typeFilter;
@@ -865,29 +1020,12 @@ if ($searchFilter && is_array($events) && !isset($events['error'])) {
     }));
 }
 
-// Fetch locations from VPS API (complete list with counts)
-$vpsLocations = fetchLocationsFromVps();
-$locations = [];
-if (!empty($vpsLocations)) {
-    // VPS returns [{"name": "Stockholm", "count": 123}, ...]
-    foreach ($vpsLocations as $loc) {
-        if (isset($loc['name'])) {
-            $locations[] = $loc['name'];
-        }
-    }
-} else {
-    // Fallback: extract from current events
-    if (is_array($allEvents) && !isset($allEvents['error'])) {
-        foreach ($allEvents as $e) {
-            if (isset($e['location']['name']) && !in_array($e['location']['name'], $locations)) {
-                $locations[] = $e['location']['name'];
-            }
-        }
-    }
-}
+// Get locations from database
+$dbLocations = getLocationsFromDb();
+$locations = array_column($dbLocations, 'name');
 sort($locations);
 
-// Extract types from events (these change rarely)
+// Extract types from events
 $types = [];
 if (is_array($allEvents) && !isset($allEvents['error'])) {
     foreach ($allEvents as $e) {
@@ -900,7 +1038,9 @@ $eventCount = is_array($events) && !isset($events['error']) ? count($events) : 0
 $stats = calculateStats($allEvents);
 $initialEvents = is_array($events) ? array_slice($events, 0, EVENTS_PER_PAGE) : [];
 $hasMorePages = $eventCount > EVENTS_PER_PAGE;
-$apiHealth = checkVpsHealth();
+
+// Get database stats for footer
+$dbStats = getDatabaseStats();
 ?>
 <!DOCTYPE html>
 <html lang="sv">
@@ -930,13 +1070,13 @@ $apiHealth = checkVpsHealth();
     <meta name="twitter:title" content="Sambandscentralen">
     <meta name="twitter:description" content="Aktuella händelsenotiser från Svenska Polisen i realtid">
     <meta name="twitter:image" content="<?= htmlspecialchars($ogCanonicalUrl) ?>og-image.php">
-    
+
     <title>Sambandscentralen</title>
 
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%23fcd34d' rx='20' width='100' height='100'/><text x='50' y='70' font-size='60' text-anchor='middle'>👮</text></svg>">
     <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%23fcd34d' rx='20' width='100' height='100'/><text x='50' y='70' font-size='60' text-anchor='middle'>👮</text></svg>">
     <link rel="manifest" href="manifest.json">
-    
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
@@ -954,10 +1094,10 @@ $apiHealth = checkVpsHealth();
                         <p>Polisens händelsenotiser i realtid</p>
                     </div>
                 </a>
-                
+
                 <div class="header-controls">
                     <div class="live-indicator"><span class="live-dot"></span><span>Live</span></div>
-                    
+
                     <div class="view-toggle">
                         <button type="button" data-view="list" class="<?= $currentView === 'list' ? 'active' : '' ?>">📋 <span class="label">Händelser</span></button>
                         <button type="button" data-view="map" class="<?= $currentView === 'map' ? 'active' : '' ?>">🗺️ <span class="label">Karta</span></button>
@@ -1030,7 +1170,6 @@ $apiHealth = checkVpsHealth();
                             $icon = getEventIcon($type);
                             $location = $event['location']['name'] ?? 'Okänd';
                             $gps = $event['location']['gps'] ?? null;
-                            $cleanedName = cleanEventName($event['name'] ?? '', $type, $location);
                         ?>
                             <article class="event-card" style="animation-delay: <?= min($i * 0.02, 0.2) ?>s">
                                 <div class="event-card-inner">
@@ -1138,16 +1277,14 @@ $apiHealth = checkVpsHealth();
 
         <footer>
             <p>
-                <span class="api-status <?= $apiHealth['online'] ? 'online' : 'offline' ?>">
-                    <?= $apiHealth['online'] ? '🟢' : '🔴' ?> API <?= $apiHealth['online'] ? 'online' : 'offline' ?>
-                </span>
-                <?php if ($apiHealth['online'] && $apiHealth['total_events']): ?>
-                    • <strong><?= number_format($apiHealth['total_events'], 0, ',', ' ') ?></strong> händelser i arkivet
-                    <?php if ($apiHealth['oldest_date']): ?>
-                        (sedan <?= date('Y-m-d', strtotime($apiHealth['oldest_date'])) ?>)
+                <span class="api-status online">🟢 Lokal databas</span>
+                <?php if ($dbStats['total_events'] > 0): ?>
+                    • <strong><?= number_format($dbStats['total_events'], 0, ',', ' ') ?></strong> händelser i arkivet
+                    <?php if ($dbStats['date_range']['oldest']): ?>
+                        (sedan <?= date('Y-m-d', strtotime($dbStats['date_range']['oldest'])) ?>)
                     <?php endif; ?>
                 <?php endif; ?>
-                • Uppdateras var 5:e minut
+                • Uppdateras var 10:e minut
                 • v<?= ASSET_VERSION ?>
             </p>
         </footer>

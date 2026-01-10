@@ -1,25 +1,25 @@
 # Sambandscentralen
 
-Sambandscentralen visar polisens händelsenotiser med historik. Applikationen använder en egen VPS-backend för att lagra händelser långsiktigt och presenterar information om utryckningar över hela Sverige.
+Sambandscentralen visar polisens händelsenotiser med historik. Applikationen är självständig och lagrar händelser lokalt i SQLite - ingen extern server behövs.
 
 ## Arkitektur
 
 ```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Frontend      │────▶│    VPS API      │────▶│  Polisens API  │
-│   (example.com) │     │ (123.221.23.219)│     │  (polisen.se)   │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-                               │
-                               ▼
-                        ┌─────────────────┐
-                        │    SQLite DB    │
-                        │  (historik)     │
-                        └─────────────────┘
+┌─────────────────┐     ┌─────────────────┐
+│   Webbserver    │────▶│  Polisens API   │
+│   (PHP+SQLite)  │     │  (polisen.se)   │
+└─────────────────┘     └─────────────────┘
+        │
+        ▼
+┌─────────────────┐
+│    SQLite DB    │
+│   (data/)       │
+└─────────────────┘
 ```
 
-- **Frontend**: PHP på delad hosting, anropar VPS API
-- **VPS API**: Python/FastAPI, samlar och lagrar händelser
-- **Fallback**: Om VPS är nere hämtas direkt från Polisens API
+- **Allt-i-ett**: PHP på delad hosting (t.ex. Hostinger)
+- **Auto-init**: Databasen skapas automatiskt vid första besök
+- **Historik**: Händelser sparas permanent i SQLite
 
 ## Funktioner
 
@@ -39,16 +39,19 @@ Sambandscentralen visar polisens händelsenotiser med historik. Applikationen an
 - Vanligaste händelsetyper med stapeldiagram
 - Händelser per plats och timmesfördelning
 
+### 📰 Pressmeddelanden
+- Samlade från alla polisregioner
+- Sökning och filtrering per region
+
 ### 🔍 Sökning & Filtrering
 - Fritextsökning i titel, sammanfattning och plats
 - Filtrera på plats (län/kommun)
 - Filtrera på händelsetyp
-- Datumfiltrering med historik
 - Snabbsökning: `Ctrl/Cmd + K`
 
 ### 📦 Historik
-- Alla händelser sparas på VPS (1+ år)
-- Bläddra bakåt i tiden via datumväljare
+- Alla händelser sparas lokalt i SQLite
+- Bläddra bakåt i tiden
 - Footern visar antal händelser i arkivet
 
 ### 📱 PWA-stöd
@@ -58,61 +61,73 @@ Sambandscentralen visar polisens händelsenotiser med historik. Applikationen an
 
 ## Teknisk översikt
 
-### Frontend (index.php)
+### Allt-i-ett (index.php)
 - **PHP 8.x** - Serverhämtning och databehandling
-- **Stale-while-revalidate** - Visar cache, uppdaterar i bakgrunden
-- **VPS API-integration** - Med 5s timeout och fallback
+- **SQLite med WAL-mode** - Kraschsäker lagring
+- **Auto-fetch** - Hämtar nya händelser var 10:e minut
 - **HTML5 + CSS3 + Vanilla JS**
 - **Leaflet.js 1.9.4** - Kartfunktionalitet
 
-### Backend (api/)
-- **Python 3.11+ / FastAPI**
-- **SQLite med WAL-mode** - Kraschsäker lagring
-- **Schemalagd hämtning** - Var 5:e minut
-- **Daglig backup** - Med integritetskontroll
-- **API-nyckel-auth** - Skyddar endpoints
-
-Se [api/README.md](api/README.md) för backend-dokumentation.
+### Datalagring
+- **data/events.db** - SQLite-databas (skapas automatiskt)
+- **WAL-mode** - Säker mot krascher
+- **Permanent lagring** - Händelser raderas aldrig
 
 ## Installation
 
-### Frontend (delad hosting)
+### Delad hosting (Hostinger, etc.)
 
-1. Ladda upp alla filer utom `api/` till webbhotell
-2. Konfigurera VPS-anslutning i `index.php`:
-   ```php
-   define('VPS_API_URL', 'http://din-vps-ip:8000');
-   define('VPS_API_KEY', 'din-api-nyckel');
+1. Ladda upp alla filer till webbhotellet:
+   ```
+   index.php
+   css/
+   js/
+   manifest.json
+   offline.html
+   icons/
    ```
 
-### Backend (VPS)
+2. Besök sidan - databasen skapas automatiskt!
 
-Se [api/README.md](api/README.md) för fullständig guide.
+3. **Valfritt**: Sätt upp cron-jobb för bakgrundshämtning:
+   ```
+   */10 * * * * curl -s https://din-domän.se/index.php > /dev/null
+   ```
+   (Behövs inte - sidan hämtar ny data vid varje besök om det gått 10+ minuter)
 
-```bash
-scp -r api/ user@din-vps:/opt/samband-api/
-ssh user@din-vps
-cd /opt/samband-api && ./start.sh
-```
+### Krav
+- PHP 8.0+
+- PDO SQLite-extension (standard på de flesta hosting)
+- Skrivbar `data/`-katalog (skapas automatiskt)
 
 ## Filer
 
 | Fil/Katalog | Beskrivning |
 |-------------|-------------|
-| `index.php` | Huvudapplikation med frontend-logik |
+| `index.php` | Huvudapplikation (PHP + API + Frontend) |
 | `css/styles.css` | Stilmallar |
 | `js/app.js` | JavaScript-funktionalitet |
-| `sw.js` | Service Worker för offline/caching |
+| `js/sw.js` | Service Worker för offline/caching |
 | `manifest.json` | PWA-manifest |
 | `offline.html` | Fallback vid offline |
 | `icons/` | App-ikoner |
-| `api/` | VPS backend (separat deploy) |
+| `data/` | SQLite-databas (skapas automatiskt) |
+
+## Konfiguration
+
+Anpassa i toppen av `index.php`:
+
+```php
+define('CACHE_TIME', 600);           // Hämtintervall (sekunder)
+define('EVENTS_PER_PAGE', 40);       // Händelser per sida
+define('USER_AGENT', 'FreshRSS/1.28.0 (Linux; https://freshrss.org)');
+```
 
 ## Automatik
 
-- **Uppdatering**: Var 5:e minut
-- **Backup**: Dagligen kl 03:00
-- **Logrensning**: Var 24:e timme (behåller 30 dagar)
+- **Datahämtning**: Var 10:e minut (vid sidbesök)
+- **Lokal lagring**: Alla händelser sparas permanent
+- **Låsning**: Förhindrar parallella hämtningar
 
 ## Responsiv design
 
