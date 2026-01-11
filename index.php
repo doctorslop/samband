@@ -2400,22 +2400,22 @@ $dbStats = getDatabaseStats();
                             $location = $event['location']['name'] ?? 'Okänd';
                             $gps = $event['location']['gps'] ?? null;
                         ?>
-                            <article class="event-card" style="animation-delay: <?= min($i * 0.02, 0.2) ?>s">
+                            <article class="event-card" itemscope itemtype="https://schema.org/NewsArticle" style="animation-delay: <?= min($i * 0.02, 0.2) ?>s">
                                 <div class="event-card-inner">
                                     <div class="event-date">
                                         <div class="day"><?= $date['day'] ?></div>
                                         <div class="month"><?= $date['month'] ?></div>
-                                        <div class="time"><?= $date['time'] ?></div>
+                                        <time class="time" itemprop="datePublished" datetime="<?= htmlspecialchars($event['datetime'] ?? '') ?>"><?= $date['time'] ?></time>
                                         <div class="relative"><?= $date['relative'] ?></div>
                                     </div>
                                     <div class="event-content">
                                         <div class="event-header">
                                             <div class="event-title-group">
                                                 <a href="?type=<?= urlencode($type) ?>&view=<?= $currentView ?>" class="event-type" style="background: <?= $color ?>20; color: <?= $color ?>"><?= $icon ?> <?= htmlspecialchars($type) ?></a>
-                                                <a href="?location=<?= urlencode($location) ?>&view=<?= $currentView ?>" class="event-location-link"><?= htmlspecialchars($location) ?></a>
+                                                <h2 class="event-location-heading"><a href="?location=<?= urlencode($location) ?>&view=<?= $currentView ?>" class="event-location-link" itemprop="contentLocation"><?= htmlspecialchars($location) ?></a></h2>
                                             </div>
                                         </div>
-                                        <p class="event-summary"><?= htmlspecialchars($event['summary'] ?? '') ?></p>
+                                        <p class="event-summary" itemprop="description"><?= htmlspecialchars($event['summary'] ?? '') ?></p>
                                         <div class="event-meta">
                                             <?php if (!empty($event['url'])): ?>
                                                 <button type="button" class="show-details-btn" data-url="<?= htmlspecialchars($event['url']) ?>">📖 Visa detaljer</button>
@@ -2429,10 +2429,10 @@ $dbStats = getDatabaseStats();
                                                 <button type="button" class="show-map-btn" data-lat="<?= $lat ?>" data-lng="<?= $lng ?>" data-location="<?= htmlspecialchars($event['location']['name'] ?? '') ?>">🗺️ Visa på karta</button>
                                             <?php endif; endif; ?>
                                             <?php if (!empty($event['url'])): ?>
-                                                <a href="https://polisen.se<?= htmlspecialchars($event['url']) ?>" target="_blank" rel="noopener noreferrer nofollow" referrerpolicy="no-referrer" class="read-more-link"><span>🔗</span> polisen.se</a>
+                                                <a href="https://polisen.se<?= htmlspecialchars($event['url']) ?>" target="_blank" rel="noopener noreferrer nofollow" referrerpolicy="no-referrer" class="read-more-link" itemprop="url"><span>🔗</span> polisen.se</a>
                                             <?php endif; ?>
                                         </div>
-                                        <div class="event-details"></div>
+                                        <div class="event-details" itemprop="articleBody"></div>
                                     </div>
                                 </div>
                             </article>
