@@ -1,0 +1,22 @@
+# Deny all direct access to database files and backups
+<FilesMatch "\.(db|db-wal|db-shm|lock|sqlite|sqlite3)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Block access to backup directory
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^backups/ - [F,L]
+</IfModule>
+
+# Fallback: deny all except .gitignore
+<Files "*">
+    Order allow,deny
+    Deny from all
+</Files>
+
+<Files ".gitignore">
+    Order deny,allow
+    Allow from all
+</Files>

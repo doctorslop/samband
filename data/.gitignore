@@ -3,7 +3,12 @@
 *.db-wal
 *.db-shm
 *.lock
-backups/
+backups/*.db
 
-# Keep this .gitignore
+# Ignore admin key file (sensitive!)
+.admin_key
+
+# Keep these files
 !.gitignore
+!.htaccess
+!backups/.htaccess

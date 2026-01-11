@@ -24,6 +24,27 @@ header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: SAMEORIGIN');
 header('X-XSS-Protection: 1; mode=block');
 header('Referrer-Policy: strict-origin-when-cross-origin');
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org; connect-src 'self'");
+
+// Admin authentication for sensitive endpoints
+// Set this in your hosting environment or create data/.admin_key file
+define('ADMIN_KEY_FILE', DATA_DIR . '/.admin_key');
+function getAdminKey(): ?string {
+    // Check environment variable first
+    $envKey = getenv('SAMBAND_ADMIN_KEY');
+    if ($envKey) return $envKey;
+    // Check file
+    if (file_exists(ADMIN_KEY_FILE)) {
+        return trim(file_get_contents(ADMIN_KEY_FILE));
+    }
+    return null;
+}
+function isAdminAuthorized(): bool {
+    $adminKey = getAdminKey();
+    if (!$adminKey) return true; // No key set = open access (backwards compatible)
+    $providedKey = $_GET['key'] ?? $_SERVER['HTTP_X_ADMIN_KEY'] ?? '';
+    return hash_equals($adminKey, $providedKey);
+}
 
 // Strict CORS - only allow same-origin for AJAX requests
 if (isset($_GET['ajax'])) {
@@ -44,7 +65,7 @@ if (isset($_GET['ajax'])) {
 define('CACHE_TIME', 600);           // 10 minutes for events
 define('STALE_CACHE_TIME', 1200);    // 20 minutes stale-while-revalidate window
 define('EVENTS_PER_PAGE', 40);
-define('ASSET_VERSION', '5.3.0');    // Bump this to bust browser cache
+define('ASSET_VERSION', '5.4.0');    // Bump this to bust browser cache
 define('MAX_FETCH_RETRIES', 3);      // Max retries for API fetch
 define('USER_AGENT', 'FreshRSS/1.28.0 (Linux; https://freshrss.org)');
 define('POLICE_API_URL', 'https://polisen.se/api/events');
@@ -1327,14 +1348,24 @@ if (isset($_GET['ajax'])) {
     }
 
     if ($_GET['ajax'] === 'status') {
-        // Hidden status endpoint - returns extended stats
+        // Hidden status endpoint - returns extended stats (requires admin key if set)
+        if (!isAdminAuthorized()) {
+            http_response_code(403);
+            echo json_encode(['error' => 'Unauthorized']);
+            exit;
+        }
         header('Cache-Control: no-cache');
         echo json_encode(getExtendedStats(), JSON_PRETTY_PRINT);
         exit;
     }
 
     if ($_GET['ajax'] === 'backup') {
-        // Trigger manual backup
+        // Trigger manual backup (requires admin key if set)
+        if (!isAdminAuthorized()) {
+            http_response_code(403);
+            echo json_encode(['error' => 'Unauthorized']);
+            exit;
+        }
         header('Cache-Control: no-cache');
         $result = createBackup();
         echo json_encode($result);
@@ -1347,6 +1378,13 @@ if (isset($_GET['ajax'])) {
 // ============================================================================
 
 if (isset($_GET['download_backup'])) {
+    // Requires admin key if set
+    if (!isAdminAuthorized()) {
+        http_response_code(403);
+        echo 'Unauthorized';
+        exit;
+    }
+
     $filename = basename($_GET['download_backup']); // Sanitize filename
     $filepath = BACKUP_DIR . '/' . $filename;
 
@@ -1370,6 +1408,12 @@ if (isset($_GET['download_backup'])) {
 // ============================================================================
 
 if (isset($_GET['page']) && $_GET['page'] === 'status') {
+    // Requires admin key if set
+    if (!isAdminAuthorized()) {
+        http_response_code(403);
+        echo '<!DOCTYPE html><html><head><title>403 Forbidden</title></head><body><h1>403 Forbidden</h1><p>Admin key required. Add ?key=YOUR_KEY to URL.</p></body></html>';
+        exit;
+    }
     $stats = getExtendedStats();
     ?>
 <!DOCTYPE html>
