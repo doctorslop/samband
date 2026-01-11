@@ -27,23 +27,10 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
 header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.basemaps.cartocdn.com https://*.tile.openstreetmap.org; connect-src 'self'");
 
 // Admin authentication for sensitive endpoints
-// Set this in your hosting environment or create data/.admin_key file
-define('ADMIN_KEY_FILE', DATA_DIR . '/.admin_key');
-function getAdminKey(): ?string {
-    // Check environment variable first
-    $envKey = getenv('SAMBAND_ADMIN_KEY');
-    if ($envKey) return $envKey;
-    // Check file
-    if (file_exists(ADMIN_KEY_FILE)) {
-        return trim(file_get_contents(ADMIN_KEY_FILE));
-    }
-    return null;
-}
+define('ADMIN_KEY', 'loltrappa123');
 function isAdminAuthorized(): bool {
-    $adminKey = getAdminKey();
-    if (!$adminKey) return true; // No key set = open access (backwards compatible)
     $providedKey = $_GET['key'] ?? $_SERVER['HTTP_X_ADMIN_KEY'] ?? '';
-    return hash_equals($adminKey, $providedKey);
+    return hash_equals(ADMIN_KEY, $providedKey);
 }
 
 // Strict CORS - only allow same-origin for AJAX requests
