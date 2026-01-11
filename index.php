@@ -12,7 +12,7 @@ date_default_timezone_set('Europe/Stockholm');
 define('CACHE_TIME', 600);           // 10 minutes for events
 define('STALE_CACHE_TIME', 1200);    // 20 minutes stale-while-revalidate window
 define('EVENTS_PER_PAGE', 40);
-define('ASSET_VERSION', '5.1.0');    // Bump this to bust browser cache
+define('ASSET_VERSION', '5.2.0');    // Bump this to bust browser cache
 define('USER_AGENT', 'FreshRSS/1.28.0 (Linux; https://freshrss.org)');
 define('POLICE_API_URL', 'https://polisen.se/api/events');
 define('POLICE_API_TIMEOUT', 30);
@@ -285,6 +285,8 @@ function getExtendedStats(): array {
     $last24h = $pdo->query("SELECT COUNT(*) as count FROM events WHERE datetime >= datetime('now', '-1 day')")->fetch()['count'];
     $last7days = $pdo->query("SELECT COUNT(*) as count FROM events WHERE datetime >= datetime('now', '-7 days')")->fetch()['count'];
     $last30days = $pdo->query("SELECT COUNT(*) as count FROM events WHERE datetime >= datetime('now', '-30 days')")->fetch()['count'];
+    $last6months = $pdo->query("SELECT COUNT(*) as count FROM events WHERE datetime >= datetime('now', '-6 months')")->fetch()['count'];
+    $last1year = $pdo->query("SELECT COUNT(*) as count FROM events WHERE datetime >= datetime('now', '-1 year')")->fetch()['count'];
 
     // Monthly breakdown (last 12 months)
     $monthlyStats = $pdo->query("
@@ -369,7 +371,9 @@ function getExtendedStats(): array {
         'time_stats' => [
             'last_24h' => $last24h,
             'last_7_days' => $last7days,
-            'last_30_days' => $last30days
+            'last_30_days' => $last30days,
+            'last_6_months' => $last6months,
+            'last_1_year' => $last1year
         ],
         'monthly' => $monthlyStats,
         'weekly' => $weeklyStats,
@@ -836,11 +840,13 @@ function calculateStats($events) {
     if (!is_array($events) || isset($events['error'])) return null;
 
     $stats = ['total' => count($events), 'byType' => [], 'byLocation' => [],
-              'byHour' => array_fill(0, 24, 0), 'byDay' => [], 'last24h' => 0, 'last7days' => 0];
+              'byHour' => array_fill(0, 24, 0), 'byDay' => [], 'last24h' => 0, 'last7days' => 0, 'last6months' => 0, 'last1year' => 0];
 
     $now = new DateTime();
     $yesterday = (clone $now)->modify('-24 hours');
     $lastWeek = (clone $now)->modify('-7 days');
+    $sixMonthsAgo = (clone $now)->modify('-6 months');
+    $oneYearAgo = (clone $now)->modify('-1 year');
 
     foreach ($events as $event) {
         $type = $event['type'] ?? 'Okänd';
@@ -855,6 +861,8 @@ function calculateStats($events) {
             $stats['byDay'][$dayKey] = ($stats['byDay'][$dayKey] ?? 0) + 1;
             if ($eventDate >= $yesterday) $stats['last24h']++;
             if ($eventDate >= $lastWeek) $stats['last7days']++;
+            if ($eventDate >= $sixMonthsAgo) $stats['last6months']++;
+            if ($eventDate >= $oneYearAgo) $stats['last1year']++;
         } catch (Exception $e) {}
     }
 
@@ -1310,7 +1318,17 @@ if (isset($_GET['page']) && $_GET['page'] === 'status') {
             </div>
             <div class="card">
                 <div class="card-title">Senaste 30 dagarna</div>
-                <div class="card-value"><?= $stats['time_stats']['last_30_days'] ?></div>
+                <div class="card-value"><?= number_format($stats['time_stats']['last_30_days'], 0, ',', ' ') ?></div>
+                <div class="card-sub">händelser</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Senaste 6 månaderna</div>
+                <div class="card-value"><?= number_format($stats['time_stats']['last_6_months'], 0, ',', ' ') ?></div>
+                <div class="card-sub">händelser</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Senaste 1 året</div>
+                <div class="card-value"><?= number_format($stats['time_stats']['last_1_year'], 0, ',', ' ') ?></div>
                 <div class="card-sub">händelser</div>
             </div>
             <div class="card">
@@ -1717,6 +1735,8 @@ $dbStats = getDatabaseStats();
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; text-align: center;">
                         <div><div class="stat-number"><?= $stats['last24h'] ?></div><div class="stat-label">Senaste 24h</div></div>
                         <div><div class="stat-number"><?= $stats['last7days'] ?></div><div class="stat-label">Senaste 7 dagar</div></div>
+                        <div><div class="stat-number"><?= number_format($stats['last6months'], 0, ',', ' ') ?></div><div class="stat-label">Senaste 6 mån</div></div>
+                        <div><div class="stat-number"><?= number_format($stats['last1year'], 0, ',', ' ') ?></div><div class="stat-label">Senaste 1 år</div></div>
                     </div>
                 </div>
                 <div class="stats-card">
