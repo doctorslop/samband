@@ -12,7 +12,7 @@ date_default_timezone_set('Europe/Stockholm');
 define('CACHE_TIME', 600);           // 10 minutes for events
 define('STALE_CACHE_TIME', 1200);    // 20 minutes stale-while-revalidate window
 define('EVENTS_PER_PAGE', 40);
-define('ASSET_VERSION', '5.0.0');    // Bump this to bust browser cache
+define('ASSET_VERSION', '5.2.0');    // Bump this to bust browser cache
 define('USER_AGENT', 'FreshRSS/1.28.0 (Linux; https://freshrss.org)');
 define('POLICE_API_URL', 'https://polisen.se/api/events');
 define('POLICE_API_TIMEOUT', 30);
@@ -21,6 +21,9 @@ define('POLICE_API_TIMEOUT', 30);
 define('DATA_DIR', __DIR__ . '/data');
 define('DB_PATH', DATA_DIR . '/events.db');
 define('BACKUP_DIR', DATA_DIR . '/backups');
+
+// Allowed views (security)
+define('ALLOWED_VIEWS', ['list', 'map', 'stats', 'press']);
 
 // ============================================================================
 // DATABASE FUNCTIONS
@@ -264,6 +267,224 @@ function getDatabaseStats(): array {
     ];
 }
 
+/**
+ * Get extended database statistics for status page
+ */
+function getExtendedStats(): array {
+    $pdo = getDatabase();
+
+    // Basic stats
+    $total = $pdo->query("SELECT COUNT(*) as count FROM events")->fetch()['count'];
+    $locationCount = $pdo->query("SELECT COUNT(DISTINCT location_name) as count FROM events")->fetch()['count'];
+    $typeCount = $pdo->query("SELECT COUNT(DISTINCT type) as count FROM events")->fetch()['count'];
+
+    // Date range
+    $dateRange = $pdo->query("SELECT MIN(datetime) as oldest, MAX(datetime) as newest FROM events")->fetch();
+
+    // Time-based stats
+    $last24h = $pdo->query("SELECT COUNT(*) as count FROM events WHERE datetime >= datetime('now', '-1 day')")->fetch()['count'];
+    $last7days = $pdo->query("SELECT COUNT(*) as count FROM events WHERE datetime >= datetime('now', '-7 days')")->fetch()['count'];
+    $last30days = $pdo->query("SELECT COUNT(*) as count FROM events WHERE datetime >= datetime('now', '-30 days')")->fetch()['count'];
+    $last6months = $pdo->query("SELECT COUNT(*) as count FROM events WHERE datetime >= datetime('now', '-6 months')")->fetch()['count'];
+    $last1year = $pdo->query("SELECT COUNT(*) as count FROM events WHERE datetime >= datetime('now', '-1 year')")->fetch()['count'];
+
+    // Monthly breakdown (last 12 months)
+    $monthlyStats = $pdo->query("
+        SELECT strftime('%Y-%m', datetime) as month, COUNT(*) as count
+        FROM events
+        WHERE datetime >= datetime('now', '-12 months')
+        GROUP BY strftime('%Y-%m', datetime)
+        ORDER BY month DESC
+    ")->fetchAll();
+
+    // Weekly breakdown (last 8 weeks)
+    $weeklyStats = $pdo->query("
+        SELECT strftime('%Y-W%W', datetime) as week, COUNT(*) as count
+        FROM events
+        WHERE datetime >= datetime('now', '-8 weeks')
+        GROUP BY strftime('%Y-W%W', datetime)
+        ORDER BY week DESC
+    ")->fetchAll();
+
+    // Top locations
+    $topLocations = $pdo->query("
+        SELECT location_name, COUNT(*) as count
+        FROM events
+        GROUP BY location_name
+        ORDER BY count DESC
+        LIMIT 15
+    ")->fetchAll();
+
+    // Top types
+    $topTypes = $pdo->query("
+        SELECT type, COUNT(*) as count
+        FROM events
+        GROUP BY type
+        ORDER BY count DESC
+        LIMIT 15
+    ")->fetchAll();
+
+    // Fetch log stats
+    $fetchStats = $pdo->query("
+        SELECT
+            COUNT(*) as total_fetches,
+            SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successful,
+            SUM(events_new) as total_new_events,
+            MAX(fetched_at) as last_fetch
+        FROM fetch_log
+    ")->fetch();
+
+    // Recent fetches
+    $recentFetches = $pdo->query("
+        SELECT fetched_at, events_fetched, events_new, success, error_message
+        FROM fetch_log
+        ORDER BY id DESC
+        LIMIT 20
+    ")->fetchAll();
+
+    // Database file size
+    $dbSize = file_exists(DB_PATH) ? filesize(DB_PATH) : 0;
+    $walSize = file_exists(DB_PATH . '-wal') ? filesize(DB_PATH . '-wal') : 0;
+
+    // Backup info
+    $backups = [];
+    if (is_dir(BACKUP_DIR)) {
+        $files = glob(BACKUP_DIR . '/*.db');
+        foreach ($files as $file) {
+            $backups[] = [
+                'filename' => basename($file),
+                'size' => filesize($file),
+                'created' => date('c', filemtime($file))
+            ];
+        }
+        usort($backups, fn($a, $b) => strcmp($b['created'], $a['created']));
+    }
+
+    return [
+        'total_events' => $total,
+        'unique_locations' => $locationCount,
+        'unique_types' => $typeCount,
+        'date_range' => [
+            'oldest' => $dateRange['oldest'],
+            'newest' => $dateRange['newest']
+        ],
+        'time_stats' => [
+            'last_24h' => $last24h,
+            'last_7_days' => $last7days,
+            'last_30_days' => $last30days,
+            'last_6_months' => $last6months,
+            'last_1_year' => $last1year
+        ],
+        'monthly' => $monthlyStats,
+        'weekly' => $weeklyStats,
+        'top_locations' => $topLocations,
+        'top_types' => $topTypes,
+        'fetch_stats' => $fetchStats,
+        'recent_fetches' => $recentFetches,
+        'database' => [
+            'size_bytes' => $dbSize,
+            'size_mb' => round($dbSize / (1024 * 1024), 2),
+            'wal_size_bytes' => $walSize,
+            'path' => DB_PATH
+        ],
+        'backups' => $backups,
+        'server_time' => date('c'),
+        'php_version' => PHP_VERSION
+    ];
+}
+
+/**
+ * Create a database backup
+ */
+function createBackup(): array {
+    if (!is_dir(BACKUP_DIR)) {
+        mkdir(BACKUP_DIR, 0755, true);
+    }
+
+    $timestamp = date('Y-m-d_H-i-s');
+    $backupFile = BACKUP_DIR . "/events_backup_{$timestamp}.db";
+
+    try {
+        // Use SQLite backup command via PHP
+        $pdo = getDatabase();
+
+        // Checkpoint WAL to ensure all data is in main db
+        $pdo->exec('PRAGMA wal_checkpoint(TRUNCATE)');
+
+        // Copy the database file
+        if (copy(DB_PATH, $backupFile)) {
+            $size = filesize($backupFile);
+
+            // Log the backup
+            $stmt = $pdo->prepare("
+                INSERT INTO backup_log (backup_at, filename, size_bytes, success, error_message)
+                VALUES (?, ?, ?, 1, NULL)
+            ");
+            $stmt->execute([date('c'), basename($backupFile), $size]);
+
+            // Clean old backups (keep last 10)
+            $backups = glob(BACKUP_DIR . '/*.db');
+            if (count($backups) > 10) {
+                usort($backups, fn($a, $b) => filemtime($b) - filemtime($a));
+                foreach (array_slice($backups, 10) as $oldBackup) {
+                    @unlink($oldBackup);
+                }
+            }
+
+            return [
+                'success' => true,
+                'filename' => basename($backupFile),
+                'size' => $size,
+                'path' => $backupFile
+            ];
+        } else {
+            throw new Exception('Failed to copy database file');
+        }
+    } catch (Exception $e) {
+        // Log failed backup
+        try {
+            $pdo = getDatabase();
+            $stmt = $pdo->prepare("
+                INSERT INTO backup_log (backup_at, filename, size_bytes, success, error_message)
+                VALUES (?, ?, 0, 0, ?)
+            ");
+            $stmt->execute([date('c'), '', $e->getMessage()]);
+        } catch (Exception $logError) {
+            // Ignore logging errors
+        }
+
+        return [
+            'success' => false,
+            'error' => $e->getMessage()
+        ];
+    }
+}
+
+/**
+ * Check if weekly backup is needed and create one
+ */
+function checkWeeklyBackup(): void {
+    $pdo = getDatabase();
+
+    // Check last successful backup
+    $lastBackup = $pdo->query("
+        SELECT backup_at FROM backup_log
+        WHERE success = 1
+        ORDER BY id DESC LIMIT 1
+    ")->fetch();
+
+    $needsBackup = true;
+    if ($lastBackup) {
+        $lastBackupTime = strtotime($lastBackup['backup_at']);
+        $weekAgo = strtotime('-7 days');
+        $needsBackup = $lastBackupTime < $weekAgo;
+    }
+
+    if ($needsBackup) {
+        createBackup();
+    }
+}
+
 // ============================================================================
 // FETCHING FUNCTIONS
 // ============================================================================
@@ -401,6 +622,8 @@ function ensureData(): void {
 
     try {
         fetchAndStoreEvents();
+        // Check if weekly backup is needed
+        checkWeeklyBackup();
     } finally {
         @unlink($lockFile);
     }
@@ -617,11 +840,13 @@ function calculateStats($events) {
     if (!is_array($events) || isset($events['error'])) return null;
 
     $stats = ['total' => count($events), 'byType' => [], 'byLocation' => [],
-              'byHour' => array_fill(0, 24, 0), 'byDay' => [], 'last24h' => 0, 'last7days' => 0];
+              'byHour' => array_fill(0, 24, 0), 'byDay' => [], 'last24h' => 0, 'last7days' => 0, 'last6months' => 0, 'last1year' => 0];
 
     $now = new DateTime();
     $yesterday = (clone $now)->modify('-24 hours');
     $lastWeek = (clone $now)->modify('-7 days');
+    $sixMonthsAgo = (clone $now)->modify('-6 months');
+    $oneYearAgo = (clone $now)->modify('-1 year');
 
     foreach ($events as $event) {
         $type = $event['type'] ?? 'Okänd';
@@ -636,6 +861,8 @@ function calculateStats($events) {
             $stats['byDay'][$dayKey] = ($stats['byDay'][$dayKey] ?? 0) + 1;
             if ($eventDate >= $yesterday) $stats['last24h']++;
             if ($eventDate >= $lastWeek) $stats['last7days']++;
+            if ($eventDate >= $sixMonthsAgo) $stats['last6months']++;
+            if ($eventDate >= $oneYearAgo) $stats['last1year']++;
         } catch (Exception $e) {}
     }
 
@@ -981,6 +1208,288 @@ if (isset($_GET['ajax'])) {
         echo json_encode(getDatabaseStats());
         exit;
     }
+
+    if ($_GET['ajax'] === 'status') {
+        // Hidden status endpoint - returns extended stats
+        header('Cache-Control: no-cache');
+        echo json_encode(getExtendedStats(), JSON_PRETTY_PRINT);
+        exit;
+    }
+
+    if ($_GET['ajax'] === 'backup') {
+        // Trigger manual backup
+        header('Cache-Control: no-cache');
+        $result = createBackup();
+        echo json_encode($result);
+        exit;
+    }
+}
+
+// ============================================================================
+// BACKUP DOWNLOAD ENDPOINT
+// ============================================================================
+
+if (isset($_GET['download_backup'])) {
+    $filename = basename($_GET['download_backup']); // Sanitize filename
+    $filepath = BACKUP_DIR . '/' . $filename;
+
+    // Validate filename format and existence
+    if (preg_match('/^events_backup_[\d\-_]+\.db$/', $filename) && file_exists($filepath)) {
+        header('Content-Type: application/octet-stream');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Content-Length: ' . filesize($filepath));
+        header('Cache-Control: no-cache');
+        readfile($filepath);
+        exit;
+    } else {
+        http_response_code(404);
+        echo 'Backup not found';
+        exit;
+    }
+}
+
+// ============================================================================
+// HIDDEN STATUS PAGE
+// ============================================================================
+
+if (isset($_GET['page']) && $_GET['page'] === 'status') {
+    $stats = getExtendedStats();
+    ?>
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Status - Sambandscentralen</title>
+    <style>
+        :root { --bg: #0a1628; --surface: #0f1f38; --border: rgba(255,255,255,0.1); --text: #e2e8f0; --muted: #94a3b8; --accent: #fcd34d; --success: #10b981; --danger: #ef4444; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { font-size: 24px; margin-bottom: 8px; color: var(--accent); }
+        h2 { font-size: 16px; margin: 24px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+        h3 { font-size: 14px; margin: 16px 0 8px; color: var(--muted); }
+        .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+        .card-title { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+        .card-value { font-size: 28px; font-weight: 700; color: var(--accent); }
+        .card-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase; }
+        tr:hover { background: rgba(255,255,255,0.02); }
+        .success { color: var(--success); }
+        .danger { color: var(--danger); }
+        .mono { font-family: monospace; font-size: 12px; }
+        .btn { display: inline-block; padding: 8px 16px; background: var(--accent); color: var(--bg); border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; margin-right: 8px; margin-bottom: 8px; }
+        .btn:hover { opacity: 0.9; }
+        .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+        .section { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+        .back-link { display: inline-block; margin-bottom: 20px; color: var(--accent); text-decoration: none; font-size: 14px; }
+        .back-link:hover { text-decoration: underline; }
+        #backup-status { margin-top: 12px; padding: 10px; border-radius: 6px; display: none; }
+        #backup-status.success { display: block; background: rgba(16,185,129,0.1); border: 1px solid var(--success); }
+        #backup-status.error { display: block; background: rgba(239,68,68,0.1); border: 1px solid var(--danger); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="./" class="back-link">← Tillbaka till Sambandscentralen</a>
+        <h1>📊 Status Dashboard</h1>
+        <p class="subtitle">Intern statistik och databasöversikt • <?= date('Y-m-d H:i:s') ?></p>
+
+        <div class="grid">
+            <div class="card">
+                <div class="card-title">Totalt antal händelser</div>
+                <div class="card-value"><?= number_format($stats['total_events'], 0, ',', ' ') ?></div>
+                <div class="card-sub">Sedan <?= $stats['date_range']['oldest'] ? date('Y-m-d', strtotime($stats['date_range']['oldest'])) : 'N/A' ?></div>
+            </div>
+            <div class="card">
+                <div class="card-title">Senaste 24 timmarna</div>
+                <div class="card-value"><?= $stats['time_stats']['last_24h'] ?></div>
+                <div class="card-sub">nya händelser</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Senaste 7 dagarna</div>
+                <div class="card-value"><?= $stats['time_stats']['last_7_days'] ?></div>
+                <div class="card-sub">händelser</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Senaste 30 dagarna</div>
+                <div class="card-value"><?= number_format($stats['time_stats']['last_30_days'], 0, ',', ' ') ?></div>
+                <div class="card-sub">händelser</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Senaste 6 månaderna</div>
+                <div class="card-value"><?= number_format($stats['time_stats']['last_6_months'], 0, ',', ' ') ?></div>
+                <div class="card-sub">händelser</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Senaste 1 året</div>
+                <div class="card-value"><?= number_format($stats['time_stats']['last_1_year'], 0, ',', ' ') ?></div>
+                <div class="card-sub">händelser</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Unika platser</div>
+                <div class="card-value"><?= $stats['unique_locations'] ?></div>
+            </div>
+            <div class="card">
+                <div class="card-title">Händelsetyper</div>
+                <div class="card-value"><?= $stats['unique_types'] ?></div>
+            </div>
+            <div class="card">
+                <div class="card-title">Databasstorlek</div>
+                <div class="card-value"><?= $stats['database']['size_mb'] ?> MB</div>
+                <div class="card-sub">WAL: <?= round($stats['database']['wal_size_bytes'] / 1024, 1) ?> KB</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Senaste hämtning</div>
+                <div class="card-value" style="font-size: 16px;"><?= $stats['fetch_stats']['last_fetch'] ? date('H:i', strtotime($stats['fetch_stats']['last_fetch'])) : 'Aldrig' ?></div>
+                <div class="card-sub"><?= $stats['fetch_stats']['last_fetch'] ? date('Y-m-d', strtotime($stats['fetch_stats']['last_fetch'])) : '' ?></div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>📅 Månadsstatistik</h2>
+            <table>
+                <thead><tr><th>Månad</th><th>Händelser</th></tr></thead>
+                <tbody>
+                <?php foreach ($stats['monthly'] as $m): ?>
+                    <tr><td><?= htmlspecialchars($m['month']) ?></td><td><?= number_format($m['count'], 0, ',', ' ') ?></td></tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section">
+            <h2>📈 Veckostatistik</h2>
+            <table>
+                <thead><tr><th>Vecka</th><th>Händelser</th></tr></thead>
+                <tbody>
+                <?php foreach ($stats['weekly'] as $w): ?>
+                    <tr><td><?= htmlspecialchars($w['week']) ?></td><td><?= number_format($w['count'], 0, ',', ' ') ?></td></tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="grid" style="grid-template-columns: 1fr 1fr;">
+            <div class="section">
+                <h2>📍 Topp 15 platser</h2>
+                <table>
+                    <thead><tr><th>Plats</th><th>Antal</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($stats['top_locations'] as $loc): ?>
+                        <tr><td><?= htmlspecialchars($loc['location_name']) ?></td><td><?= number_format($loc['count'], 0, ',', ' ') ?></td></tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <div class="section">
+                <h2>🏷️ Topp 15 typer</h2>
+                <table>
+                    <thead><tr><th>Typ</th><th>Antal</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($stats['top_types'] as $type): ?>
+                        <tr><td><?= htmlspecialchars($type['type']) ?></td><td><?= number_format($type['count'], 0, ',', ' ') ?></td></tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🔄 Senaste hämtningar</h2>
+            <table>
+                <thead><tr><th>Tidpunkt</th><th>Hämtade</th><th>Nya</th><th>Status</th><th>Fel</th></tr></thead>
+                <tbody>
+                <?php foreach ($stats['recent_fetches'] as $f): ?>
+                    <tr>
+                        <td class="mono"><?= htmlspecialchars($f['fetched_at']) ?></td>
+                        <td><?= $f['events_fetched'] ?></td>
+                        <td><?= $f['events_new'] ?></td>
+                        <td class="<?= $f['success'] ? 'success' : 'danger' ?>"><?= $f['success'] ? '✓ OK' : '✗ Fel' ?></td>
+                        <td class="mono" style="max-width: 200px; overflow: hidden; text-overflow: ellipsis;"><?= htmlspecialchars($f['error_message'] ?? '') ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section">
+            <h2>💾 Säkerhetskopior</h2>
+            <p style="margin-bottom: 16px; color: var(--muted); font-size: 13px;">Automatiska veckovisa säkerhetskopior. Senaste 10 sparas.</p>
+
+            <button class="btn" onclick="createBackup()">Skapa ny säkerhetskopia</button>
+            <div id="backup-status"></div>
+
+            <?php if (empty($stats['backups'])): ?>
+                <p style="color: var(--muted); margin-top: 16px;">Inga säkerhetskopior ännu.</p>
+            <?php else: ?>
+                <table style="margin-top: 16px;">
+                    <thead><tr><th>Fil</th><th>Storlek</th><th>Skapad</th><th>Ladda ner</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($stats['backups'] as $backup): ?>
+                        <tr>
+                            <td class="mono"><?= htmlspecialchars($backup['filename']) ?></td>
+                            <td><?= round($backup['size'] / (1024 * 1024), 2) ?> MB</td>
+                            <td class="mono"><?= date('Y-m-d H:i', strtotime($backup['created'])) ?></td>
+                            <td><a href="?download_backup=<?= urlencode($backup['filename']) ?>" class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;">⬇️ Ladda ner</a></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php endif; ?>
+        </div>
+
+        <div class="section">
+            <h2>🖥️ Systeminformation</h2>
+            <table>
+                <tr><td>PHP-version</td><td class="mono"><?= $stats['php_version'] ?></td></tr>
+                <tr><td>Servertid</td><td class="mono"><?= $stats['server_time'] ?></td></tr>
+                <tr><td>Databassökväg</td><td class="mono"><?= htmlspecialchars($stats['database']['path']) ?></td></tr>
+                <tr><td>Totalt antal hämtningar</td><td><?= $stats['fetch_stats']['total_fetches'] ?></td></tr>
+                <tr><td>Lyckade hämtningar</td><td><?= $stats['fetch_stats']['successful'] ?></td></tr>
+                <tr><td>Totalt nya händelser (via hämtningar)</td><td><?= $stats['fetch_stats']['total_new_events'] ?></td></tr>
+            </table>
+        </div>
+
+        <p style="text-align: center; color: var(--muted); font-size: 12px; margin-top: 40px;">
+            Sambandscentralen Status Dashboard • v<?= ASSET_VERSION ?>
+        </p>
+    </div>
+
+    <script>
+    async function createBackup() {
+        const status = document.getElementById('backup-status');
+        status.className = '';
+        status.style.display = 'none';
+        status.textContent = 'Skapar säkerhetskopia...';
+
+        try {
+            const res = await fetch('?ajax=backup');
+            const data = await res.json();
+
+            if (data.success) {
+                status.className = 'success';
+                status.innerHTML = '✓ Säkerhetskopia skapad: <strong>' + data.filename + '</strong> (' + (data.size / 1024 / 1024).toFixed(2) + ' MB)';
+                setTimeout(() => location.reload(), 2000);
+            } else {
+                status.className = 'error';
+                status.textContent = '✗ Fel: ' + (data.error || 'Okänt fel');
+            }
+        } catch (err) {
+            status.className = 'error';
+            status.textContent = '✗ Nätverksfel: ' + err.message;
+        }
+    }
+    </script>
+</body>
+</html>
+    <?php
+    exit;
 }
 
 // ============================================================================
@@ -997,6 +1506,10 @@ if ($customLocation) {
 $typeFilter = trim($_GET['type'] ?? '');
 $searchFilter = trim($_GET['search'] ?? '');
 $currentView = $_GET['view'] ?? 'list';
+// Validate view parameter (security)
+if (!in_array($currentView, ALLOWED_VIEWS)) {
+    $currentView = 'list';
+}
 
 $allEvents = fetchPoliceEvents();
 $filters = [];
@@ -1222,6 +1735,8 @@ $dbStats = getDatabaseStats();
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; text-align: center;">
                         <div><div class="stat-number"><?= $stats['last24h'] ?></div><div class="stat-label">Senaste 24h</div></div>
                         <div><div class="stat-number"><?= $stats['last7days'] ?></div><div class="stat-label">Senaste 7 dagar</div></div>
+                        <div><div class="stat-number"><?= number_format($stats['last6months'], 0, ',', ' ') ?></div><div class="stat-label">Senaste 6 mån</div></div>
+                        <div><div class="stat-number"><?= number_format($stats['last1year'], 0, ',', ' ') ?></div><div class="stat-label">Senaste 1 år</div></div>
                     </div>
                 </div>
                 <div class="stats-card">

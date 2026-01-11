@@ -515,7 +515,7 @@
             e.preventDefault();
             e.stopPropagation();
             if (!audio) {
-                audio = new Audio('radio.mp3');
+                audio = new Audio('sound/radio.mp3');
                 audio.volume = 0.5;
                 audio.addEventListener('ended', () => logoIcon.classList.remove('radio-playing'));
             }
