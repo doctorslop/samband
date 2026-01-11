@@ -50,7 +50,6 @@ if (isset($_GET['ajax'])) {
 
 // Configuration
 define('CACHE_TIME', 120);           // 2 minutes for events (more real-time)
-define('STALE_CACHE_TIME', 300);     // 5 minutes stale-while-revalidate window
 define('EVENTS_PER_PAGE', 40);
 define('ASSET_VERSION', '5.5.0');    // Bump this to bust browser cache
 define('MAX_FETCH_RETRIES', 3);      // Max retries for API fetch
@@ -141,6 +140,9 @@ function getDatabase(): PDO {
         if ($isNew) {
             initDatabase($pdo);
         }
+
+        // Run any pending migrations
+        runMigrations($pdo);
     }
 
     return $pdo;
@@ -192,7 +194,56 @@ function initDatabase(PDO $pdo): void {
             success INTEGER NOT NULL,
             error_message TEXT
         );
+
+        -- Migrations tracking table
+        CREATE TABLE IF NOT EXISTS migrations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            applied_at TEXT NOT NULL
+        );
     ");
+}
+
+/**
+ * Run database migrations
+ */
+function runMigrations(PDO $pdo): void {
+    // Migration: Normalize datetime format
+    $migrationName = 'normalize_datetime_format_v1';
+
+    // Check if migration already applied
+    $stmt = $pdo->prepare("SELECT 1 FROM migrations WHERE name = ?");
+    $stmt->execute([$migrationName]);
+    if ($stmt->fetch()) {
+        return; // Already applied
+    }
+
+    // Fix datetime format: "2026-01-11 16:47:22 +01:00" -> "2026-01-11T16:47:22+01:00"
+    // Step 1: Replace space before timezone (both + and -)
+    $pdo->exec("UPDATE events SET datetime = REPLACE(datetime, ' +', '+') WHERE datetime LIKE '% +%'");
+    $pdo->exec("UPDATE events SET datetime = REPLACE(datetime, ' -', '-') WHERE datetime LIKE '% -%' AND datetime NOT LIKE '%T%'");
+    // Step 2: Replace first space with T (between date and time)
+    $pdo->exec("
+        UPDATE events
+        SET datetime = SUBSTR(datetime, 1, 10) || 'T' || SUBSTR(datetime, 12)
+        WHERE datetime LIKE '____-__-__ %'
+    ");
+
+    // Record migration
+    $stmt = $pdo->prepare("INSERT INTO migrations (name, applied_at) VALUES (?, ?)");
+    $stmt->execute([$migrationName, date('c')]);
+}
+
+/**
+ * Normalize datetime to ISO 8601 format for SQLite compatibility
+ * Converts "2026-01-11 16:47:22 +01:00" to "2026-01-11T16:47:22+01:00"
+ */
+function normalizeDateTime(string $datetime): string {
+    // Replace first space with T (between date and time)
+    $normalized = preg_replace('/^(\d{4}-\d{2}-\d{2}) /', '$1T', $datetime);
+    // Remove space before timezone offset (e.g., " +01:00" -> "+01:00")
+    $normalized = preg_replace('/ ([+-]\d{2}:\d{2})$/', '$1', $normalized);
+    return $normalized;
 }
 
 /**
@@ -206,9 +257,12 @@ function insertEvent(PDO $pdo, array $event): bool {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ");
 
+    // Normalize datetime to ISO 8601 format for SQLite compatibility
+    $normalizedDatetime = normalizeDateTime($event['datetime']);
+
     $stmt->execute([
         $event['id'],
-        $event['datetime'],
+        $normalizedDatetime,
         $event['name'],
         $event['summary'] ?? '',
         $event['url'] ?? '',
@@ -267,7 +321,7 @@ function getEventsFromDb(array $filters = [], int $limit = 500, int $offset = 0)
         $params[] = $filters['to'] . 'T23:59:59';
     }
 
-    $query .= " ORDER BY datetime(datetime) DESC LIMIT ? OFFSET ?";
+    $query .= " ORDER BY datetime DESC LIMIT ? OFFSET ?";
     $params[] = $limit;
     $params[] = $offset;
 
@@ -817,27 +871,6 @@ function ensureData(): void {
     } finally {
         @unlink($lockFile);
     }
-}
-
-// ============================================================================
-// CACHING FUNCTIONS (for file-based cache of processed data)
-// ============================================================================
-
-function getCacheFilePath($key) {
-    return sys_get_temp_dir() . '/samband_' . md5($key) . '.json';
-}
-
-function getFromFileCache($key, $maxAge = 300) {
-    $file = getCacheFilePath($key);
-    if (file_exists($file) && (time() - filemtime($file)) < $maxAge) {
-        $data = json_decode(file_get_contents($file), true);
-        if ($data !== null) return $data;
-    }
-    return null;
-}
-
-function saveToFileCache($key, $data) {
-    file_put_contents(getCacheFilePath($key), json_encode($data));
 }
 
 // ============================================================================
