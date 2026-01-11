@@ -5,6 +5,9 @@
 *.lock
 backups/*.db
 
+# Ignore admin key file (sensitive!)
+.admin_key
+
 # Keep these files
 !.gitignore
 !.htaccess
