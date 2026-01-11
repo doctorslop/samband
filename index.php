@@ -49,10 +49,10 @@ if (isset($_GET['ajax'])) {
 }
 
 // Configuration
-define('CACHE_TIME', 600);           // 10 minutes for events
-define('STALE_CACHE_TIME', 1200);    // 20 minutes stale-while-revalidate window
+define('CACHE_TIME', 120);           // 2 minutes for events (more real-time)
+define('STALE_CACHE_TIME', 300);     // 5 minutes stale-while-revalidate window
 define('EVENTS_PER_PAGE', 40);
-define('ASSET_VERSION', '5.4.1');    // Bump this to bust browser cache
+define('ASSET_VERSION', '5.5.0');    // Bump this to bust browser cache
 define('MAX_FETCH_RETRIES', 3);      // Max retries for API fetch
 define('USER_AGENT', 'FreshRSS/1.28.0 (Linux; https://freshrss.org)');
 define('POLICE_API_URL', 'https://polisen.se/api/events');
@@ -1427,6 +1427,27 @@ if (isset($_GET['ajax'])) {
         echo json_encode($result);
         exit;
     }
+
+    if ($_GET['ajax'] === 'refresh') {
+        // Force refresh data from Police API (requires admin key)
+        if (!isAdminAuthorized()) {
+            http_response_code(403);
+            echo json_encode(['error' => 'Unauthorized']);
+            exit;
+        }
+        header('Cache-Control: no-cache');
+
+        // Remove lock file if stuck
+        $lockFile = DATA_DIR . '/fetch.lock';
+        if (file_exists($lockFile)) {
+            @unlink($lockFile);
+        }
+
+        // Force fetch
+        $result = fetchAndStoreEvents();
+        echo json_encode($result);
+        exit;
+    }
 }
 
 // ============================================================================
@@ -1543,6 +1564,7 @@ if (isset($_GET['page']) && $_GET['page'] === 'status') {
             gap: 12px;
         }
         .header-left p { color: var(--muted); font-size: 14px; margin-top: 4px; }
+        .header-right { display: flex; align-items: center; gap: 16px; }
         .back-link {
             color: var(--accent);
             text-decoration: none;
@@ -1817,8 +1839,12 @@ if (isset($_GET['page']) && $_GET['page'] === 'status') {
                 <h1>📊 Status Dashboard</h1>
                 <p>Sambandscentralen • <?= date('Y-m-d H:i:s') ?></p>
             </div>
-            <a href="./" class="back-link">← Tillbaka</a>
+            <div class="header-right">
+                <button class="btn btn-primary" onclick="forceRefresh()">🔄 Uppdatera data</button>
+                <a href="./" class="back-link">← Tillbaka</a>
+            </div>
         </div>
+        <div id="refresh-status" style="display:none; margin-bottom: 16px; padding: 12px 16px; border-radius: 8px; text-align: center;"></div>
 
         <!-- Health Banner -->
         <div class="health-banner">
@@ -2137,6 +2163,38 @@ if (isset($_GET['page']) && $_GET['page'] === 'status') {
             }
         } catch (err) {
             status.className = 'error';
+            status.textContent = '✗ Nätverksfel: ' + err.message;
+        }
+    }
+
+    async function forceRefresh() {
+        const status = document.getElementById('refresh-status');
+        status.style.display = 'block';
+        status.style.background = 'var(--surface)';
+        status.style.border = '1px solid var(--border)';
+        status.style.color = 'var(--text)';
+        status.textContent = '⏳ Hämtar data från polisen.se...';
+
+        try {
+            const res = await fetch('?ajax=refresh&key=' + encodeURIComponent(adminKey));
+            const data = await res.json();
+
+            if (data.success) {
+                status.style.background = 'rgba(46, 204, 113, 0.1)';
+                status.style.border = '1px solid var(--success)';
+                status.style.color = 'var(--success)';
+                status.innerHTML = '✓ Data uppdaterad! Hämtade <strong>' + data.events_fetched + '</strong> händelser (' + data.events_new + ' nya)';
+                setTimeout(() => location.reload(), 2000);
+            } else {
+                status.style.background = 'rgba(231, 76, 60, 0.1)';
+                status.style.border = '1px solid var(--danger)';
+                status.style.color = 'var(--danger)';
+                status.textContent = '✗ Fel: ' + (data.error || 'Okänt fel');
+            }
+        } catch (err) {
+            status.style.background = 'rgba(231, 76, 60, 0.1)';
+            status.style.border = '1px solid var(--danger)';
+            status.style.color = 'var(--danger)';
             status.textContent = '✗ Nätverksfel: ' + err.message;
         }
     }
