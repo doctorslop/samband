@@ -411,10 +411,23 @@ function getExtendedStats(): array {
         SELECT
             COUNT(*) as total_fetches,
             SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successful,
+            SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) as failed,
             SUM(events_new) as total_new_events,
             MAX(fetched_at) as last_fetch
         FROM fetch_log
     ")->fetch();
+
+    // Fetch success rate (last 24 hours)
+    $recentFetchStats = $pdo->query("
+        SELECT
+            COUNT(*) as total,
+            SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successful
+        FROM fetch_log
+        WHERE fetched_at >= datetime('now', '-24 hours')
+    ")->fetch();
+    $fetchSuccessRate = $recentFetchStats['total'] > 0
+        ? round(($recentFetchStats['successful'] / $recentFetchStats['total']) * 100, 1)
+        : 100;
 
     // Recent fetches
     $recentFetches = $pdo->query("
@@ -423,6 +436,52 @@ function getExtendedStats(): array {
         ORDER BY id DESC
         LIMIT 20
     ")->fetchAll();
+
+    // Data freshness - time since last event
+    $dataFreshness = null;
+    if ($dateRange['newest']) {
+        $newestTime = strtotime($dateRange['newest']);
+        $dataFreshness = time() - $newestTime;
+    }
+
+    // Average events per day (last 30 days)
+    $avgPerDay = $last30days > 0 ? round($last30days / 30, 1) : 0;
+
+    // Daily breakdown (last 14 days) for chart
+    $dailyStats = $pdo->query("
+        SELECT date(datetime) as day, COUNT(*) as count
+        FROM events
+        WHERE datetime >= datetime('now', '-14 days')
+        GROUP BY date(datetime)
+        ORDER BY day ASC
+    ")->fetchAll();
+
+    // Hourly distribution for today
+    $hourlyToday = $pdo->query("
+        SELECT strftime('%H', datetime) as hour, COUNT(*) as count
+        FROM events
+        WHERE date(datetime) = date('now')
+        GROUP BY strftime('%H', datetime)
+        ORDER BY hour ASC
+    ")->fetchAll();
+
+    // Database integrity check
+    $integrityCheck = $pdo->query("PRAGMA integrity_check")->fetch();
+    $dbIntegrity = ($integrityCheck[0] ?? $integrityCheck['integrity_check'] ?? 'ok') === 'ok';
+
+    // Recent errors (last 7 days)
+    $recentErrors = $pdo->query("
+        SELECT COUNT(*) as count FROM fetch_log
+        WHERE success = 0 AND fetched_at >= datetime('now', '-7 days')
+    ")->fetch()['count'];
+
+    // Calculate health score (0-100)
+    $healthScore = 100;
+    if (!$dbIntegrity) $healthScore -= 50;
+    if ($fetchSuccessRate < 90) $healthScore -= (90 - $fetchSuccessRate);
+    if ($dataFreshness && $dataFreshness > 3600) $healthScore -= min(20, floor($dataFreshness / 3600));
+    if ($recentErrors > 5) $healthScore -= min(20, $recentErrors * 2);
+    $healthScore = max(0, min(100, $healthScore));
 
     // Database file size
     $dbSize = file_exists(DB_PATH) ? filesize(DB_PATH) : 0;
@@ -459,15 +518,25 @@ function getExtendedStats(): array {
         ],
         'monthly' => $monthlyStats,
         'weekly' => $weeklyStats,
+        'daily' => $dailyStats,
+        'hourly_today' => $hourlyToday,
         'top_locations' => $topLocations,
         'top_types' => $topTypes,
         'fetch_stats' => $fetchStats,
+        'fetch_success_rate' => $fetchSuccessRate,
         'recent_fetches' => $recentFetches,
         'database' => [
             'size_bytes' => $dbSize,
             'size_mb' => round($dbSize / (1024 * 1024), 2),
             'wal_size_bytes' => $walSize,
-            'path' => DB_PATH
+            'path' => DB_PATH,
+            'integrity_ok' => $dbIntegrity
+        ],
+        'health' => [
+            'score' => $healthScore,
+            'data_freshness_seconds' => $dataFreshness,
+            'recent_errors' => $recentErrors,
+            'avg_events_per_day' => $avgPerDay
         ],
         'backups' => $backups,
         'server_time' => date('c'),
@@ -1402,6 +1471,20 @@ if (isset($_GET['page']) && $_GET['page'] === 'status') {
         exit;
     }
     $stats = getExtendedStats();
+    $adminKey = ADMIN_KEY;
+
+    // Helper function for formatting freshness
+    function formatFreshness($seconds) {
+        if ($seconds === null) return 'Okänd';
+        if ($seconds < 60) return $seconds . ' sek';
+        if ($seconds < 3600) return floor($seconds / 60) . ' min';
+        if ($seconds < 86400) return floor($seconds / 3600) . ' tim';
+        return floor($seconds / 86400) . ' dagar';
+    }
+
+    // Health status
+    $healthColor = $stats['health']['score'] >= 80 ? '#10b981' : ($stats['health']['score'] >= 50 ? '#f59e0b' : '#ef4444');
+    $healthStatus = $stats['health']['score'] >= 80 ? 'Utmärkt' : ($stats['health']['score'] >= 50 ? 'Varning' : 'Kritisk');
     ?>
 <!DOCTYPE html>
 <html lang="sv">
@@ -1409,222 +1492,639 @@ if (isset($_GET['page']) && $_GET['page'] === 'status') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
-    <title>Status - Sambandscentralen</title>
+    <title>Status Dashboard - Sambandscentralen</title>
     <style>
-        :root { --bg: #0a1628; --surface: #0f1f38; --border: rgba(255,255,255,0.1); --text: #e2e8f0; --muted: #94a3b8; --accent: #fcd34d; --success: #10b981; --danger: #ef4444; }
+        :root {
+            --bg: #0a0f1a;
+            --surface: #111827;
+            --surface-hover: #1f2937;
+            --border: rgba(255,255,255,0.08);
+            --text: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --muted: #6b7280;
+            --accent: #fbbf24;
+            --accent-dim: rgba(251,191,36,0.15);
+            --success: #10b981;
+            --success-dim: rgba(16,185,129,0.15);
+            --warning: #f59e0b;
+            --warning-dim: rgba(245,158,11,0.15);
+            --danger: #ef4444;
+            --danger-dim: rgba(239,68,68,0.15);
+            --blue: #3b82f6;
+            --blue-dim: rgba(59,130,246,0.15);
+            --purple: #8b5cf6;
+            --purple-dim: rgba(139,92,246,0.15);
+        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding: 20px; }
-        .container { max-width: 1200px; margin: 0 auto; }
-        h1 { font-size: 24px; margin-bottom: 8px; color: var(--accent); }
-        h2 { font-size: 16px; margin: 24px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
-        h3 { font-size: 14px; margin: 16px 0 8px; color: var(--muted); }
-        .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
-        .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
-        .card-title { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
-        .card-value { font-size: 28px; font-weight: 700; color: var(--accent); }
-        .card-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
-        table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
-        th { color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase; }
-        tr:hover { background: rgba(255,255,255,0.02); }
-        .success { color: var(--success); }
-        .danger { color: var(--danger); }
-        .mono { font-family: monospace; font-size: 12px; }
-        .btn { display: inline-block; padding: 8px 16px; background: var(--accent); color: var(--bg); border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; margin-right: 8px; margin-bottom: 8px; }
-        .btn:hover { opacity: 0.9; }
-        .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
-        .section { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
-        .back-link { display: inline-block; margin-bottom: 20px; color: var(--accent); text-decoration: none; font-size: 14px; }
-        .back-link:hover { text-decoration: underline; }
-        #backup-status { margin-top: 12px; padding: 10px; border-radius: 6px; display: none; }
-        #backup-status.success { display: block; background: rgba(16,185,129,0.1); border: 1px solid var(--success); }
-        #backup-status.error { display: block; background: rgba(239,68,68,0.1); border: 1px solid var(--danger); }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+        .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .header-left h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .header-left p { color: var(--muted); font-size: 14px; margin-top: 4px; }
+        .back-link {
+            color: var(--accent);
+            text-decoration: none;
+            font-size: 14px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            background: var(--accent-dim);
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+        .back-link:hover { background: rgba(251,191,36,0.25); }
+
+        /* Health Banner */
+        .health-banner {
+            background: linear-gradient(135deg, var(--surface) 0%, rgba(17,24,39,0.8) 100%);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            gap: 24px;
+            align-items: center;
+        }
+        .health-score {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            position: relative;
+        }
+        .health-score::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            border: 4px solid var(--border);
+        }
+        .health-score::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            border: 4px solid transparent;
+            border-top-color: currentColor;
+            transform: rotate(-45deg);
+        }
+        .health-score .number { font-size: 32px; }
+        .health-score .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+        .health-details { display: flex; flex-wrap: wrap; gap: 24px; }
+        .health-item { display: flex; flex-direction: column; gap: 4px; }
+        .health-item .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        .health-item .value { font-size: 18px; font-weight: 600; }
+        .health-actions { display: flex; flex-direction: column; gap: 8px; }
+
+        /* Status badges */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .badge-success { background: var(--success-dim); color: var(--success); }
+        .badge-warning { background: var(--warning-dim); color: var(--warning); }
+        .badge-danger { background: var(--danger-dim); color: var(--danger); }
+        .badge-info { background: var(--blue-dim); color: var(--blue); }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.2s;
+        }
+        .stat-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+        .stat-card .icon { font-size: 24px; margin-bottom: 8px; }
+        .stat-card .value {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--accent);
+            line-height: 1.2;
+        }
+        .stat-card .label {
+            font-size: 12px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 8px;
+        }
+        .stat-card .sub { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+
+        /* Sections */
+        .section {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        .section-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .section-header h2 {
+            font-size: 16px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .section-body { padding: 20px 24px; }
+        .section-body.no-padding { padding: 0; }
+
+        /* Two column layout */
+        .two-columns {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+        }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border); }
+        th {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background: rgba(0,0,0,0.2);
+        }
+        td { font-size: 14px; }
+        tr:hover td { background: var(--surface-hover); }
+        tr:last-child td { border-bottom: none; }
+        .mono { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+
+        /* Chart */
+        .chart-container {
+            height: 120px;
+            display: flex;
+            align-items: flex-end;
+            gap: 4px;
+            padding: 16px 0;
+        }
+        .chart-bar {
+            flex: 1;
+            background: linear-gradient(to top, var(--accent), var(--accent-dim));
+            border-radius: 4px 4px 0 0;
+            min-height: 4px;
+            transition: all 0.3s;
+            position: relative;
+        }
+        .chart-bar:hover { opacity: 0.8; }
+        .chart-bar::after {
+            content: attr(data-value);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 10px;
+            color: var(--muted);
+            opacity: 0;
+            transition: opacity 0.2s;
+            white-space: nowrap;
+        }
+        .chart-bar:hover::after { opacity: 1; }
+        .chart-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: var(--muted);
+            padding: 8px 0;
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        .btn-primary { background: var(--accent); color: #000; }
+        .btn-primary:hover { background: #fcd34d; }
+        .btn-secondary { background: var(--surface-hover); color: var(--text); border: 1px solid var(--border); }
+        .btn-secondary:hover { border-color: var(--accent); }
+        .btn-sm { padding: 6px 12px; font-size: 12px; }
+        .btn-icon { padding: 8px; }
+
+        /* Search */
+        .search-box {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 12px;
+        }
+        .search-box input {
+            flex: 1;
+            background: none;
+            border: none;
+            color: var(--text);
+            font-size: 14px;
+            outline: none;
+        }
+        .search-box input::placeholder { color: var(--muted); }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            color: var(--muted);
+            font-size: 12px;
+            padding: 32px 0 16px;
+        }
+
+        /* Backup status */
+        #backup-status {
+            margin-top: 16px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            display: none;
+        }
+        #backup-status.success { display: block; background: var(--success-dim); color: var(--success); }
+        #backup-status.error { display: block; background: var(--danger-dim); color: var(--danger); }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container { padding: 16px; }
+            .health-banner { grid-template-columns: 1fr; text-align: center; }
+            .health-details { justify-content: center; }
+            .two-columns { grid-template-columns: 1fr; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .stat-card .value { font-size: 24px; }
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <a href="./" class="back-link">← Tillbaka till Sambandscentralen</a>
-        <h1>📊 Status Dashboard</h1>
-        <p class="subtitle">Intern statistik och databasöversikt • <?= date('Y-m-d H:i:s') ?></p>
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <h1>📊 Status Dashboard</h1>
+                <p>Sambandscentralen • <?= date('Y-m-d H:i:s') ?></p>
+            </div>
+            <a href="./" class="back-link">← Tillbaka</a>
+        </div>
 
-        <div class="grid">
-            <div class="card">
-                <div class="card-title">Totalt antal händelser</div>
-                <div class="card-value"><?= number_format($stats['total_events'], 0, ',', ' ') ?></div>
-                <div class="card-sub">Sedan <?= $stats['date_range']['oldest'] ? date('Y-m-d', strtotime($stats['date_range']['oldest'])) : 'N/A' ?></div>
+        <!-- Health Banner -->
+        <div class="health-banner">
+            <div class="health-score" style="color: <?= $healthColor ?>">
+                <span class="number"><?= $stats['health']['score'] ?></span>
+                <span class="label">Hälsa</span>
             </div>
-            <div class="card">
-                <div class="card-title">Senaste 24 timmarna</div>
-                <div class="card-value"><?= $stats['time_stats']['last_24h'] ?></div>
-                <div class="card-sub">nya händelser</div>
+            <div class="health-details">
+                <div class="health-item">
+                    <span class="label">Status</span>
+                    <span class="badge <?= $stats['health']['score'] >= 80 ? 'badge-success' : ($stats['health']['score'] >= 50 ? 'badge-warning' : 'badge-danger') ?>">
+                        <?= $stats['health']['score'] >= 80 ? '✓' : ($stats['health']['score'] >= 50 ? '⚠' : '✗') ?> <?= $healthStatus ?>
+                    </span>
+                </div>
+                <div class="health-item">
+                    <span class="label">Data Freshness</span>
+                    <span class="value"><?= formatFreshness($stats['health']['data_freshness_seconds']) ?></span>
+                </div>
+                <div class="health-item">
+                    <span class="label">Fetch Rate (24h)</span>
+                    <span class="value"><?= $stats['fetch_success_rate'] ?>%</span>
+                </div>
+                <div class="health-item">
+                    <span class="label">Fel (7d)</span>
+                    <span class="value <?= $stats['health']['recent_errors'] > 0 ? 'danger' : '' ?>"><?= $stats['health']['recent_errors'] ?></span>
+                </div>
+                <div class="health-item">
+                    <span class="label">Databas</span>
+                    <span class="badge <?= $stats['database']['integrity_ok'] ? 'badge-success' : 'badge-danger' ?>">
+                        <?= $stats['database']['integrity_ok'] ? '✓ OK' : '✗ Korrupt' ?>
+                    </span>
+                </div>
+                <div class="health-item">
+                    <span class="label">Snitt/dag</span>
+                    <span class="value"><?= $stats['health']['avg_events_per_day'] ?></span>
+                </div>
             </div>
-            <div class="card">
-                <div class="card-title">Senaste 7 dagarna</div>
-                <div class="card-value"><?= $stats['time_stats']['last_7_days'] ?></div>
-                <div class="card-sub">händelser</div>
-            </div>
-            <div class="card">
-                <div class="card-title">Senaste 30 dagarna</div>
-                <div class="card-value"><?= number_format($stats['time_stats']['last_30_days'], 0, ',', ' ') ?></div>
-                <div class="card-sub">händelser</div>
-            </div>
-            <div class="card">
-                <div class="card-title">Senaste 6 månaderna</div>
-                <div class="card-value"><?= number_format($stats['time_stats']['last_6_months'], 0, ',', ' ') ?></div>
-                <div class="card-sub">händelser</div>
-            </div>
-            <div class="card">
-                <div class="card-title">Senaste 1 året</div>
-                <div class="card-value"><?= number_format($stats['time_stats']['last_1_year'], 0, ',', ' ') ?></div>
-                <div class="card-sub">händelser</div>
-            </div>
-            <div class="card">
-                <div class="card-title">Unika platser</div>
-                <div class="card-value"><?= $stats['unique_locations'] ?></div>
-            </div>
-            <div class="card">
-                <div class="card-title">Händelsetyper</div>
-                <div class="card-value"><?= $stats['unique_types'] ?></div>
-            </div>
-            <div class="card">
-                <div class="card-title">Databasstorlek</div>
-                <div class="card-value"><?= $stats['database']['size_mb'] ?> MB</div>
-                <div class="card-sub">WAL: <?= round($stats['database']['wal_size_bytes'] / 1024, 1) ?> KB</div>
-            </div>
-            <div class="card">
-                <div class="card-title">Senaste hämtning</div>
-                <div class="card-value" style="font-size: 16px;"><?= $stats['fetch_stats']['last_fetch'] ? date('H:i', strtotime($stats['fetch_stats']['last_fetch'])) : 'Aldrig' ?></div>
-                <div class="card-sub"><?= $stats['fetch_stats']['last_fetch'] ? date('Y-m-d', strtotime($stats['fetch_stats']['last_fetch'])) : '' ?></div>
+            <div class="health-actions">
+                <button class="btn btn-primary" onclick="location.reload()">🔄 Uppdatera</button>
             </div>
         </div>
 
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="icon">📦</div>
+                <div class="value"><?= number_format($stats['total_events'], 0, ' ', ' ') ?></div>
+                <div class="label">Totalt</div>
+                <div class="sub">sedan <?= $stats['date_range']['oldest'] ? date('Y-m-d', strtotime($stats['date_range']['oldest'])) : 'N/A' ?></div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">⏰</div>
+                <div class="value"><?= $stats['time_stats']['last_24h'] ?></div>
+                <div class="label">Senaste 24h</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">📅</div>
+                <div class="value"><?= number_format($stats['time_stats']['last_7_days'], 0, ' ', ' ') ?></div>
+                <div class="label">Senaste 7 dagar</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">📆</div>
+                <div class="value"><?= number_format($stats['time_stats']['last_30_days'], 0, ' ', ' ') ?></div>
+                <div class="label">Senaste 30 dagar</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">📍</div>
+                <div class="value"><?= $stats['unique_locations'] ?></div>
+                <div class="label">Platser</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">🏷️</div>
+                <div class="value"><?= $stats['unique_types'] ?></div>
+                <div class="label">Typer</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">💾</div>
+                <div class="value"><?= $stats['database']['size_mb'] ?></div>
+                <div class="label">MB Databas</div>
+                <div class="sub">WAL: <?= round($stats['database']['wal_size_bytes'] / 1024, 1) ?> KB</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">🔄</div>
+                <div class="value"><?= $stats['fetch_stats']['last_fetch'] ? date('H:i', strtotime($stats['fetch_stats']['last_fetch'])) : '--:--' ?></div>
+                <div class="label">Senaste hämtning</div>
+                <div class="sub"><?= $stats['fetch_stats']['last_fetch'] ? date('Y-m-d', strtotime($stats['fetch_stats']['last_fetch'])) : '' ?></div>
+            </div>
+        </div>
+
+        <!-- Daily Chart -->
         <div class="section">
-            <h2>📅 Månadsstatistik</h2>
-            <table>
-                <thead><tr><th>Månad</th><th>Händelser</th></tr></thead>
-                <tbody>
-                <?php foreach ($stats['monthly'] as $m): ?>
-                    <tr><td><?= htmlspecialchars($m['month']) ?></td><td><?= number_format($m['count'], 0, ',', ' ') ?></td></tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-
-        <div class="section">
-            <h2>📈 Veckostatistik</h2>
-            <table>
-                <thead><tr><th>Vecka</th><th>Händelser</th></tr></thead>
-                <tbody>
-                <?php foreach ($stats['weekly'] as $w): ?>
-                    <tr><td><?= htmlspecialchars($w['week']) ?></td><td><?= number_format($w['count'], 0, ',', ' ') ?></td></tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-
-        <div class="grid" style="grid-template-columns: 1fr 1fr;">
-            <div class="section">
-                <h2>📍 Topp 15 platser</h2>
-                <table>
-                    <thead><tr><th>Plats</th><th>Antal</th></tr></thead>
-                    <tbody>
-                    <?php foreach ($stats['top_locations'] as $loc): ?>
-                        <tr><td><?= htmlspecialchars($loc['location_name']) ?></td><td><?= number_format($loc['count'], 0, ',', ' ') ?></td></tr>
+            <div class="section-header">
+                <h2>📈 Händelser per dag (14 dagar)</h2>
+            </div>
+            <div class="section-body">
+                <?php
+                $maxDaily = max(array_column($stats['daily'], 'count') ?: [1]);
+                ?>
+                <div class="chart-container">
+                    <?php foreach ($stats['daily'] as $d): ?>
+                        <div class="chart-bar" style="height: <?= ($d['count'] / $maxDaily) * 100 ?>%" data-value="<?= $d['count'] ?> (<?= date('d/m', strtotime($d['day'])) ?>)"></div>
                     <?php endforeach; ?>
-                    </tbody>
-                </table>
+                </div>
+                <div class="chart-labels">
+                    <span><?= !empty($stats['daily']) ? date('d M', strtotime($stats['daily'][0]['day'])) : '' ?></span>
+                    <span>Idag</span>
+                </div>
             </div>
+        </div>
+
+        <!-- Two Column Layout -->
+        <div class="two-columns">
+            <!-- Top Locations -->
             <div class="section">
-                <h2>🏷️ Topp 15 typer</h2>
-                <table>
-                    <thead><tr><th>Typ</th><th>Antal</th></tr></thead>
-                    <tbody>
-                    <?php foreach ($stats['top_types'] as $type): ?>
-                        <tr><td><?= htmlspecialchars($type['type']) ?></td><td><?= number_format($type['count'], 0, ',', ' ') ?></td></tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
+                <div class="section-header">
+                    <h2>📍 Topp platser</h2>
+                </div>
+                <div class="section-body no-padding">
+                    <table>
+                        <thead><tr><th>Plats</th><th class="text-right">Antal</th></tr></thead>
+                        <tbody>
+                        <?php foreach (array_slice($stats['top_locations'], 0, 10) as $loc): ?>
+                            <tr>
+                                <td><?= htmlspecialchars($loc['location_name']) ?></td>
+                                <td class="text-right mono"><?= number_format($loc['count'], 0, ' ', ' ') ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Top Types -->
+            <div class="section">
+                <div class="section-header">
+                    <h2>🏷️ Topp händelsetyper</h2>
+                </div>
+                <div class="section-body no-padding">
+                    <table>
+                        <thead><tr><th>Typ</th><th class="text-right">Antal</th></tr></thead>
+                        <tbody>
+                        <?php foreach (array_slice($stats['top_types'], 0, 10) as $type): ?>
+                            <tr>
+                                <td><?= htmlspecialchars($type['type']) ?></td>
+                                <td class="text-right mono"><?= number_format($type['count'], 0, ' ', ' ') ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
-        <div class="section">
-            <h2>🔄 Senaste hämtningar</h2>
-            <table>
-                <thead><tr><th>Tidpunkt</th><th>Hämtade</th><th>Nya</th><th>Status</th><th>Fel</th></tr></thead>
-                <tbody>
-                <?php foreach ($stats['recent_fetches'] as $f): ?>
-                    <tr>
-                        <td class="mono"><?= htmlspecialchars($f['fetched_at']) ?></td>
-                        <td><?= $f['events_fetched'] ?></td>
-                        <td><?= $f['events_new'] ?></td>
-                        <td class="<?= $f['success'] ? 'success' : 'danger' ?>"><?= $f['success'] ? '✓ OK' : '✗ Fel' ?></td>
-                        <td class="mono" style="max-width: 200px; overflow: hidden; text-overflow: ellipsis;"><?= htmlspecialchars($f['error_message'] ?? '') ?></td>
-                    </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
+        <!-- Monthly Stats -->
+        <div class="two-columns">
+            <div class="section">
+                <div class="section-header">
+                    <h2>📅 Månadsstatistik</h2>
+                </div>
+                <div class="section-body no-padding">
+                    <table>
+                        <thead><tr><th>Månad</th><th class="text-right">Händelser</th></tr></thead>
+                        <tbody>
+                        <?php foreach ($stats['monthly'] as $m): ?>
+                            <tr>
+                                <td><?= htmlspecialchars($m['month']) ?></td>
+                                <td class="text-right mono"><?= number_format($m['count'], 0, ' ', ' ') ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-header">
+                    <h2>📆 Veckostatistik</h2>
+                </div>
+                <div class="section-body no-padding">
+                    <table>
+                        <thead><tr><th>Vecka</th><th class="text-right">Händelser</th></tr></thead>
+                        <tbody>
+                        <?php foreach ($stats['weekly'] as $w): ?>
+                            <tr>
+                                <td><?= htmlspecialchars($w['week']) ?></td>
+                                <td class="text-right mono"><?= number_format($w['count'], 0, ' ', ' ') ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
 
+        <!-- Recent Fetches -->
         <div class="section">
-            <h2>💾 Säkerhetskopior</h2>
-            <p style="margin-bottom: 16px; color: var(--muted); font-size: 13px;">Automatiska veckovisa säkerhetskopior. Senaste 10 sparas.</p>
-
-            <button class="btn" onclick="createBackup()">Skapa ny säkerhetskopia</button>
-            <div id="backup-status"></div>
-
-            <?php if (empty($stats['backups'])): ?>
-                <p style="color: var(--muted); margin-top: 16px;">Inga säkerhetskopior ännu.</p>
-            <?php else: ?>
-                <table style="margin-top: 16px;">
-                    <thead><tr><th>Fil</th><th>Storlek</th><th>Skapad</th><th>Ladda ner</th></tr></thead>
-                    <tbody>
-                    <?php foreach ($stats['backups'] as $backup): ?>
+            <div class="section-header">
+                <h2>🔄 Senaste hämtningar</h2>
+                <span class="badge badge-info"><?= $stats['fetch_stats']['total_fetches'] ?> totalt</span>
+            </div>
+            <div class="section-body no-padding">
+                <table>
+                    <thead>
                         <tr>
-                            <td class="mono"><?= htmlspecialchars($backup['filename']) ?></td>
-                            <td><?= round($backup['size'] / (1024 * 1024), 2) ?> MB</td>
-                            <td class="mono"><?= date('Y-m-d H:i', strtotime($backup['created'])) ?></td>
-                            <td><a href="?download_backup=<?= urlencode($backup['filename']) ?>" class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;">⬇️ Ladda ner</a></td>
+                            <th>Tidpunkt</th>
+                            <th class="text-center">Hämtade</th>
+                            <th class="text-center">Nya</th>
+                            <th class="text-center">Status</th>
+                            <th>Felmeddelande</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($stats['recent_fetches'] as $f): ?>
+                        <tr>
+                            <td class="mono"><?= date('Y-m-d H:i:s', strtotime($f['fetched_at'])) ?></td>
+                            <td class="text-center"><?= $f['events_fetched'] ?></td>
+                            <td class="text-center"><?= $f['events_new'] ?></td>
+                            <td class="text-center">
+                                <span class="badge <?= $f['success'] ? 'badge-success' : 'badge-danger' ?>">
+                                    <?= $f['success'] ? '✓ OK' : '✗ Fel' ?>
+                                </span>
+                            </td>
+                            <td class="mono" style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="<?= htmlspecialchars($f['error_message'] ?? '') ?>">
+                                <?= htmlspecialchars($f['error_message'] ?? '-') ?>
+                            </td>
                         </tr>
                     <?php endforeach; ?>
                     </tbody>
                 </table>
-            <?php endif; ?>
+            </div>
         </div>
 
+        <!-- Backups -->
         <div class="section">
-            <h2>🖥️ Systeminformation</h2>
-            <table>
-                <tr><td>PHP-version</td><td class="mono"><?= $stats['php_version'] ?></td></tr>
-                <tr><td>Servertid</td><td class="mono"><?= $stats['server_time'] ?></td></tr>
-                <tr><td>Databassökväg</td><td class="mono"><?php
-                    // Clean up path - only show from public_html onwards
-                    $dbPath = $stats['database']['path'];
-                    if (($pos = strpos($dbPath, 'public_html/')) !== false) {
-                        $dbPath = substr($dbPath, $pos + strlen('public_html/'));
-                    }
-                    echo htmlspecialchars($dbPath);
-                ?></td></tr>
-                <tr><td>Totalt antal hämtningar</td><td><?= $stats['fetch_stats']['total_fetches'] ?></td></tr>
-                <tr><td>Lyckade hämtningar</td><td><?= $stats['fetch_stats']['successful'] ?></td></tr>
-                <tr><td>Totalt nya händelser (via hämtningar)</td><td><?= $stats['fetch_stats']['total_new_events'] ?></td></tr>
-            </table>
+            <div class="section-header">
+                <h2>💾 Säkerhetskopior</h2>
+                <button class="btn btn-primary btn-sm" onclick="createBackup()">+ Skapa ny</button>
+            </div>
+            <div class="section-body">
+                <div id="backup-status"></div>
+                <?php if (empty($stats['backups'])): ?>
+                    <p style="color: var(--muted); text-align: center; padding: 24px;">Inga säkerhetskopior ännu. Klicka "Skapa ny" för att skapa en.</p>
+                <?php else: ?>
+                    <table>
+                        <thead><tr><th>Filnamn</th><th class="text-right">Storlek</th><th>Skapad</th><th></th></tr></thead>
+                        <tbody>
+                        <?php foreach ($stats['backups'] as $backup): ?>
+                            <tr>
+                                <td class="mono"><?= htmlspecialchars($backup['filename']) ?></td>
+                                <td class="text-right"><?= round($backup['size'] / (1024 * 1024), 2) ?> MB</td>
+                                <td class="mono"><?= date('Y-m-d H:i', strtotime($backup['created'])) ?></td>
+                                <td class="text-right">
+                                    <a href="?download_backup=<?= urlencode($backup['filename']) ?>&key=<?= urlencode($adminKey) ?>" class="btn btn-secondary btn-sm">⬇️ Ladda ner</a>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                <?php endif; ?>
+            </div>
         </div>
 
-        <p style="text-align: center; color: var(--muted); font-size: 12px; margin-top: 40px;">
+        <!-- System Info -->
+        <div class="section">
+            <div class="section-header">
+                <h2>🖥️ Systeminformation</h2>
+            </div>
+            <div class="section-body no-padding">
+                <table>
+                    <tr><td style="width: 200px;">PHP-version</td><td class="mono"><?= $stats['php_version'] ?></td></tr>
+                    <tr><td>Servertid</td><td class="mono"><?= $stats['server_time'] ?></td></tr>
+                    <tr>
+                        <td>Databassökväg</td>
+                        <td class="mono"><?php
+                            $dbPath = $stats['database']['path'];
+                            if (($pos = strpos($dbPath, 'public_html/')) !== false) {
+                                $dbPath = substr($dbPath, $pos + strlen('public_html/'));
+                            }
+                            echo htmlspecialchars($dbPath);
+                        ?></td>
+                    </tr>
+                    <tr><td>Databasintegritet</td><td><span class="badge <?= $stats['database']['integrity_ok'] ? 'badge-success' : 'badge-danger' ?>"><?= $stats['database']['integrity_ok'] ? '✓ OK' : '✗ Problem' ?></span></td></tr>
+                    <tr><td>Totalt antal hämtningar</td><td class="mono"><?= number_format($stats['fetch_stats']['total_fetches'], 0, ' ', ' ') ?></td></tr>
+                    <tr><td>Lyckade hämtningar</td><td class="mono"><?= number_format($stats['fetch_stats']['successful'], 0, ' ', ' ') ?></td></tr>
+                    <tr><td>Misslyckade hämtningar</td><td class="mono"><?= number_format($stats['fetch_stats']['failed'] ?? 0, 0, ' ', ' ') ?></td></tr>
+                    <tr><td>Nya händelser totalt</td><td class="mono"><?= number_format($stats['fetch_stats']['total_new_events'], 0, ' ', ' ') ?></td></tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="footer">
             Sambandscentralen Status Dashboard • v<?= ASSET_VERSION ?>
-        </p>
+        </div>
     </div>
 
     <script>
+    const adminKey = '<?= htmlspecialchars($adminKey) ?>';
+
     async function createBackup() {
         const status = document.getElementById('backup-status');
         status.className = '';
-        status.style.display = 'none';
-        status.textContent = 'Skapar säkerhetskopia...';
+        status.style.display = 'block';
+        status.textContent = '⏳ Skapar säkerhetskopia...';
 
         try {
-            const res = await fetch('?ajax=backup');
+            const res = await fetch('?ajax=backup&key=' + encodeURIComponent(adminKey));
             const data = await res.json();
 
             if (data.success) {
@@ -1640,6 +2140,9 @@ if (isset($_GET['page']) && $_GET['page'] === 'status') {
             status.textContent = '✗ Nätverksfel: ' + err.message;
         }
     }
+
+    // Auto-refresh every 5 minutes
+    setTimeout(() => location.reload(), 300000);
     </script>
 </body>
 </html>
