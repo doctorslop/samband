@@ -3,7 +3,9 @@
 *.db-wal
 *.db-shm
 *.lock
-backups/
+backups/*.db
 
-# Keep this .gitignore
+# Keep these files
 !.gitignore
+!.htaccess
+!backups/.htaccess
