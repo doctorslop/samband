@@ -52,7 +52,7 @@ if (isset($_GET['ajax'])) {
 define('CACHE_TIME', 600);           // 10 minutes for events
 define('STALE_CACHE_TIME', 1200);    // 20 minutes stale-while-revalidate window
 define('EVENTS_PER_PAGE', 40);
-define('ASSET_VERSION', '5.4.0');    // Bump this to bust browser cache
+define('ASSET_VERSION', '5.4.1');    // Bump this to bust browser cache
 define('MAX_FETCH_RETRIES', 3);      // Max retries for API fetch
 define('USER_AGENT', 'FreshRSS/1.28.0 (Linux; https://freshrss.org)');
 define('POLICE_API_URL', 'https://polisen.se/api/events');
@@ -267,7 +267,7 @@ function getEventsFromDb(array $filters = [], int $limit = 500, int $offset = 0)
         $params[] = $filters['to'] . 'T23:59:59';
     }
 
-    $query .= " ORDER BY datetime DESC LIMIT ? OFFSET ?";
+    $query .= " ORDER BY datetime(datetime) DESC LIMIT ? OFFSET ?";
     $params[] = $limit;
     $params[] = $offset;
 
