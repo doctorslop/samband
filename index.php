@@ -8,11 +8,44 @@
 
 date_default_timezone_set('Europe/Stockholm');
 
+// ============================================================================
+// SECURITY HEADERS & HTTPS ENFORCEMENT
+// ============================================================================
+
+// Enforce HTTPS in production
+if (!empty($_SERVER['HTTP_HOST']) && $_SERVER['HTTP_HOST'] !== 'localhost' &&
+    empty($_SERVER['HTTPS']) && ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') !== 'https') {
+    header('Location: https://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'], true, 301);
+    exit;
+}
+
+// Security headers
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: SAMEORIGIN');
+header('X-XSS-Protection: 1; mode=block');
+header('Referrer-Policy: strict-origin-when-cross-origin');
+
+// Strict CORS - only allow same-origin for AJAX requests
+if (isset($_GET['ajax'])) {
+    $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+    $host = $_SERVER['HTTP_HOST'] ?? '';
+
+    // Only allow same-origin requests
+    if ($origin && parse_url($origin, PHP_URL_HOST) === $host) {
+        header('Access-Control-Allow-Origin: ' . $origin);
+        header('Access-Control-Allow-Methods: GET');
+        header('Access-Control-Allow-Headers: Content-Type');
+    }
+    // For same-origin requests without Origin header (same-site navigation)
+    header('Access-Control-Allow-Credentials: false');
+}
+
 // Configuration
 define('CACHE_TIME', 600);           // 10 minutes for events
 define('STALE_CACHE_TIME', 1200);    // 20 minutes stale-while-revalidate window
 define('EVENTS_PER_PAGE', 40);
-define('ASSET_VERSION', '5.2.0');    // Bump this to bust browser cache
+define('ASSET_VERSION', '5.3.0');    // Bump this to bust browser cache
+define('MAX_FETCH_RETRIES', 3);      // Max retries for API fetch
 define('USER_AGENT', 'FreshRSS/1.28.0 (Linux; https://freshrss.org)');
 define('POLICE_API_URL', 'https://polisen.se/api/events');
 define('POLICE_API_TIMEOUT', 30);
@@ -24,6 +57,47 @@ define('BACKUP_DIR', DATA_DIR . '/backups');
 
 // Allowed views (security)
 define('ALLOWED_VIEWS', ['list', 'map', 'stats', 'press']);
+
+// ============================================================================
+// INPUT SANITIZATION FUNCTIONS
+// ============================================================================
+
+/**
+ * Sanitize string input - removes null bytes and normalizes whitespace
+ */
+function sanitizeInput(string $input, int $maxLength = 255): string {
+    // Remove null bytes and control characters (except newline, tab)
+    $input = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $input);
+    // Normalize whitespace
+    $input = preg_replace('/\s+/', ' ', $input);
+    // Trim and limit length
+    return mb_substr(trim($input), 0, $maxLength);
+}
+
+/**
+ * Sanitize location name for database queries
+ */
+function sanitizeLocation(string $location): string {
+    $location = sanitizeInput($location, 100);
+    // Only allow alphanumeric, spaces, Swedish chars, and common punctuation
+    return preg_replace('/[^a-zA-ZåäöÅÄÖ0-9\s\-,\.]/', '', $location);
+}
+
+/**
+ * Sanitize event type for database queries
+ */
+function sanitizeType(string $type): string {
+    $type = sanitizeInput($type, 100);
+    // Only allow alphanumeric, spaces, Swedish chars, and slashes
+    return preg_replace('/[^a-zA-ZåäöÅÄÖ0-9\s\/\-,]/', '', $type);
+}
+
+/**
+ * Sanitize search query
+ */
+function sanitizeSearch(string $search): string {
+    return sanitizeInput($search, 200);
+}
 
 // ============================================================================
 // DATABASE FUNCTIONS
@@ -490,34 +564,71 @@ function checkWeeklyBackup(): void {
 // ============================================================================
 
 /**
- * Fetch events from Police API
+ * Fetch events from Police API with retry logic
+ * Returns array with 'data' on success or 'error' on failure
  */
-function fetchFromPoliceApi(): ?array {
-    $context = stream_context_create([
-        'http' => [
-            'timeout' => POLICE_API_TIMEOUT,
-            'header' => "User-Agent: " . USER_AGENT . "\r\nAccept: application/json",
-            'ignore_errors' => true
-        ],
-        'ssl' => [
-            'verify_peer' => true,
-            'verify_peer_name' => true
-        ]
-    ]);
+function fetchFromPoliceApi(): array {
+    $lastError = '';
 
-    $response = @file_get_contents(POLICE_API_URL, false, $context);
+    for ($attempt = 1; $attempt <= MAX_FETCH_RETRIES; $attempt++) {
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => POLICE_API_TIMEOUT,
+                'header' => "User-Agent: " . USER_AGENT . "\r\nAccept: application/json",
+                'ignore_errors' => true
+            ],
+            'ssl' => [
+                'verify_peer' => true,
+                'verify_peer_name' => true
+            ]
+        ]);
 
-    if ($response === false) {
-        return null;
+        $response = @file_get_contents(POLICE_API_URL, false, $context);
+
+        // Check HTTP response code
+        $httpCode = 0;
+        if (isset($http_response_header) && is_array($http_response_header)) {
+            foreach ($http_response_header as $header) {
+                if (preg_match('/^HTTP\/\d+\.\d+\s+(\d+)/', $header, $matches)) {
+                    $httpCode = (int)$matches[1];
+                    break;
+                }
+            }
+        }
+
+        if ($response === false) {
+            $lastError = "Connection failed (attempt $attempt/" . MAX_FETCH_RETRIES . ")";
+            if ($attempt < MAX_FETCH_RETRIES) {
+                usleep(500000 * $attempt); // 0.5s, 1s, 1.5s backoff
+                continue;
+            }
+            return ['error' => $lastError, 'http_code' => 0];
+        }
+
+        if ($httpCode >= 400) {
+            $lastError = "HTTP error $httpCode (attempt $attempt/" . MAX_FETCH_RETRIES . ")";
+            if ($attempt < MAX_FETCH_RETRIES && $httpCode >= 500) {
+                usleep(500000 * $attempt);
+                continue;
+            }
+            return ['error' => $lastError, 'http_code' => $httpCode];
+        }
+
+        $data = json_decode($response, true);
+
+        if (!is_array($data)) {
+            $lastError = "Invalid JSON response (attempt $attempt/" . MAX_FETCH_RETRIES . ")";
+            if ($attempt < MAX_FETCH_RETRIES) {
+                usleep(500000 * $attempt);
+                continue;
+            }
+            return ['error' => $lastError, 'http_code' => $httpCode];
+        }
+
+        return ['data' => $data, 'http_code' => $httpCode];
     }
 
-    $data = json_decode($response, true);
-
-    if (!is_array($data)) {
-        return null;
-    }
-
-    return $data;
+    return ['error' => $lastError ?: 'Unknown error', 'http_code' => 0];
 }
 
 /**
@@ -525,13 +636,15 @@ function fetchFromPoliceApi(): ?array {
  */
 function fetchAndStoreEvents(): array {
     $pdo = getDatabase();
-    $events = fetchFromPoliceApi();
+    $result = fetchFromPoliceApi();
 
-    if ($events === null) {
-        logFetch($pdo, 0, 0, false, 'Failed to fetch from Police API');
-        return ['success' => false, 'error' => 'Failed to fetch from Police API'];
+    if (isset($result['error'])) {
+        $errorMsg = $result['error'] . ' (HTTP ' . ($result['http_code'] ?? 0) . ')';
+        logFetch($pdo, 0, 0, false, $errorMsg);
+        return ['success' => false, 'error' => $errorMsg];
     }
 
+    $events = $result['data'];
     $newCount = 0;
     $pdo->beginTransaction();
 
@@ -1018,10 +1131,10 @@ if (isset($_GET['ajax'])) {
     if ($_GET['ajax'] === 'events') {
         sendCacheHeaders(60, 300);
 
-        $page = max(1, intval($_GET['page'] ?? 1));
+        $page = max(1, min(1000, intval($_GET['page'] ?? 1))); // Limit max page
         $filters = [];
-        if (!empty($_GET['location'])) $filters['location'] = $_GET['location'];
-        if (!empty($_GET['type'])) $filters['type'] = $_GET['type'];
+        if (!empty($_GET['location'])) $filters['location'] = sanitizeLocation($_GET['location']);
+        if (!empty($_GET['type'])) $filters['type'] = sanitizeType($_GET['type']);
 
         $allEvents = fetchPoliceEvents($filters);
         if (isset($allEvents['error'])) { echo json_encode(['error' => $allEvents['error']]); exit; }
@@ -1034,7 +1147,7 @@ if (isset($_GET['ajax'])) {
             }));
         }
 
-        $searchFilter = $_GET['search'] ?? '';
+        $searchFilter = sanitizeSearch($_GET['search'] ?? '');
         if ($searchFilter) {
             $allEvents = array_values(array_filter($allEvents, function($e) use ($searchFilter) {
                 return mb_stripos($e['name'] ?? '', $searchFilter) !== false ||
@@ -1088,9 +1201,13 @@ if (isset($_GET['ajax'])) {
     if ($_GET['ajax'] === 'press') {
         sendCacheHeaders(120, 600);
 
-        $page = max(1, intval($_GET['page'] ?? 1));
-        $regionFilter = !empty($_GET['region']) ? $_GET['region'] : null;
-        $searchFilter = trim($_GET['search'] ?? '');
+        $page = max(1, min(500, intval($_GET['page'] ?? 1)));
+        $regionFilter = !empty($_GET['region']) ? sanitizeInput($_GET['region'], 50) : null;
+        // Validate region against allowed list
+        if ($regionFilter && !array_key_exists($regionFilter, getPressRegions())) {
+            $regionFilter = null;
+        }
+        $searchFilter = sanitizeSearch($_GET['search'] ?? '');
 
         $allPress = fetchPressReleases($regionFilter);
 
@@ -1449,7 +1566,14 @@ if (isset($_GET['page']) && $_GET['page'] === 'status') {
             <table>
                 <tr><td>PHP-version</td><td class="mono"><?= $stats['php_version'] ?></td></tr>
                 <tr><td>Servertid</td><td class="mono"><?= $stats['server_time'] ?></td></tr>
-                <tr><td>Databassökväg</td><td class="mono"><?= htmlspecialchars($stats['database']['path']) ?></td></tr>
+                <tr><td>Databassökväg</td><td class="mono"><?php
+                    // Clean up path - only show from public_html onwards
+                    $dbPath = $stats['database']['path'];
+                    if (($pos = strpos($dbPath, 'public_html/')) !== false) {
+                        $dbPath = substr($dbPath, $pos + strlen('public_html/'));
+                    }
+                    echo htmlspecialchars($dbPath);
+                ?></td></tr>
                 <tr><td>Totalt antal hämtningar</td><td><?= $stats['fetch_stats']['total_fetches'] ?></td></tr>
                 <tr><td>Lyckade hämtningar</td><td><?= $stats['fetch_stats']['successful'] ?></td></tr>
                 <tr><td>Totalt nya händelser (via hämtningar)</td><td><?= $stats['fetch_stats']['total_new_events'] ?></td></tr>
@@ -1496,16 +1620,16 @@ if (isset($_GET['page']) && $_GET['page'] === 'status') {
 // MAIN PAGE
 // ============================================================================
 
-$locationFilter = trim($_GET['location'] ?? '');
-$customLocation = trim($_GET['customLocation'] ?? '');
+$locationFilter = sanitizeLocation($_GET['location'] ?? '');
+$customLocation = sanitizeLocation($_GET['customLocation'] ?? '');
 if ($customLocation) {
     $locationFilter = $customLocation;
 } elseif ($locationFilter === '__custom__') {
     $locationFilter = '';
 }
-$typeFilter = trim($_GET['type'] ?? '');
-$searchFilter = trim($_GET['search'] ?? '');
-$currentView = $_GET['view'] ?? 'list';
+$typeFilter = sanitizeType($_GET['type'] ?? '');
+$searchFilter = sanitizeSearch($_GET['search'] ?? '');
+$currentView = sanitizeInput($_GET['view'] ?? 'list', 20);
 // Validate view parameter (security)
 if (!in_array($currentView, ALLOWED_VIEWS)) {
     $currentView = 'list';
@@ -1713,7 +1837,7 @@ $dbStats = getDatabaseStats();
                                                 <button type="button" class="show-map-btn" data-lat="<?= $lat ?>" data-lng="<?= $lng ?>" data-location="<?= htmlspecialchars($event['location']['name'] ?? '') ?>">🗺️ Visa på karta</button>
                                             <?php endif; endif; ?>
                                             <?php if (!empty($event['url'])): ?>
-                                                <a href="https://polisen.se<?= htmlspecialchars($event['url']) ?>" target="_blank" rel="noopener noreferrer" class="read-more-link"><span>🔗</span> polisen.se</a>
+                                                <a href="https://polisen.se<?= htmlspecialchars($event['url']) ?>" target="_blank" rel="noopener noreferrer nofollow" referrerpolicy="no-referrer" class="read-more-link"><span>🔗</span> polisen.se</a>
                                             <?php endif; ?>
                                         </div>
                                         <div class="event-details"></div>
