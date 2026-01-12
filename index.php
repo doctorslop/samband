@@ -51,7 +51,7 @@ if (isset($_GET['ajax'])) {
 // Configuration
 define('CACHE_TIME', 120);           // 2 minutes for events (more real-time)
 define('EVENTS_PER_PAGE', 40);
-define('ASSET_VERSION', '5.5.0');    // Bump this to bust browser cache
+define('ASSET_VERSION', '5.6.0');    // Bump this to bust browser cache
 define('MAX_FETCH_RETRIES', 3);      // Max retries for API fetch
 define('USER_AGENT', 'FreshRSS/1.28.0 (Linux; https://freshrss.org)');
 define('POLICE_API_URL', 'https://polisen.se/api/events');
@@ -208,30 +208,49 @@ function initDatabase(PDO $pdo): void {
  * Run database migrations
  */
 function runMigrations(PDO $pdo): void {
-    // Migration: Normalize datetime format
+    // Migration 1: Normalize datetime format
     $migrationName = 'normalize_datetime_format_v1';
-
-    // Check if migration already applied
     $stmt = $pdo->prepare("SELECT 1 FROM migrations WHERE name = ?");
     $stmt->execute([$migrationName]);
-    if ($stmt->fetch()) {
-        return; // Already applied
+    if (!$stmt->fetch()) {
+        // Fix datetime format: "2026-01-11 16:47:22 +01:00" -> "2026-01-11T16:47:22+01:00"
+        $pdo->exec("UPDATE events SET datetime = REPLACE(datetime, ' +', '+') WHERE datetime LIKE '% +%'");
+        $pdo->exec("UPDATE events SET datetime = REPLACE(datetime, ' -', '-') WHERE datetime LIKE '% -%' AND datetime NOT LIKE '%T%'");
+        $pdo->exec("
+            UPDATE events
+            SET datetime = SUBSTR(datetime, 1, 10) || 'T' || SUBSTR(datetime, 12)
+            WHERE datetime LIKE '____-__-__ %'
+        ");
+        $stmt = $pdo->prepare("INSERT INTO migrations (name, applied_at) VALUES (?, ?)");
+        $stmt->execute([$migrationName, date('c')]);
     }
 
-    // Fix datetime format: "2026-01-11 16:47:22 +01:00" -> "2026-01-11T16:47:22+01:00"
-    // Step 1: Replace space before timezone (both + and -)
-    $pdo->exec("UPDATE events SET datetime = REPLACE(datetime, ' +', '+') WHERE datetime LIKE '% +%'");
-    $pdo->exec("UPDATE events SET datetime = REPLACE(datetime, ' -', '-') WHERE datetime LIKE '% -%' AND datetime NOT LIKE '%T%'");
-    // Step 2: Replace first space with T (between date and time)
-    $pdo->exec("
-        UPDATE events
-        SET datetime = SUBSTR(datetime, 1, 10) || 'T' || SUBSTR(datetime, 12)
-        WHERE datetime LIKE '____-__-__ %'
-    ");
+    // Migration 2: Add dual-time model (event_time + publish_time)
+    $migrationName = 'add_dual_time_model_v1';
+    $stmt = $pdo->prepare("SELECT 1 FROM migrations WHERE name = ?");
+    $stmt->execute([$migrationName]);
+    if (!$stmt->fetch()) {
+        // Add new columns for dual-time model
+        $pdo->exec("ALTER TABLE events ADD COLUMN event_time TEXT");
+        $pdo->exec("ALTER TABLE events ADD COLUMN publish_time TEXT");
+        $pdo->exec("ALTER TABLE events ADD COLUMN last_updated TEXT");
+        $pdo->exec("ALTER TABLE events ADD COLUMN content_hash TEXT");
 
-    // Record migration
-    $stmt = $pdo->prepare("INSERT INTO migrations (name, applied_at) VALUES (?, ?)");
-    $stmt->execute([$migrationName, date('c')]);
+        // Populate event_time from datetime for existing records
+        // For existing events, we assume datetime is the event_time
+        $pdo->exec("UPDATE events SET event_time = datetime WHERE event_time IS NULL");
+        // Set publish_time to fetched_at for existing records
+        $pdo->exec("UPDATE events SET publish_time = fetched_at WHERE publish_time IS NULL");
+        // Set last_updated to publish_time initially
+        $pdo->exec("UPDATE events SET last_updated = publish_time WHERE last_updated IS NULL");
+
+        // Create index on event_time for sorting
+        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_events_event_time ON events(event_time DESC)");
+
+        // Record migration
+        $stmt = $pdo->prepare("INSERT INTO migrations (name, applied_at) VALUES (?, ?)");
+        $stmt->execute([$migrationName, date('c')]);
+    }
 }
 
 /**
@@ -247,22 +266,152 @@ function normalizeDateTime(string $datetime): string {
 }
 
 /**
- * Insert event if it doesn't exist
- * Returns true if new event was inserted
+ * Extract the actual event time from event data
+ * The Police API datetime often represents publish/update time, not event time
+ * This function attempts to extract the real event time from the summary
  */
-function insertEvent(PDO $pdo, array $event): bool {
-    $stmt = $pdo->prepare("
-        INSERT OR IGNORE INTO events
-        (id, datetime, name, summary, url, type, location_name, location_gps, raw_data, fetched_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ");
+function extractEventTime(array $event): ?string {
+    $summary = $event['summary'] ?? '';
+    $name = $event['name'] ?? '';
+    $apiDatetime = $event['datetime'] ?? null;
+    $type = $event['type'] ?? '';
 
-    // Normalize datetime to ISO 8601 format for SQLite compatibility
+    // For summaries, try to extract the time period they cover
+    if (stripos($type, 'Sammanfattning') !== false || stripos($name, 'Sammanfattning') !== false) {
+        // Look for patterns like "kl 06-14" or "06.00-14.00" or "morgon" etc.
+        // Summaries should be sorted to the START of their period, not when published
+        if (preg_match('/kl\.?\s*(\d{1,2})[:\.]?(\d{2})?\s*[-–]\s*(\d{1,2})/i', $summary, $m)) {
+            // Found a time range, use the start time
+            $startHour = intval($m[1]);
+            if ($apiDatetime) {
+                try {
+                    $date = new DateTime($apiDatetime);
+                    $date->setTime($startHour, 0, 0);
+                    return $date->format('c');
+                } catch (Exception $e) {}
+            }
+        }
+        // For daily summaries without specific times, set to start of day
+        if (preg_match('/(dygn|dag|natt|kväll|morgon)/i', $summary)) {
+            if ($apiDatetime) {
+                try {
+                    $date = new DateTime($apiDatetime);
+                    // If it mentions "natt" or "kväll", might be previous day
+                    if (preg_match('/natt/i', $summary)) {
+                        $date->setTime(0, 0, 0);
+                    } elseif (preg_match('/kväll/i', $summary)) {
+                        $date->setTime(18, 0, 0);
+                    } elseif (preg_match('/morgon/i', $summary)) {
+                        $date->setTime(6, 0, 0);
+                    } else {
+                        $date->setTime(0, 0, 0);
+                    }
+                    return $date->format('c');
+                } catch (Exception $e) {}
+            }
+        }
+    }
+
+    // For regular events, look for specific time mentions in summary
+    // E.g., "Klockan 14.30 larmades polisen..."
+    if (preg_match('/[Kk]l(?:ockan)?\.?\s*(\d{1,2})[:\.](\d{2})/', $summary, $m)) {
+        $hour = intval($m[1]);
+        $minute = intval($m[2]);
+        if ($hour >= 0 && $hour <= 23 && $minute >= 0 && $minute <= 59) {
+            if ($apiDatetime) {
+                try {
+                    $date = new DateTime($apiDatetime);
+                    // If the mentioned time is later than the API datetime, it might be from yesterday
+                    $apiHour = intval($date->format('H'));
+                    if ($hour > $apiHour + 2) {
+                        $date->modify('-1 day');
+                    }
+                    $date->setTime($hour, $minute, 0);
+                    return $date->format('c');
+                } catch (Exception $e) {}
+            }
+        }
+    }
+
+    // Default: use the API datetime as event_time
+    return $apiDatetime ? normalizeDateTime($apiDatetime) : null;
+}
+
+/**
+ * Generate a hash of event content to detect changes
+ */
+function generateContentHash(array $event): string {
+    $content = ($event['name'] ?? '') . '|' . ($event['summary'] ?? '') . '|' . ($event['type'] ?? '');
+    return md5($content);
+}
+
+/**
+ * Insert or update event in database
+ * Returns: 'new' if new event, 'updated' if content changed, 'unchanged' if no change
+ */
+function insertEvent(PDO $pdo, array $event): string {
+    $eventId = $event['id'];
     $normalizedDatetime = normalizeDateTime($event['datetime']);
+    $now = date('c');
+    $contentHash = generateContentHash($event);
 
+    // Check if event already exists
+    $stmt = $pdo->prepare("SELECT content_hash, event_time FROM events WHERE id = ?");
+    $stmt->execute([$eventId]);
+    $existing = $stmt->fetch();
+
+    if ($existing) {
+        // Event exists - check if content changed
+        if ($existing['content_hash'] === $contentHash) {
+            return 'unchanged';
+        }
+
+        // Content changed - update the event but keep original event_time
+        $stmt = $pdo->prepare("
+            UPDATE events SET
+                datetime = ?,
+                name = ?,
+                summary = ?,
+                url = ?,
+                type = ?,
+                location_name = ?,
+                location_gps = ?,
+                raw_data = ?,
+                last_updated = ?,
+                content_hash = ?
+            WHERE id = ?
+        ");
+        $stmt->execute([
+            $normalizedDatetime,
+            $event['name'],
+            $event['summary'] ?? '',
+            $event['url'] ?? '',
+            $event['type'],
+            $event['location']['name'],
+            $event['location']['gps'] ?? '',
+            json_encode($event, JSON_UNESCAPED_UNICODE),
+            $now,
+            $contentHash,
+            $eventId
+        ]);
+        return 'updated';
+    }
+
+    // New event - extract event_time and insert
+    $eventTime = extractEventTime($event) ?? $normalizedDatetime;
+
+    $stmt = $pdo->prepare("
+        INSERT INTO events
+        (id, datetime, event_time, publish_time, last_updated, name, summary, url, type,
+         location_name, location_gps, raw_data, fetched_at, content_hash)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ");
     $stmt->execute([
-        $event['id'],
+        $eventId,
         $normalizedDatetime,
+        $eventTime,
+        $now,
+        $now,
         $event['name'],
         $event['summary'] ?? '',
         $event['url'] ?? '',
@@ -270,10 +419,10 @@ function insertEvent(PDO $pdo, array $event): bool {
         $event['location']['name'],
         $event['location']['gps'] ?? '',
         json_encode($event, JSON_UNESCAPED_UNICODE),
-        date('c')
+        $now,
+        $contentHash
     ]);
-
-    return $stmt->rowCount() > 0;
+    return 'new';
 }
 
 /**
@@ -289,11 +438,14 @@ function logFetch(PDO $pdo, int $eventsFetched, int $eventsNew, bool $success, ?
 
 /**
  * Get events from database with optional filters
+ * Now returns events sorted by event_time (when the event occurred)
+ * Each event includes event_time, publish_time, and last_updated metadata
  */
 function getEventsFromDb(array $filters = [], int $limit = 500, int $offset = 0): array {
     $pdo = getDatabase();
 
-    $query = "SELECT raw_data FROM events WHERE 1=1";
+    // Select raw_data plus the time columns for dual-time model
+    $query = "SELECT raw_data, event_time, publish_time, last_updated FROM events WHERE 1=1";
     $params = [];
 
     if (!empty($filters['location'])) {
@@ -307,21 +459,24 @@ function getEventsFromDb(array $filters = [], int $limit = 500, int $offset = 0)
     }
 
     if (!empty($filters['date'])) {
-        $query .= " AND datetime LIKE ?";
+        // Filter by event_time date, not datetime (publish time)
+        $query .= " AND event_time LIKE ?";
         $params[] = $filters['date'] . '%';
     }
 
     if (!empty($filters['from'])) {
-        $query .= " AND datetime >= ?";
+        $query .= " AND event_time >= ?";
         $params[] = $filters['from'];
     }
 
     if (!empty($filters['to'])) {
-        $query .= " AND datetime <= ?";
+        $query .= " AND event_time <= ?";
         $params[] = $filters['to'] . 'T23:59:59';
     }
 
-    $query .= " ORDER BY datetime DESC LIMIT ? OFFSET ?";
+    // Sort by event_time (when the event occurred), not by datetime (API time)
+    // This ensures events appear in correct chronological order
+    $query .= " ORDER BY event_time DESC LIMIT ? OFFSET ?";
     $params[] = $limit;
     $params[] = $offset;
 
@@ -330,7 +485,15 @@ function getEventsFromDb(array $filters = [], int $limit = 500, int $offset = 0)
 
     $events = [];
     while ($row = $stmt->fetch()) {
-        $events[] = json_decode($row['raw_data'], true);
+        $event = json_decode($row['raw_data'], true);
+        // Add the dual-time model fields to each event
+        $event['event_time'] = $row['event_time'];
+        $event['publish_time'] = $row['publish_time'];
+        $event['last_updated'] = $row['last_updated'];
+        // Check if event has been updated (last_updated differs from publish_time)
+        $event['was_updated'] = $row['last_updated'] && $row['publish_time'] &&
+                                 $row['last_updated'] !== $row['publish_time'];
+        $events[] = $event;
     }
 
     return $events;
@@ -777,6 +940,7 @@ function fetchAndStoreEvents(): array {
 
     $events = $result['data'];
     $newCount = 0;
+    $updatedCount = 0;
     $pdo->beginTransaction();
 
     try {
@@ -786,8 +950,11 @@ function fetchAndStoreEvents(): array {
                 continue;
             }
 
-            if (insertEvent($pdo, $event)) {
+            $result = insertEvent($pdo, $event);
+            if ($result === 'new') {
                 $newCount++;
+            } elseif ($result === 'updated') {
+                $updatedCount++;
             }
         }
 
@@ -797,7 +964,8 @@ function fetchAndStoreEvents(): array {
         return [
             'success' => true,
             'events_fetched' => count($events),
-            'events_new' => $newCount
+            'events_new' => $newCount,
+            'events_updated' => $updatedCount
         ];
     } catch (Exception $e) {
         $pdo->rollBack();
@@ -1078,7 +1246,10 @@ function calculateStats($events) {
         $stats['byLocation'][$location] = ($stats['byLocation'][$location] ?? 0) + 1;
 
         try {
-            $eventDate = new DateTime($event['datetime']);
+            // Use event_time for statistics (when event occurred), falling back to datetime
+            $eventTimeStr = $event['event_time'] ?? $event['datetime'] ?? null;
+            if (!$eventTimeStr) continue;
+            $eventDate = new DateTime($eventTimeStr);
             $stats['byHour'][(int)$eventDate->format('H')]++;
             $dayKey = $eventDate->format('Y-m-d');
             $stats['byDay'][$dayKey] = ($stats['byDay'][$dayKey] ?? 0) + 1;
@@ -1271,12 +1442,23 @@ if (isset($_GET['ajax'])) {
         $events = array_slice($allEvents, ($page - 1) * EVENTS_PER_PAGE, EVENTS_PER_PAGE);
 
         $formatted = array_map(function($e) {
-            $date = formatDate($e['datetime'] ?? date('Y-m-d H:i:s'));
+            // Use event_time for display (when event occurred), falling back to datetime
+            $eventTime = $e['event_time'] ?? $e['datetime'] ?? date('Y-m-d H:i:s');
+            $date = formatDate($eventTime);
+
+            // Format the update time if the event was updated
+            $updated = null;
+            if (!empty($e['was_updated']) && !empty($e['last_updated'])) {
+                $updatedDate = formatDate($e['last_updated']);
+                $updated = $updatedDate['time']; // Just show time like "21:34"
+            }
+
             return [
                 'id' => $e['id'] ?? uniqid(), 'name' => $e['name'] ?? '', 'summary' => $e['summary'] ?? '',
                 'type' => $e['type'] ?? 'Okänd', 'url' => $e['url'] ?? '',
                 'location' => $e['location']['name'] ?? 'Okänd', 'gps' => $e['location']['gps'] ?? null,
                 'date' => $date, 'icon' => getEventIcon($e['type'] ?? ''), 'color' => getEventColor($e['type'] ?? ''),
+                'updated' => $updated, 'wasUpdated' => !empty($e['was_updated']),
             ];
         }, $events);
 
@@ -2426,12 +2608,16 @@ $dbStats = getDatabaseStats();
                         ?></p></div>
                     <?php else: ?>
                         <?php foreach ($initialEvents as $i => $event):
-                            $date = formatDate($event['datetime'] ?? date('Y-m-d H:i:s'));
+                            // Use event_time for display (when event occurred), falling back to datetime
+                            $eventTime = $event['event_time'] ?? $event['datetime'] ?? date('Y-m-d H:i:s');
+                            $date = formatDate($eventTime);
                             $type = $event['type'] ?? 'Okänd';
                             $color = getEventColor($type);
                             $icon = getEventIcon($type);
                             $location = $event['location']['name'] ?? 'Okänd';
                             $gps = $event['location']['gps'] ?? null;
+                            $wasUpdated = !empty($event['was_updated']);
+                            $updatedTime = $wasUpdated ? formatDate($event['last_updated'])['time'] : null;
                         ?>
                             <article class="event-card" style="animation-delay: <?= min($i * 0.02, 0.2) ?>s">
                                 <div class="event-card-inner">
@@ -2440,6 +2626,9 @@ $dbStats = getDatabaseStats();
                                         <div class="month"><?= $date['month'] ?></div>
                                         <div class="time"><?= $date['time'] ?></div>
                                         <div class="relative"><?= $date['relative'] ?></div>
+                                        <?php if ($wasUpdated): ?>
+                                            <div class="updated-indicator" title="Uppdaterad <?= $updatedTime ?>">uppdaterad <?= $updatedTime ?></div>
+                                        <?php endif; ?>
                                     </div>
                                     <div class="event-content">
                                         <div class="event-header">
@@ -2599,7 +2788,7 @@ $dbStats = getDatabaseStats();
         currentView: <?= json_encode($currentView) ?>,
         basePath: <?= json_encode(rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/index.php'), '/')) ?>
     };
-    window.eventsData = <?= json_encode(is_array($events) && !isset($events['error']) ? array_map(fn($e) => ['name' => $e['name'] ?? '', 'summary' => $e['summary'] ?? '', 'type' => $e['type'] ?? '', 'url' => $e['url'] ?? '', 'location' => $e['location']['name'] ?? '', 'gps' => $e['location']['gps'] ?? null, 'datetime' => $e['datetime'] ?? '', 'icon' => getEventIcon($e['type'] ?? ''), 'color' => getEventColor($e['type'] ?? '')], $events) : []) ?>;
+    window.eventsData = <?= json_encode(is_array($events) && !isset($events['error']) ? array_map(fn($e) => ['name' => $e['name'] ?? '', 'summary' => $e['summary'] ?? '', 'type' => $e['type'] ?? '', 'url' => $e['url'] ?? '', 'location' => $e['location']['name'] ?? '', 'gps' => $e['location']['gps'] ?? null, 'datetime' => $e['event_time'] ?? $e['datetime'] ?? '', 'icon' => getEventIcon($e['type'] ?? ''), 'color' => getEventColor($e['type'] ?? '')], $events) : []) ?>;
     </script>
     <script src="js/app.js?v=<?= ASSET_VERSION ?>" defer></script>
 </body>
