@@ -474,8 +474,8 @@ function getEventsFromDb(array $filters = [], int $limit = 500, int $offset = 0)
         $params[] = $filters['to'] . 'T23:59:59';
     }
 
-    // Sort by datetime (API/publish time) so newest activity appears first
-    $query .= " ORDER BY datetime DESC LIMIT ? OFFSET ?";
+    // Sort by event_time (when the event occurred) so newest events appear first
+    $query .= " ORDER BY event_time DESC LIMIT ? OFFSET ?";
     $params[] = $limit;
     $params[] = $offset;
 
