@@ -474,9 +474,8 @@ function getEventsFromDb(array $filters = [], int $limit = 500, int $offset = 0)
         $params[] = $filters['to'] . 'T23:59:59';
     }
 
-    // Sort by event_time (when the event occurred), not by datetime (API time)
-    // This ensures events appear in correct chronological order
-    $query .= " ORDER BY event_time DESC LIMIT ? OFFSET ?";
+    // Sort by datetime (API/publish time) so newest activity appears first
+    $query .= " ORDER BY datetime DESC LIMIT ? OFFSET ?";
     $params[] = $limit;
     $params[] = $offset;
 
