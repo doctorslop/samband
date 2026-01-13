@@ -497,9 +497,9 @@ function getEventsFromDb(array $filters = [], int $limit = 500, int $offset = 0)
         $params[] = $searchTerm;
     }
 
-    // Sort by event_time (when the event occurred) so newest events appear first
-    // Use id DESC as secondary sort to ensure stable ordering for events with same event_time
-    $query .= " ORDER BY event_time DESC, id DESC LIMIT ? OFFSET ?";
+    // Sort by datetime (API timestamp) for consistent chronological order
+    // Using datetime instead of event_time because event_time extraction causes inconsistent ordering
+    $query .= " ORDER BY datetime DESC, id DESC LIMIT ? OFFSET ?";
     $params[] = $limit;
     $params[] = $offset;
 
@@ -1484,8 +1484,8 @@ if (isset($_GET['ajax'])) {
         $events = getEventsFromDb($filters, EVENTS_PER_PAGE, $offset);
 
         $formatted = array_map(function($e) {
-            // Use event_time for display (when event occurred), falling back to datetime
-            $eventTime = $e['event_time'] ?? $e['datetime'] ?? date('Y-m-d H:i:s');
+            // Use datetime (API timestamp) for display to match sort order
+            $eventTime = $e['datetime'] ?? date('Y-m-d H:i:s');
             $date = formatDate($eventTime);
 
             // Format the update time if the event was updated
@@ -2635,8 +2635,8 @@ $dbStats = getDatabaseStats();
                         ?></p></div>
                     <?php else: ?>
                         <?php foreach ($initialEvents as $i => $event):
-                            // Use event_time for display (when event occurred), falling back to datetime
-                            $eventTime = $event['event_time'] ?? $event['datetime'] ?? date('Y-m-d H:i:s');
+                            // Use datetime (API timestamp) for display to match sort order
+                            $eventTime = $event['datetime'] ?? date('Y-m-d H:i:s');
                             $date = formatDate($eventTime);
                             $type = $event['type'] ?? 'Okänd';
                             $color = getEventColor($type);
@@ -2815,7 +2815,7 @@ $dbStats = getDatabaseStats();
         currentView: <?= json_encode($currentView) ?>,
         basePath: <?= json_encode(rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/index.php'), '/')) ?>
     };
-    window.eventsData = <?= json_encode(is_array($initialEvents) ? array_map(fn($e) => ['name' => $e['name'] ?? '', 'summary' => $e['summary'] ?? '', 'type' => $e['type'] ?? '', 'url' => $e['url'] ?? '', 'location' => $e['location']['name'] ?? '', 'gps' => $e['location']['gps'] ?? null, 'datetime' => $e['event_time'] ?? $e['datetime'] ?? '', 'icon' => getEventIcon($e['type'] ?? ''), 'color' => getEventColor($e['type'] ?? '')], $initialEvents) : []) ?>;
+    window.eventsData = <?= json_encode(is_array($initialEvents) ? array_map(fn($e) => ['name' => $e['name'] ?? '', 'summary' => $e['summary'] ?? '', 'type' => $e['type'] ?? '', 'url' => $e['url'] ?? '', 'location' => $e['location']['name'] ?? '', 'gps' => $e['location']['gps'] ?? null, 'datetime' => $e['datetime'] ?? '', 'icon' => getEventIcon($e['type'] ?? ''), 'color' => getEventColor($e['type'] ?? '')], $initialEvents) : []) ?>;
     </script>
     <script src="js/app.js?v=<?= ASSET_VERSION ?>" defer></script>
 </body>
