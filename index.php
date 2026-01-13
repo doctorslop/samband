@@ -2484,6 +2484,9 @@ if (!in_array($currentView, ALLOWED_VIEWS)) {
     $currentView = 'list';
 }
 
+// Ensure we have fresh data before querying
+ensureData();
+
 // Build filters for database query
 $filters = [];
 if ($locationFilter) $filters['location'] = $locationFilter;
