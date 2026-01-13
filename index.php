@@ -251,6 +251,21 @@ function runMigrations(PDO $pdo): void {
         $stmt = $pdo->prepare("INSERT INTO migrations (name, applied_at) VALUES (?, ?)");
         $stmt->execute([$migrationName, date('c')]);
     }
+
+    // Migration 3: Add composite indexes for filtered queries with event_time sorting
+    $migrationName = 'add_composite_event_time_indexes_v1';
+    $stmt = $pdo->prepare("SELECT 1 FROM migrations WHERE name = ?");
+    $stmt->execute([$migrationName]);
+    if (!$stmt->fetch()) {
+        // Composite indexes for common filter + sort patterns
+        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_events_location_event_time ON events(location_name, event_time DESC, id DESC)");
+        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_events_type_event_time ON events(type, event_time DESC, id DESC)");
+        // Index for event_time + id sorting (used in all queries)
+        $pdo->exec("CREATE INDEX IF NOT EXISTS idx_events_event_time_id ON events(event_time DESC, id DESC)");
+
+        $stmt = $pdo->prepare("INSERT INTO migrations (name, applied_at) VALUES (?, ?)");
+        $stmt->execute([$migrationName, date('c')]);
+    }
 }
 
 /**
@@ -474,6 +489,14 @@ function getEventsFromDb(array $filters = [], int $limit = 500, int $offset = 0)
         $params[] = $filters['to'] . 'T23:59:59';
     }
 
+    if (!empty($filters['search'])) {
+        $query .= " AND (name LIKE ? OR summary LIKE ? OR location_name LIKE ?)";
+        $searchTerm = '%' . $filters['search'] . '%';
+        $params[] = $searchTerm;
+        $params[] = $searchTerm;
+        $params[] = $searchTerm;
+    }
+
     // Sort by event_time (when the event occurred) so newest events appear first
     // Use id DESC as secondary sort to ensure stable ordering for events with same event_time
     $query .= " ORDER BY event_time DESC, id DESC LIMIT ? OFFSET ?";
@@ -497,6 +520,38 @@ function getEventsFromDb(array $filters = [], int $limit = 500, int $offset = 0)
     }
 
     return $events;
+}
+
+/**
+ * Count events in database with optional filters (including search)
+ */
+function countEventsInDb(array $filters = []): int {
+    $pdo = getDatabase();
+
+    $query = "SELECT COUNT(*) as count FROM events WHERE 1=1";
+    $params = [];
+
+    if (!empty($filters['location'])) {
+        $query .= " AND location_name = ?";
+        $params[] = $filters['location'];
+    }
+
+    if (!empty($filters['type'])) {
+        $query .= " AND type = ?";
+        $params[] = $filters['type'];
+    }
+
+    if (!empty($filters['search'])) {
+        $query .= " AND (name LIKE ? OR summary LIKE ? OR location_name LIKE ?)";
+        $searchTerm = '%' . $filters['search'] . '%';
+        $params[] = $searchTerm;
+        $params[] = $searchTerm;
+        $params[] = $searchTerm;
+    }
+
+    $stmt = $pdo->prepare($query);
+    $stmt->execute($params);
+    return (int) $stmt->fetch()['count'];
 }
 
 /**
@@ -1412,34 +1467,21 @@ if (isset($_GET['ajax'])) {
     if ($_GET['ajax'] === 'events') {
         sendCacheHeaders(60, 300);
 
+        // Ensure we have fresh data
+        ensureData();
+
         $page = max(1, min(1000, intval($_GET['page'] ?? 1))); // Limit max page
         $filters = [];
         if (!empty($_GET['location'])) $filters['location'] = sanitizeLocation($_GET['location']);
         if (!empty($_GET['type'])) $filters['type'] = sanitizeType($_GET['type']);
-
-        $allEvents = fetchPoliceEvents($filters);
-        if (isset($allEvents['error'])) { echo json_encode(['error' => $allEvents['error']]); exit; }
-
-        // Client-side type filtering as fallback
-        $typeFilter = $filters['type'] ?? '';
-        if ($typeFilter && is_array($allEvents)) {
-            $allEvents = array_values(array_filter($allEvents, function($e) use ($typeFilter) {
-                return isset($e['type']) && $e['type'] === $typeFilter;
-            }));
-        }
-
         $searchFilter = sanitizeSearch($_GET['search'] ?? '');
-        if ($searchFilter) {
-            $allEvents = array_values(array_filter($allEvents, function($e) use ($searchFilter) {
-                return mb_stripos($e['name'] ?? '', $searchFilter) !== false ||
-                       mb_stripos($e['summary'] ?? '', $searchFilter) !== false ||
-                       mb_stripos($e['location']['name'] ?? '', $searchFilter) !== false;
-            }));
-        }
+        if ($searchFilter) $filters['search'] = $searchFilter;
 
-        $total = count($allEvents);
-        $totalPages = ceil($total / EVENTS_PER_PAGE);
-        $events = array_slice($allEvents, ($page - 1) * EVENTS_PER_PAGE, EVENTS_PER_PAGE);
+        // Use proper database pagination - count total and fetch only needed page
+        $total = countEventsInDb($filters);
+        $totalPages = max(1, ceil($total / EVENTS_PER_PAGE));
+        $offset = ($page - 1) * EVENTS_PER_PAGE;
+        $events = getEventsFromDb($filters, EVENTS_PER_PAGE, $offset);
 
         $formatted = array_map(function($e) {
             // Use event_time for display (when event occurred), falling back to datetime
@@ -2442,46 +2484,31 @@ if (!in_array($currentView, ALLOWED_VIEWS)) {
     $currentView = 'list';
 }
 
-$allEvents = fetchPoliceEvents();
+// Build filters for database query
 $filters = [];
 if ($locationFilter) $filters['location'] = $locationFilter;
 if ($typeFilter) $filters['type'] = $typeFilter;
+if ($searchFilter) $filters['search'] = $searchFilter;
 
-$events = !empty($filters) ? fetchPoliceEvents($filters) : $allEvents;
+// Use proper database pagination - count total and fetch only first page
+$eventCount = countEventsInDb($filters);
+$initialEvents = getEventsFromDb($filters, EVENTS_PER_PAGE, 0);
+$hasMorePages = $eventCount > EVENTS_PER_PAGE;
 
-// Client-side type filtering as fallback
-if ($typeFilter && is_array($events) && !isset($events['error'])) {
-    $events = array_values(array_filter($events, function($e) use ($typeFilter) {
-        return isset($e['type']) && $e['type'] === $typeFilter;
-    }));
-}
-
-if ($searchFilter && is_array($events) && !isset($events['error'])) {
-    $events = array_values(array_filter($events, function($e) use ($searchFilter) {
-        return mb_stripos($e['name'] ?? '', $searchFilter) !== false ||
-               mb_stripos($e['summary'] ?? '', $searchFilter) !== false ||
-               mb_stripos($e['location']['name'] ?? '', $searchFilter) !== false;
-    }));
-}
+// Get all events (unfiltered) for stats calculation - limit to recent events for performance
+$allEvents = getEventsFromDb([], 1000, 0);
 
 // Get locations from database
 $dbLocations = getLocationsFromDb();
 $locations = array_column($dbLocations, 'name');
 sort($locations);
 
-// Extract types from events
-$types = [];
-if (is_array($allEvents) && !isset($allEvents['error'])) {
-    foreach ($allEvents as $e) {
-        if (isset($e['type']) && !in_array($e['type'], $types)) $types[] = $e['type'];
-    }
-    sort($types);
-}
+// Get types from database
+$dbTypes = getTypesFromDb();
+$types = array_column($dbTypes, 'type');
+sort($types);
 
-$eventCount = is_array($events) && !isset($events['error']) ? count($events) : 0;
 $stats = calculateStats($allEvents);
-$initialEvents = is_array($events) ? array_slice($events, 0, EVENTS_PER_PAGE) : [];
-$hasMorePages = $eventCount > EVENTS_PER_PAGE;
 
 // Get database stats for footer
 $dbStats = getDatabaseStats();
@@ -2788,7 +2815,7 @@ $dbStats = getDatabaseStats();
         currentView: <?= json_encode($currentView) ?>,
         basePath: <?= json_encode(rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/index.php'), '/')) ?>
     };
-    window.eventsData = <?= json_encode(is_array($events) && !isset($events['error']) ? array_map(fn($e) => ['name' => $e['name'] ?? '', 'summary' => $e['summary'] ?? '', 'type' => $e['type'] ?? '', 'url' => $e['url'] ?? '', 'location' => $e['location']['name'] ?? '', 'gps' => $e['location']['gps'] ?? null, 'datetime' => $e['event_time'] ?? $e['datetime'] ?? '', 'icon' => getEventIcon($e['type'] ?? ''), 'color' => getEventColor($e['type'] ?? '')], $events) : []) ?>;
+    window.eventsData = <?= json_encode(is_array($initialEvents) ? array_map(fn($e) => ['name' => $e['name'] ?? '', 'summary' => $e['summary'] ?? '', 'type' => $e['type'] ?? '', 'url' => $e['url'] ?? '', 'location' => $e['location']['name'] ?? '', 'gps' => $e['location']['gps'] ?? null, 'datetime' => $e['event_time'] ?? $e['datetime'] ?? '', 'icon' => getEventIcon($e['type'] ?? ''), 'color' => getEventColor($e['type'] ?? '')], $initialEvents) : []) ?>;
     </script>
     <script src="js/app.js?v=<?= ASSET_VERSION ?>" defer></script>
 </body>
