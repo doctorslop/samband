@@ -388,86 +388,84 @@
     // Keyboard
     document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); document.getElementById('searchInput')?.focus(); } });
 
-    // Event details expansion
+    // Event details expansion - click anywhere on card to show/hide details
     const detailsCache = {};
 
-    // Reusable function to toggle event details
     async function toggleEventDetails(card) {
+        if (!card) return;
         const btn = card.querySelector('.show-details-btn');
         const detailsDiv = card.querySelector('.event-details');
-        const eventUrl = btn?.dataset.url;
+        if (!btn || !detailsDiv) return;
 
-        if (!eventUrl || !detailsDiv || !btn) return;
+        const eventUrl = btn.dataset.url;
+        if (!eventUrl) return;
 
-        // If already visible, hide it
+        // Toggle visibility
         if (detailsDiv.classList.contains('visible')) {
             detailsDiv.classList.remove('visible');
             btn.classList.remove('expanded');
-            btn.innerHTML = '📖 Visa detaljer';
+            btn.textContent = '📖 Visa detaljer';
             return;
         }
 
-        // If cached, show immediately
+        // Show cached content immediately
         if (detailsCache[eventUrl]) {
             detailsDiv.textContent = detailsCache[eventUrl];
             detailsDiv.classList.add('visible');
             detailsDiv.classList.remove('error');
             btn.classList.add('expanded');
-            btn.innerHTML = '📖 Dölj detaljer';
+            btn.textContent = '📖 Dölj detaljer';
             return;
         }
 
-        // Fetch details
+        // Fetch details from server
         btn.classList.add('loading');
-        btn.innerHTML = '⏳ Laddar...';
+        btn.textContent = '⏳ Laddar...';
 
         try {
-            const res = await fetch(`?ajax=details&url=${encodeURIComponent(eventUrl)}`);
+            const res = await fetch('?ajax=details&url=' + encodeURIComponent(eventUrl));
             const data = await res.json();
 
-            if (data.success && data.details?.content) {
+            if (data.success && data.details && data.details.content) {
                 detailsCache[eventUrl] = data.details.content;
                 detailsDiv.textContent = data.details.content;
                 detailsDiv.classList.add('visible');
                 detailsDiv.classList.remove('error');
                 btn.classList.add('expanded');
-                btn.innerHTML = '📖 Dölj detaljer';
+                btn.textContent = '📖 Dölj detaljer';
             } else {
                 detailsDiv.textContent = 'Kunde inte hämta detaljer. Klicka på polisen.se-länken för att läsa mer.';
                 detailsDiv.classList.add('visible', 'error');
-                btn.innerHTML = '📖 Visa detaljer';
+                btn.textContent = '📖 Visa detaljer';
             }
         } catch (err) {
-            console.error('Failed to fetch details:', err);
             detailsDiv.textContent = 'Kunde inte hämta detaljer. Klicka på polisen.se-länken för att läsa mer.';
             detailsDiv.classList.add('visible', 'error');
-            btn.innerHTML = '📖 Visa detaljer';
+            btn.textContent = '📖 Visa detaljer';
         } finally {
             btn.classList.remove('loading');
         }
     }
 
-    // Click on details button
-    document.addEventListener('click', async (e) => {
-        const btn = e.target.closest('.show-details-btn');
-        if (!btn) return;
+    // Single click handler for event cards - handles both card clicks and button clicks
+    document.addEventListener('click', function(e) {
+        // Check if clicked on details button directly
+        var btn = e.target.closest('.show-details-btn');
+        if (btn) {
+            var card = btn.closest('.event-card');
+            if (card) toggleEventDetails(card);
+            return;
+        }
 
-        const card = btn.closest('.event-card');
-        if (card) toggleEventDetails(card);
-    });
-
-    // Click on event card to toggle details (excluding interactive elements)
-    document.addEventListener('click', (e) => {
-        const card = e.target.closest('.event-card');
+        // Check if clicked on event card (but not on interactive elements)
+        var card = e.target.closest('.event-card');
         if (!card) return;
 
-        // Don't trigger if clicking on interactive elements
-        const interactive = e.target.closest('a, button, .event-meta');
-        if (interactive) return;
+        // Skip if clicking on links, buttons, or the action bar
+        if (e.target.closest('a, button, .event-meta')) return;
 
-        // Only trigger if card has a details button (meaning it has details to show)
-        const btn = card.querySelector('.show-details-btn');
-        if (btn) toggleEventDetails(card);
+        // Toggle details on card click
+        toggleEventDetails(card);
     });
 
     // Map Modal
