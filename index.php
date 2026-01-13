@@ -475,7 +475,8 @@ function getEventsFromDb(array $filters = [], int $limit = 500, int $offset = 0)
     }
 
     // Sort by event_time (when the event occurred) so newest events appear first
-    $query .= " ORDER BY event_time DESC LIMIT ? OFFSET ?";
+    // Use id DESC as secondary sort to ensure stable ordering for events with same event_time
+    $query .= " ORDER BY event_time DESC, id DESC LIMIT ? OFFSET ?";
     $params[] = $limit;
     $params[] = $offset;
 

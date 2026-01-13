@@ -199,7 +199,7 @@ header {
 
 .events-grid { display: grid; gap: 12px; }
 .event-card {
-    background: linear-gradient(135deg, var(--surface) 0%, rgba(15, 31, 56, 0.95) 100%);
+    background: var(--surface);
     border-radius: var(--radius);
     border: 1px solid var(--border);
     overflow: hidden;
@@ -233,9 +233,9 @@ header {
     text-align: center;
     min-width: 68px;
     padding: 8px 4px;
-    background: linear-gradient(180deg, rgba(252, 211, 77, 0.08) 0%, transparent 100%);
+    background: rgba(252, 211, 77, 0.05);
     border-radius: var(--radius-sm);
-    border: 1px solid rgba(252, 211, 77, 0.12);
+    border: 1px solid rgba(252, 211, 77, 0.1);
 }
 .event-date .day {
     font-size: 28px;
@@ -543,21 +543,39 @@ footer .api-status.offline { color: #ef4444; }
     .event-date {
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: 8px;
         text-align: left;
-        padding: 8px 12px;
-        background: linear-gradient(90deg, rgba(252, 211, 77, 0.08) 0%, transparent 100%);
+        padding: 6px 10px;
+        background: rgba(252, 211, 77, 0.04);
         border-radius: var(--radius-sm);
-        border: 1px solid rgba(252, 211, 77, 0.1);
+        border: 1px solid rgba(252, 211, 77, 0.08);
         min-width: auto;
+        flex-wrap: wrap;
     }
-    .event-date .day { font-size: 24px; }
+    .event-date .day { font-size: 20px; line-height: 1; }
     .event-date .month { margin-top: 0; font-size: 10px; }
-    .event-date .time { margin-top: 0; padding: 3px 6px; font-size: 10px; }
-    .event-date .relative { margin-top: 0; font-size: 9px; }
-    .event-date .updated-indicator { margin-top: 0; margin-left: auto; }
-    .event-meta { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .event-date .time { margin-top: 0; padding: 4px 8px; font-size: 11px; }
+    .event-date .relative { margin-top: 0; font-size: 10px; }
+    .event-date .updated-indicator { margin-top: 0; margin-left: auto; font-size: 9px; }
+    .event-header { margin-bottom: 8px; }
+    .event-type { padding: 6px 10px; font-size: 11px; }
+    .event-location-link { font-size: 14px; margin-top: 4px; }
+    .event-summary { font-size: 13px; line-height: 1.5; margin-top: 8px; }
+    .event-meta {
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin-top: 12px;
+        padding-top: 10px;
+    }
+    .event-meta button, .event-meta a {
+        min-height: 36px;
+        padding: 8px 12px;
+        font-size: 12px;
+    }
     .read-more-link { margin-left: 0; }
+    .show-details-btn, .show-map-btn { flex: 1; justify-content: center; }
     .map-container { height: calc(100vh - 180px); min-height: 400px; }
     .view-toggle button span.label { display: none; }
     .live-indicator { display: none; }
@@ -572,6 +590,12 @@ footer .api-status.offline { color: #ef4444; }
     .logo-text h1 { font-size: 13px; }
     .logo-text p { display: none; }
     .view-toggle button { padding: 5px 6px; font-size: 12px; }
+    .event-card-inner { padding: 12px; gap: 10px; }
+    .event-date { padding: 5px 8px; gap: 6px; }
+    .event-date .day { font-size: 18px; }
+    .event-type { padding: 5px 8px; font-size: 10px; }
+    .event-location-link { font-size: 13px; }
+    .event-summary { font-size: 12px; }
 }
 
 body.view-map .filters-section { display: none; }
