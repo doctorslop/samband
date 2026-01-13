@@ -203,10 +203,11 @@ header {
     border-radius: var(--radius);
     border: 1px solid var(--border);
     overflow: hidden;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.2s ease, transform 0.15s ease;
     animation: slideIn 0.4s ease-out backwards;
     position: relative;
     cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
 }
 .event-card::before {
     content: '';
@@ -217,15 +218,19 @@ header {
     width: 3px;
     background: var(--accent);
     opacity: 0;
-    transition: opacity 0.25s ease;
+    transition: opacity 0.2s ease;
 }
 @keyframes slideIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
 .event-card:hover {
-    border-color: rgba(252, 211, 77, 0.25);
-    transform: translateY(-3px);
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(252, 211, 77, 0.08);
+    border-color: rgba(252, 211, 77, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 2px 8px rgba(252, 211, 77, 0.1);
 }
 .event-card:hover::before { opacity: 1; }
+.event-card:active {
+    transform: translateY(0);
+    transition: transform 0.05s ease;
+}
 
 .event-card-inner { display: flex; gap: 16px; padding: 18px 20px; }
 
@@ -434,23 +439,39 @@ header {
 .event-details {
     display: none;
     margin-top: 14px;
-    padding: 14px 16px;
+    padding: 16px 18px;
     background: linear-gradient(135deg, var(--primary) 0%, rgba(10, 22, 40, 0.95) 100%);
     border-radius: var(--radius-sm);
     border: 1px solid var(--border);
     font-size: 13px;
-    line-height: 1.75;
+    line-height: 1.8;
     color: var(--text);
     white-space: pre-wrap;
     border-left: 3px solid var(--success);
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
-.event-details.visible { display: block; animation: fadeIn 0.3s ease-out; }
+.event-details.visible { display: block; animation: detailsSlideIn 0.25s ease-out; }
 .event-details.error {
     color: var(--text-muted);
     font-style: italic;
     border-left-color: var(--danger);
 }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes detailsSlideIn { from { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; } to { opacity: 1; max-height: 1000px; } }
+
+/* Click hint on card */
+.event-summary::after {
+    content: 'Klicka för att läsa mer';
+    display: block;
+    font-size: 11px;
+    color: var(--text-muted);
+    opacity: 0.5;
+    margin-top: 8px;
+    transition: opacity 0.2s ease;
+}
+.event-card:hover .event-summary::after { opacity: 0.8; }
+.event-card:has(.event-details.visible) .event-summary::after { display: none; }
 
 .empty-state { text-align: center; padding: 50px 20px; color: var(--text-muted); }
 .empty-state-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
@@ -540,43 +561,52 @@ footer .api-status.offline { color: #ef4444; }
     .filter-select { width: 100%; }
     .custom-location-wrapper { width: 100%; }
     .filter-input { width: 100%; min-width: 0; }
+
+    /* Mobile card improvements */
+    .events-grid { gap: 10px; }
+    .event-card { border-radius: 12px; }
+    .event-card:hover { transform: none; box-shadow: none; }
+    .event-card:active { background: var(--surface-light); }
     .event-card-inner { flex-direction: column; gap: 12px; padding: 14px 16px; }
     .event-date {
         display: flex;
         align-items: center;
         gap: 8px;
         text-align: left;
-        padding: 6px 10px;
-        background: rgba(252, 211, 77, 0.04);
+        padding: 8px 12px;
+        background: rgba(252, 211, 77, 0.06);
         border-radius: var(--radius-sm);
-        border: 1px solid rgba(252, 211, 77, 0.08);
+        border: 1px solid rgba(252, 211, 77, 0.1);
         min-width: auto;
         flex-wrap: wrap;
     }
-    .event-date .day { font-size: 20px; line-height: 1; }
-    .event-date .month { margin-top: 0; font-size: 10px; }
-    .event-date .time { margin-top: 0; padding: 4px 8px; font-size: 11px; }
-    .event-date .relative { margin-top: 0; font-size: 10px; }
+    .event-date .day { font-size: 22px; line-height: 1; font-weight: 800; }
+    .event-date .month { margin-top: 0; font-size: 11px; }
+    .event-date .time { margin-top: 0; padding: 5px 10px; font-size: 12px; }
+    .event-date .relative { margin-top: 0; font-size: 11px; }
     .event-date .updated-indicator { margin-top: 0; margin-left: auto; font-size: 9px; }
     .event-header { margin-bottom: 8px; }
-    .event-type { padding: 6px 10px; font-size: 11px; }
-    .event-location-link { font-size: 14px; margin-top: 4px; }
-    .event-summary { font-size: 13px; line-height: 1.5; margin-top: 8px; }
+    .event-type { padding: 7px 12px; font-size: 11px; }
+    .event-location-link { font-size: 15px; margin-top: 6px; font-weight: 600; }
+    .event-summary { font-size: 14px; line-height: 1.6; margin-top: 10px; }
+    .event-summary::after { content: 'Tryck for att visa detaljer'; font-size: 12px; margin-top: 10px; }
     .event-meta {
         flex-direction: row;
         flex-wrap: wrap;
         align-items: center;
         gap: 8px;
-        margin-top: 12px;
-        padding-top: 10px;
+        margin-top: 14px;
+        padding-top: 12px;
     }
     .event-meta button, .event-meta a {
-        min-height: 36px;
-        padding: 8px 12px;
-        font-size: 12px;
+        min-height: 44px;
+        padding: 10px 14px;
+        font-size: 13px;
+        border-radius: 8px;
     }
     .read-more-link { margin-left: 0; }
     .show-details-btn, .show-map-btn { flex: 1; justify-content: center; }
+    .event-details { padding: 14px 16px; font-size: 14px; line-height: 1.7; margin-top: 12px; }
     .map-container { height: calc(100vh - 180px); min-height: 400px; }
     .view-toggle button span.label { display: none; }
     .live-indicator { display: none; }
