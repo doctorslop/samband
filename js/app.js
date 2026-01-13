@@ -390,14 +390,16 @@
 
     // Event details expansion
     const detailsCache = {};
-    document.addEventListener('click', async (e) => {
-        const btn = e.target.closest('.show-details-btn');
-        if (!btn) return;
 
-        const eventUrl = btn.dataset.url;
-        const detailsDiv = btn.closest('.event-content').querySelector('.event-details');
-        if (!eventUrl || !detailsDiv) return;
+    // Reusable function to toggle event details
+    async function toggleEventDetails(card) {
+        const btn = card.querySelector('.show-details-btn');
+        const detailsDiv = card.querySelector('.event-details');
+        const eventUrl = btn?.dataset.url;
 
+        if (!eventUrl || !detailsDiv || !btn) return;
+
+        // If already visible, hide it
         if (detailsDiv.classList.contains('visible')) {
             detailsDiv.classList.remove('visible');
             btn.classList.remove('expanded');
@@ -405,6 +407,7 @@
             return;
         }
 
+        // If cached, show immediately
         if (detailsCache[eventUrl]) {
             detailsDiv.textContent = detailsCache[eventUrl];
             detailsDiv.classList.add('visible');
@@ -414,6 +417,7 @@
             return;
         }
 
+        // Fetch details
         btn.classList.add('loading');
         btn.innerHTML = '⏳ Laddar...';
 
@@ -441,6 +445,29 @@
         } finally {
             btn.classList.remove('loading');
         }
+    }
+
+    // Click on details button
+    document.addEventListener('click', async (e) => {
+        const btn = e.target.closest('.show-details-btn');
+        if (!btn) return;
+
+        const card = btn.closest('.event-card');
+        if (card) toggleEventDetails(card);
+    });
+
+    // Click on event card to toggle details (excluding interactive elements)
+    document.addEventListener('click', (e) => {
+        const card = e.target.closest('.event-card');
+        if (!card) return;
+
+        // Don't trigger if clicking on interactive elements
+        const interactive = e.target.closest('a, button, .event-meta');
+        if (interactive) return;
+
+        // Only trigger if card has a details button (meaning it has details to show)
+        const btn = card.querySelector('.show-details-btn');
+        if (btn) toggleEventDetails(card);
     });
 
     // Map Modal
