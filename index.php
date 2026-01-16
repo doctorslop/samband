@@ -24,7 +24,7 @@ header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: SAMEORIGIN');
 header('X-XSS-Protection: 1; mode=block');
 header('Referrer-Policy: strict-origin-when-cross-origin');
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src [...]");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.basemaps.cartocdn.com; connect-src 'self'");
 
 // Admin authentication for sensitive endpoints
 define('ADMIN_KEY', 'loltrappa123');
@@ -541,3 +541,587 @@ function countEventsInDb(array $filters = []): int {
     $stmt->execute($params);
     return (int) $stmt->fetch()['count'];
 }
+
+// ============================================================================
+// DATA FETCHING & PRESENTATION HELPERS
+// ============================================================================
+
+function esc(string $value): string {
+    return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+}
+
+function fetchJson(string $url): array {
+    $ch = curl_init();
+    curl_setopt_array($ch, [
+        CURLOPT_URL => $url,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => POLICE_API_TIMEOUT,
+        CURLOPT_USERAGENT => USER_AGENT,
+        CURLOPT_FOLLOWLOCATION => true
+    ]);
+    $response = curl_exec($ch);
+    $error = curl_error($ch);
+    $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+
+    if ($response === false || $status >= 400) {
+        throw new RuntimeException($error ?: 'HTTP error ' . $status);
+    }
+
+    $data = json_decode($response, true);
+    if (!is_array($data)) {
+        throw new RuntimeException('Invalid JSON response');
+    }
+
+    return $data;
+}
+
+function refreshEventsIfNeeded(): array {
+    $pdo = getDatabase();
+    $stmt = $pdo->query("SELECT fetched_at FROM fetch_log ORDER BY fetched_at DESC LIMIT 1");
+    $lastFetch = $stmt->fetchColumn();
+    $shouldFetch = !$lastFetch || (time() - strtotime($lastFetch)) > CACHE_TIME;
+
+    if (!$shouldFetch) {
+        return ['fetched' => 0, 'new' => 0, 'updated' => 0, 'success' => true, 'error' => null];
+    }
+
+    $eventsFetched = 0;
+    $eventsNew = 0;
+    $eventsUpdated = 0;
+    $error = null;
+
+    try {
+        $events = [];
+        $attempt = 0;
+        while ($attempt < MAX_FETCH_RETRIES) {
+            $attempt++;
+            try {
+                $events = fetchJson(POLICE_API_URL);
+                break;
+            } catch (RuntimeException $e) {
+                $error = $e->getMessage();
+                if ($attempt >= MAX_FETCH_RETRIES) {
+                    throw $e;
+                }
+                usleep(200000);
+            }
+        }
+
+        foreach ($events as $event) {
+            $eventsFetched++;
+            $status = insertEvent($pdo, $event);
+            if ($status === 'new') {
+                $eventsNew++;
+            } elseif ($status === 'updated') {
+                $eventsUpdated++;
+            }
+        }
+
+        logFetch($pdo, $eventsFetched, $eventsNew, true, null);
+        return ['fetched' => $eventsFetched, 'new' => $eventsNew, 'updated' => $eventsUpdated, 'success' => true, 'error' => null];
+    } catch (RuntimeException $e) {
+        logFetch($pdo, $eventsFetched, $eventsNew, false, $error ?: $e->getMessage());
+        return ['fetched' => $eventsFetched, 'new' => $eventsNew, 'updated' => $eventsUpdated, 'success' => false, 'error' => $e->getMessage()];
+    }
+}
+
+function getTypeStyles(): array {
+    return [
+        'Inbrott' => ['icon' => '🔓', 'color' => '#f97316'],
+        'Brand' => ['icon' => '🔥', 'color' => '#ef4444'],
+        'Rån' => ['icon' => '💰', 'color' => '#f59e0b'],
+        'Trafikolycka' => ['icon' => '🚗', 'color' => '#3b82f6'],
+        'Misshandel' => ['icon' => '👊', 'color' => '#ef4444'],
+        'Skadegörelse' => ['icon' => '🔨', 'color' => '#f59e0b'],
+        'Bedrägeri' => ['icon' => '🕵️', 'color' => '#8b5cf6'],
+        'Narkotikabrott' => ['icon' => '💊', 'color' => '#10b981'],
+        'Ofredande' => ['icon' => '🚨', 'color' => '#f43f5e'],
+        'Sammanfattning' => ['icon' => '📊', 'color' => '#22c55e'],
+        'default' => ['icon' => '📌', 'color' => '#fcd34d']
+    ];
+}
+
+function formatRelativeTime(DateTimeImmutable $date, DateTimeImmutable $now): string {
+    $diffSeconds = $now->getTimestamp() - $date->getTimestamp();
+    if ($diffSeconds < 60) {
+        return 'Just nu';
+    }
+    $diffMinutes = (int) floor($diffSeconds / 60);
+    if ($diffMinutes < 60) {
+        return $diffMinutes . ' min sedan';
+    }
+    $diffHours = (int) floor($diffMinutes / 60);
+    if ($diffHours < 24) {
+        return $diffHours . ' timmar sedan';
+    }
+    $diffDays = (int) floor($diffHours / 24);
+    return $diffDays . ' dagar sedan';
+}
+
+function formatEventForUi(array $event): array {
+    $now = new DateTimeImmutable('now');
+    $eventTime = $event['event_time'] ?? $event['datetime'] ?? $now->format('c');
+    try {
+        $date = new DateTimeImmutable($eventTime);
+    } catch (Exception $e) {
+        $date = $now;
+    }
+
+    $type = $event['type'] ?? 'Okänd';
+    $typeStyles = getTypeStyles();
+    $style = $typeStyles[$type] ?? $typeStyles['default'];
+
+    $updated = $event['last_updated'] ?? $event['publish_time'] ?? null;
+
+    return [
+        'id' => $event['id'] ?? null,
+        'datetime' => $event['datetime'] ?? null,
+        'name' => $event['name'] ?? '',
+        'summary' => $event['summary'] ?? '',
+        'url' => $event['url'] ?? '',
+        'type' => $type,
+        'location' => $event['location']['name'] ?? '',
+        'gps' => $event['location']['gps'] ?? '',
+        'color' => $style['color'],
+        'icon' => $style['icon'],
+        'date' => [
+            'day' => $date->format('d'),
+            'month' => $date->format('M'),
+            'time' => $date->format('H:i'),
+            'relative' => formatRelativeTime($date, $now)
+        ],
+        'wasUpdated' => !empty($event['was_updated']),
+        'updated' => $updated ? (new DateTimeImmutable($updated))->format('Y-m-d H:i') : ''
+    ];
+}
+
+function getEventsForUi(array $filters, int $limit, int $offset = 0): array {
+    $events = getEventsFromDb($filters, $limit, $offset);
+    return array_map('formatEventForUi', $events);
+}
+
+function getFilterOptions(string $column): array {
+    $pdo = getDatabase();
+    $stmt = $pdo->query("SELECT DISTINCT {$column} AS value FROM events WHERE {$column} != '' ORDER BY {$column} ASC");
+    return array_column($stmt->fetchAll(), 'value');
+}
+
+function getStatsSummary(): array {
+    $pdo = getDatabase();
+    $now = new DateTimeImmutable('now');
+    $since24h = $now->modify('-24 hours')->format('c');
+    $since7d = $now->modify('-7 days')->format('c');
+
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM events WHERE event_time >= ?");
+    $stmt->execute([$since24h]);
+    $last24h = (int) $stmt->fetchColumn();
+
+    $stmt->execute([$since7d]);
+    $last7d = (int) $stmt->fetchColumn();
+
+    $total = (int) $pdo->query("SELECT COUNT(*) FROM events")->fetchColumn();
+
+    $topTypes = $pdo->query("SELECT type AS label, COUNT(*) AS total FROM events GROUP BY type ORDER BY total DESC LIMIT 5")->fetchAll();
+    $topLocations = $pdo->query("SELECT location_name AS label, COUNT(*) AS total FROM events GROUP BY location_name ORDER BY total DESC LIMIT 5")->fetchAll();
+
+    $hourStmt = $pdo->prepare("SELECT strftime('%H', event_time) AS hour, COUNT(*) AS total FROM events WHERE event_time >= ? GROUP BY hour ORDER BY hour");
+    $hourStmt->execute([$since24h]);
+    $hourly = array_fill(0, 24, 0);
+    foreach ($hourStmt->fetchAll() as $row) {
+        $hourly[(int) $row['hour']] = (int) $row['total'];
+    }
+
+    return [
+        'total' => $total,
+        'last24h' => $last24h,
+        'last7d' => $last7d,
+        'topTypes' => $topTypes,
+        'topLocations' => $topLocations,
+        'hourly' => $hourly
+    ];
+}
+
+function fetchDetailsText(string $url): ?string {
+    $absoluteUrl = str_starts_with($url, 'http') ? $url : 'https://polisen.se' . $url;
+    $context = stream_context_create([
+        'http' => [
+            'method' => 'GET',
+            'header' => "User-Agent: " . USER_AGENT . "\r\n",
+            'timeout' => POLICE_API_TIMEOUT
+        ]
+    ]);
+    $html = @file_get_contents($absoluteUrl, false, $context);
+    if ($html === false) {
+        return null;
+    }
+
+    $dom = new DOMDocument();
+    libxml_use_internal_errors(true);
+    $dom->loadHTML($html);
+    libxml_clear_errors();
+
+    $xpath = new DOMXPath($dom);
+    $nodes = $xpath->query("//article//p");
+    if (!$nodes || $nodes->length === 0) {
+        $nodes = $xpath->query("//main//p");
+    }
+
+    $text = [];
+    foreach ($nodes as $node) {
+        $content = trim($node->textContent);
+        if ($content) {
+            $text[] = $content;
+        }
+    }
+
+    if (!$text) {
+        return null;
+    }
+
+    return implode("\n\n", array_slice($text, 0, 4));
+}
+
+// ============================================================================
+// REQUEST HANDLING
+// ============================================================================
+
+$refreshStatus = refreshEventsIfNeeded();
+
+$filters = [
+    'location' => isset($_GET['location']) ? sanitizeLocation((string) $_GET['location']) : '',
+    'type' => isset($_GET['type']) ? sanitizeType((string) $_GET['type']) : '',
+    'search' => isset($_GET['search']) ? sanitizeSearch((string) $_GET['search']) : ''
+];
+
+$currentView = $_GET['view'] ?? 'list';
+if (!in_array($currentView, ALLOWED_VIEWS, true)) {
+    $currentView = 'list';
+}
+
+if (isset($_GET['ajax'])) {
+    header('Content-Type: application/json; charset=utf-8');
+
+    if ($_GET['ajax'] === 'events') {
+        $page = max(1, (int) ($_GET['page'] ?? 1));
+        $offset = ($page - 1) * EVENTS_PER_PAGE;
+        $events = getEventsForUi($filters, EVENTS_PER_PAGE, $offset);
+        $total = countEventsInDb($filters);
+        echo json_encode([
+            'events' => $events,
+            'hasMore' => ($offset + EVENTS_PER_PAGE) < $total
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    if ($_GET['ajax'] === 'details' && isset($_GET['url'])) {
+        $details = fetchDetailsText(sanitizeInput((string) $_GET['url'], 500));
+        echo json_encode([
+            'success' => (bool) $details,
+            'details' => ['content' => $details]
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    if ($_GET['ajax'] === 'press') {
+        echo json_encode([
+            'items' => [],
+            'hasMore' => false
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    if ($_GET['ajax'] === 'pressdetails' && isset($_GET['url'])) {
+        $details = fetchDetailsText(sanitizeInput((string) $_GET['url'], 500));
+        echo json_encode([
+            'success' => (bool) $details,
+            'details' => ['content' => $details]
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    echo json_encode(['error' => 'Invalid endpoint'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+$page = max(1, (int) ($_GET['page'] ?? 1));
+$offset = ($page - 1) * EVENTS_PER_PAGE;
+$events = getEventsForUi($filters, EVENTS_PER_PAGE, $offset);
+$totalEvents = countEventsInDb($filters);
+$hasMore = ($offset + EVENTS_PER_PAGE) < $totalEvents;
+$mapEvents = getEventsForUi($filters, 500, 0);
+
+$locations = getFilterOptions('location_name');
+$types = getFilterOptions('type');
+$stats = getStatsSummary();
+
+$basePath = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/');
+if ($basePath === '/') {
+    $basePath = '';
+}
+
+?>
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sambandscentralen</title>
+    <link rel="manifest" href="<?= esc($basePath) ?>/manifest.json">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>📻</text></svg>">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+    <link rel="stylesheet" href="<?= esc($basePath) ?>/css/styles.css?v=<?= esc(ASSET_VERSION) ?>">
+</head>
+<body class="view-<?= esc($currentView) ?>">
+<div class="container">
+    <header>
+        <div class="header-content">
+            <a class="logo" href="<?= esc($basePath) ?>/">
+                <div class="logo-icon">📻</div>
+                <div class="logo-text">
+                    <h1>Sambandscentralen</h1>
+                    <p>Polisens händelsenotiser i realtid</p>
+                </div>
+            </a>
+            <div class="header-controls">
+                <div class="view-toggle">
+                    <button type="button" data-view="list" class="<?= $currentView === 'list' ? 'active' : '' ?>">📋 <span class="label">Lista</span></button>
+                    <button type="button" data-view="map" class="<?= $currentView === 'map' ? 'active' : '' ?>">🗺️ <span class="label">Karta</span></button>
+                    <button type="button" data-view="stats" class="<?= $currentView === 'stats' ? 'active' : '' ?>">📊 <span class="label">Statistik</span></button>
+                    <button type="button" data-view="press" class="<?= $currentView === 'press' ? 'active' : '' ?>">📰 <span class="label">Press</span></button>
+                </div>
+                <div class="live-indicator"><span class="live-dot"></span> Live</div>
+            </div>
+        </div>
+    </header>
+
+    <section class="filters-section">
+        <div class="search-bar">
+            <form class="search-form" method="get">
+                <input type="hidden" id="viewInput" name="view" value="<?= esc($currentView) ?>">
+                <div class="search-input-wrapper">
+                    <input class="search-input" id="searchInput" type="search" name="search" placeholder="Sök händelser..." value="<?= esc($filters['search']) ?>">
+                </div>
+                <select class="filter-select" id="locationSelect" name="location">
+                    <option value="">Alla platser</option>
+                    <?php foreach ($locations as $location): ?>
+                        <option value="<?= esc($location) ?>" <?= $filters['location'] === $location ? 'selected' : '' ?>><?= esc($location) ?></option>
+                    <?php endforeach; ?>
+                    <option value="__custom__">Annan plats...</option>
+                </select>
+                <div class="custom-location-wrapper" id="customLocationWrapper" style="display:none;">
+                    <input class="filter-input" id="customLocationInput" type="text" name="location" placeholder="Skriv plats" value="<?= esc($filters['location']) ?>">
+                    <button type="button" class="custom-location-cancel" id="customLocationCancel">×</button>
+                </div>
+                <select class="filter-select" name="type">
+                    <option value="">Alla typer</option>
+                    <?php foreach ($types as $type): ?>
+                        <option value="<?= esc($type) ?>" <?= $filters['type'] === $type ? 'selected' : '' ?>><?= esc($type) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <button class="btn" type="submit">Filtrera</button>
+            </form>
+        </div>
+        <?php if ($filters['location'] || $filters['type'] || $filters['search']): ?>
+            <div class="active-filters">
+                <?php if ($filters['location']): ?>
+                    <span class="filter-tag">📍 <?= esc($filters['location']) ?> <a href="?view=<?= esc($currentView) ?>&type=<?= esc($filters['type']) ?>&search=<?= esc($filters['search']) ?>">×</a></span>
+                <?php endif; ?>
+                <?php if ($filters['type']): ?>
+                    <span class="filter-tag">🏷️ <?= esc($filters['type']) ?> <a href="?view=<?= esc($currentView) ?>&location=<?= esc($filters['location']) ?>&search=<?= esc($filters['search']) ?>">×</a></span>
+                <?php endif; ?>
+                <?php if ($filters['search']): ?>
+                    <span class="filter-tag">🔍 <?= esc($filters['search']) ?> <a href="?view=<?= esc($currentView) ?>&location=<?= esc($filters['location']) ?>&type=<?= esc($filters['type']) ?>">×</a></span>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
+    </section>
+
+    <main class="main-content">
+        <div class="content-area">
+            <section id="eventsGrid" class="events-grid">
+                <?php if (!$events): ?>
+                    <div class="press-empty">
+                        <div class="press-empty-icon">📭</div>
+                        <h3>Inga händelser</h3>
+                        <p>Inga händelser hittades för dina filter.</p>
+                    </div>
+                <?php endif; ?>
+                <?php foreach ($events as $event): ?>
+                    <article class="event-card">
+                        <div class="event-card-inner">
+                            <div class="event-date">
+                                <div class="day"><?= esc($event['date']['day']) ?></div>
+                                <div class="month"><?= esc($event['date']['month']) ?></div>
+                                <div class="time"><?= esc($event['date']['time']) ?></div>
+                                <div class="relative"><?= esc($event['date']['relative']) ?></div>
+                                <?php if ($event['wasUpdated'] && $event['updated']): ?>
+                                    <div class="updated-indicator" title="Uppdaterad <?= esc($event['updated']) ?>">uppdaterad <?= esc($event['updated']) ?></div>
+                                <?php endif; ?>
+                            </div>
+                            <div class="event-content">
+                                <div class="event-header">
+                                    <div class="event-title-group">
+                                        <a href="?type=<?= esc($event['type']) ?>&view=<?= esc($currentView) ?>" class="event-type" style="background:<?= esc($event['color']) ?>20;color:<?= esc($event['color']) ?>">
+                                            <?= esc($event['icon']) ?> <?= esc($event['type']) ?>
+                                        </a>
+                                        <a href="?location=<?= esc($event['location']) ?>&view=<?= esc($currentView) ?>" class="event-location-link"><?= esc($event['location']) ?></a>
+                                    </div>
+                                </div>
+                                <p class="event-summary"><?= esc($event['summary']) ?></p>
+                                <div class="event-meta">
+                                    <?php if (!empty($event['url'])): ?>
+                                        <button type="button" class="show-details-btn" data-url="<?= esc($event['url']) ?>">📖 Visa detaljer</button>
+                                    <?php endif; ?>
+                                    <?php if (!empty($event['gps'])): ?>
+                                        <?php [$lat, $lng] = array_map('trim', explode(',', $event['gps'] . ',')); ?>
+                                        <button type="button" class="show-map-btn" data-lat="<?= esc($lat) ?>" data-lng="<?= esc($lng) ?>" data-location="<?= esc($event['location']) ?>">🗺️ Visa på karta</button>
+                                    <?php endif; ?>
+                                    <?php if (!empty($event['url'])): ?>
+                                        <a class="read-more-link" href="https://polisen.se<?= esc($event['url']) ?>" target="_blank" rel="noopener noreferrer nofollow" referrerpolicy="no-referrer">
+                                            <span>🔗</span> polisen.se
+                                        </a>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="event-details"></div>
+                            </div>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
+            </section>
+
+            <div id="loadingMore" class="press-loading" style="display:none;">
+                <div class="spinner"></div>
+                <p>Laddar fler händelser...</p>
+            </div>
+
+            <div id="mapContainer" class="map-container">
+                <div id="map" style="height:100%;"></div>
+            </div>
+
+            <section id="pressSection" class="press-section">
+                <div class="press-header">
+                    <h2>Pressmeddelanden</h2>
+                    <p>Senaste pressmeddelanden från Polisen</p>
+                </div>
+                <div class="press-filters">
+                    <div class="press-search-wrapper">
+                        <input type="search" id="pressSearch" class="press-search" placeholder="Sök pressmeddelanden...">
+                    </div>
+                    <select id="pressRegionSelect" class="press-region-select">
+                        <option value="">Alla regioner</option>
+                        <option value="bergslagen">Bergslagen</option>
+                        <option value="mitt">Mitt</option>
+                        <option value="nord">Nord</option>
+                        <option value="stockholm">Stockholm</option>
+                        <option value="syd">Syd</option>
+                        <option value="vast">Väst</option>
+                        <option value="ost">Öst</option>
+                    </select>
+                </div>
+                <div id="pressGrid" class="press-grid"></div>
+                <div id="pressLoadMore" class="press-load-more">
+                    <button type="button" id="pressLoadMoreBtn" class="btn btn-secondary">Ladda fler</button>
+                </div>
+            </section>
+        </div>
+
+        <aside id="statsSidebar" class="stats-sidebar">
+            <div class="stats-card">
+                <h3>📊 Översikt</h3>
+                <div class="stat-number"><?= esc((string) $stats['total']) ?></div>
+                <div class="stat-label">Totalt antal händelser</div>
+            </div>
+            <div class="stats-card">
+                <h3>⏱️ Senaste 24h</h3>
+                <div class="stat-number"><?= esc((string) $stats['last24h']) ?></div>
+                <div class="stat-label">Händelser senaste dygnet</div>
+            </div>
+            <div class="stats-card">
+                <h3>📅 Senaste 7 dagar</h3>
+                <div class="stat-number"><?= esc((string) $stats['last7d']) ?></div>
+                <div class="stat-label">Händelser senaste veckan</div>
+            </div>
+            <div class="stats-card">
+                <h3>🏷️ Vanligaste typer</h3>
+                <?php foreach ($stats['topTypes'] as $row): ?>
+                    <div class="stat-row">
+                        <div class="stat-row-label"><?= esc($row['label']) ?></div>
+                        <div class="stat-row-value"><?= esc((string) $row['total']) ?></div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+            <div class="stats-card">
+                <h3>📍 Vanliga platser</h3>
+                <?php foreach ($stats['topLocations'] as $row): ?>
+                    <div class="stat-row">
+                        <div class="stat-row-label"><?= esc($row['label']) ?></div>
+                        <div class="stat-row-value"><?= esc((string) $row['total']) ?></div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+            <div class="stats-card">
+                <h3>🕒 Per timme (24h)</h3>
+                <div class="hour-chart">
+                    <?php foreach ($stats['hourly'] as $count): ?>
+                        <div class="hour-bar" style="height: <?= 2 + ($count * 4) ?>px;"></div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </aside>
+    </main>
+
+    <footer>
+        <p>Data från <a href="https://polisen.se" target="_blank" rel="noopener noreferrer">Polisen</a>. <?= esc((string) $totalEvents) ?> händelser i arkivet.</p>
+        <p class="api-status <?= $refreshStatus['success'] ? 'online' : 'offline' ?>">
+            API-status: <?= $refreshStatus['success'] ? 'Online' : 'Offline' ?>
+        </p>
+    </footer>
+</div>
+
+<button id="scrollTop" class="scroll-top" type="button">⬆️</button>
+
+<div id="installPrompt" class="install-prompt">
+    <h4>Installera Sambandscentralen</h4>
+    <p>Lägg till appen på hemskärmen för snabb åtkomst.</p>
+    <div class="install-prompt-buttons">
+        <button id="installBtn" class="install-btn" type="button">Installera</button>
+        <button id="dismissInstall" class="dismiss-btn" type="button">Inte nu</button>
+    </div>
+</div>
+
+<div id="mapModalOverlay" class="map-modal-overlay">
+    <div class="map-modal">
+        <div class="map-modal-header">
+            <h3 id="mapModalTitle">📍 Plats</h3>
+            <button id="mapModalClose" class="map-modal-close" type="button">✕</button>
+        </div>
+        <div class="map-modal-body">
+            <div id="modalMap" style="height:100%;"></div>
+        </div>
+        <div class="map-modal-footer">
+            <span id="mapModalCoords" class="coords"></span>
+            <a id="mapModalGoogleLink" href="#" target="_blank" rel="noopener noreferrer">Google Maps</a>
+            <a id="mapModalAppleLink" href="#" target="_blank" rel="noopener noreferrer">Apple Maps</a>
+        </div>
+    </div>
+</div>
+
+<script>
+    window.CONFIG = {
+        currentView: <?= json_encode($currentView, JSON_UNESCAPED_UNICODE) ?>,
+        basePath: <?= json_encode($basePath, JSON_UNESCAPED_UNICODE) ?>,
+        hasMore: <?= json_encode($hasMore) ?>,
+        filters: {
+            location: <?= json_encode($filters['location'], JSON_UNESCAPED_UNICODE) ?>,
+            type: <?= json_encode($filters['type'], JSON_UNESCAPED_UNICODE) ?>,
+            search: <?= json_encode($filters['search'], JSON_UNESCAPED_UNICODE) ?>
+        }
+    };
+    window.eventsData = <?= json_encode($mapEvents, JSON_UNESCAPED_UNICODE) ?>;
+</script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="<?= esc($basePath) ?>/js/app.js?v=<?= esc(ASSET_VERSION) ?>"></script>
+</body>
+</html>
