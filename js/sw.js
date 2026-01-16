@@ -3,8 +3,8 @@
  * Ger offline-stöd och caching för bättre prestanda
  */
 
-const CACHE_NAME = 'sambandscentralen-v4';
-const ASSET_VERSION = '1.0.0';
+const CACHE_NAME = 'sambandscentralen-v5';
+const ASSET_VERSION = '5.7.0';
 
 // Get the base path from service worker location (supports subdirectory deployment)
 const BASE_PATH = self.location.pathname.replace(/\/js\/sw\.js$/, '');

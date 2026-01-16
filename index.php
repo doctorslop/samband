@@ -51,7 +51,7 @@ if (isset($_GET['ajax'])) {
 // Configuration
 define('CACHE_TIME', 120);           // 2 minutes for events (more real-time)
 define('EVENTS_PER_PAGE', 40);
-define('ASSET_VERSION', '5.6.0');    // Bump this to bust browser cache
+define('ASSET_VERSION', '5.7.0');    // Bump this to bust browser cache
 define('MAX_FETCH_RETRIES', 3);      // Max retries for API fetch
 define('USER_AGENT', 'FreshRSS/1.28.0 (Linux; https://freshrss.org)');
 define('POLICE_API_URL', 'https://polisen.se/api/events');
@@ -485,9 +485,10 @@ function getEventsFromDb(array $filters = [], int $limit = 500, int $offset = 0)
         $params[] = $searchTerm;
     }
 
-    // Sort by most-recent publish/update activity to match "publicerades" timing in the UI,
-    // then fall back to event_time for stable ordering within the same publish/update time.
-    $query .= " ORDER BY COALESCE(last_updated, publish_time) DESC, event_time DESC, id DESC LIMIT ? OFFSET ?";
+    // Sort by event_time (when the event actually occurred) for consistent chronological ordering.
+    // This ensures newest events always appear first, regardless of when they were published or updated.
+    // Secondary sort by id DESC ensures stable ordering for events with identical timestamps.
+    $query .= " ORDER BY event_time DESC, id DESC LIMIT ? OFFSET ?";
     $params[] = $limit;
     $params[] = $offset;
 
@@ -676,7 +677,7 @@ function formatEventForUi(array $event): array {
 
     return [
         'id' => $event['id'] ?? null,
-        'datetime' => $event['datetime'] ?? null,
+        'datetime' => $eventTime,
         'name' => $event['name'] ?? '',
         'summary' => $event['summary'] ?? '',
         'url' => $event['url'] ?? '',
@@ -689,7 +690,8 @@ function formatEventForUi(array $event): array {
             'day' => $date->format('d'),
             'month' => $date->format('M'),
             'time' => $date->format('H:i'),
-            'relative' => formatRelativeTime($date, $now)
+            'relative' => formatRelativeTime($date, $now),
+            'iso' => $date->format('c')
         ],
         'wasUpdated' => !empty($event['was_updated']),
         'updated' => $updated ? (new DateTimeImmutable($updated))->format('Y-m-d H:i') : ''
