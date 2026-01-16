@@ -266,6 +266,30 @@ function runMigrations(PDO $pdo): void {
         $stmt = $pdo->prepare("INSERT INTO migrations (name, applied_at) VALUES (?, ?)");
         $stmt->execute([$migrationName, date('c')]);
     }
+
+    // Migration 4: Re-extract event_time from name field for proper chronological sorting
+    // The previous extraction only looked at summary field, but actual event time is in the name
+    $migrationName = 'reextract_event_time_from_name_v1';
+    $stmt = $pdo->prepare("SELECT 1 FROM migrations WHERE name = ?");
+    $stmt->execute([$migrationName]);
+    if (!$stmt->fetch()) {
+        // Re-process all events to extract correct event_time from name field
+        $events = $pdo->query("SELECT id, raw_data FROM events")->fetchAll();
+        $updateStmt = $pdo->prepare("UPDATE events SET event_time = ? WHERE id = ?");
+
+        foreach ($events as $row) {
+            $eventData = json_decode($row['raw_data'], true);
+            if ($eventData) {
+                $newEventTime = extractEventTime($eventData);
+                if ($newEventTime) {
+                    $updateStmt->execute([$newEventTime, $row['id']]);
+                }
+            }
+        }
+
+        $stmt = $pdo->prepare("INSERT INTO migrations (name, applied_at) VALUES (?, ?)");
+        $stmt->execute([$migrationName, date('c')]);
+    }
 }
 
 /**
@@ -282,6 +306,13 @@ function normalizeDateTime(string $datetime): string {
 
 /**
  * Extract the actual event time from event data
+ *
+ * The API returns events with a 'datetime' that represents when the event was
+ * published, not when it actually occurred. The actual event time is embedded
+ * in the 'name' field in the format: "DD månad HH.MM, Type, Location"
+ * (e.g., "16 januari 20.29, Stöld/inbrott, Nacka")
+ *
+ * This function extracts the actual event time for proper chronological sorting.
  */
 function extractEventTime(array $event): ?string {
     $summary = $event['summary'] ?? '';
@@ -320,6 +351,36 @@ function extractEventTime(array $event): ?string {
         }
     }
 
+    // Primary: Extract time from name field format "DD månad HH.MM, Type, Location"
+    // Examples: "16 januari 20.29, Stöld/inbrott, Nacka" or "16 januari 17.50, Trafikolycka, Nacka"
+    if (preg_match('/^(\d{1,2})\s+\w+\s+(\d{1,2})[\.:,](\d{2})/u', $name, $m)) {
+        $day = intval($m[1]);
+        $hour = intval($m[2]);
+        $minute = intval($m[3]);
+        if ($hour >= 0 && $hour <= 23 && $minute >= 0 && $minute <= 59 && $day >= 1 && $day <= 31) {
+            if ($apiDatetime) {
+                try {
+                    $date = new DateTime($apiDatetime);
+                    $apiDay = intval($date->format('d'));
+                    // If the event day differs from publish day, adjust the date
+                    if ($day !== $apiDay) {
+                        // Event is from a previous day (published later)
+                        if ($day < $apiDay) {
+                            $date->setDate((int)$date->format('Y'), (int)$date->format('m'), $day);
+                        } else {
+                            // Day is greater but we're in a new month - go back to previous month
+                            $date->modify('-1 month');
+                            $date->setDate((int)$date->format('Y'), (int)$date->format('m'), $day);
+                        }
+                    }
+                    $date->setTime($hour, $minute, 0);
+                    return $date->format('c');
+                } catch (Exception $e) {}
+            }
+        }
+    }
+
+    // Fallback: Extract time from summary using "Kl" or "Klockan" prefix
     if (preg_match('/[Kk]l(?:ockan)?\.?\s*(\d{1,2})[:\.](\d{2})/', $summary, $m)) {
         $hour = intval($m[1]);
         $minute = intval($m[2]);
