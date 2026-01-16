@@ -82,9 +82,14 @@
                     let relTime = diffMins <= 1 ? 'Just nu' : diffMins < 60 ? `${diffMins} min sedan` : `${diffHours} timmar sedan`;
 
                     const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+                    const summaryText = escHtml(e.summary || '');
+                    const summaryPreview = summaryText.length > 120 ? `${summaryText.substring(0, 120)}...` : summaryText;
+                    const safeType = escHtml(e.type || '');
+                    const safeName = escHtml(e.name || '');
+                    const safeLocation = escHtml(e.location || '');
 
                     const m = L.circleMarker([lat, lng], { radius: 8, fillColor: e.color, color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.85 });
-                    m.bindPopup(`<div class="map-popup"><span class="badge" style="background:${e.color}20;color:${e.color}">${e.icon} ${e.type}</span><div class="popup-time">🕐 ${relTime}</div><h3>${e.name}</h3><p>${e.summary.substring(0, 120)}${e.summary.length > 120 ? '...' : ''}</p><p><strong>📍 ${e.location}</strong></p><div class="popup-links"><a href="${googleMapsUrl}" target="_blank" rel="noopener noreferrer">🗺️ Google Maps</a>${e.url ? `<a href="https://polisen.se${e.url}" target="_blank" rel="noopener noreferrer nofollow" referrerpolicy="no-referrer">📄 Läs mer</a>` : ''}</div></div>`);
+                    m.bindPopup(`<div class="map-popup"><span class="badge" style="background:${e.color}20;color:${e.color}">${e.icon} ${safeType}</span><div class="popup-time">🕐 ${relTime}</div><h3>${safeName}</h3><p>${summaryPreview}</p><p><strong>📍 ${safeLocation}</strong></p><div class="popup-links"><a href="${googleMapsUrl}" target="_blank" rel="noopener noreferrer">🗺️ Google Maps</a>${e.url ? `<a href="https://polisen.se${e.url}" target="_blank" rel="noopener noreferrer nofollow" referrerpolicy="no-referrer">📄 Läs mer</a>` : ''}</div></div>`);
                     markers.addLayer(m);
                 }
             }
