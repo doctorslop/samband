@@ -485,9 +485,9 @@ function getEventsFromDb(array $filters = [], int $limit = 500, int $offset = 0)
         $params[] = $searchTerm;
     }
 
-    // Sort by most-recent activity: prefer last_updated (edits), then publish_time (creation),
-    // then event_time (when the event occurred), finally id as a stable tiebreaker.
-    $query .= " ORDER BY COALESCE(last_updated, publish_time, event_time) DESC, id DESC LIMIT ? OFFSET ?";
+    // Sort by most-recent publish/update activity to match "publicerades" timing in the UI,
+    // then fall back to event_time for stable ordering within the same publish/update time.
+    $query .= " ORDER BY COALESCE(last_updated, publish_time) DESC, event_time DESC, id DESC LIMIT ? OFFSET ?";
     $params[] = $limit;
     $params[] = $offset;
 
