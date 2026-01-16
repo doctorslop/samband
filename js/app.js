@@ -59,13 +59,15 @@
         map = L.map('map').setView([62.5, 17.5], 5);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '© OpenStreetMap', maxZoom: 18 }).addTo(map);
 
-        // Filter events to last 24 hours only
+        // Filter events to last 24 hours only using the correct event time
         const now = new Date();
         const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
         const recentEvents = window.eventsData.filter(e => {
-            if (!e.datetime) return false;
-            const eventDate = new Date(e.datetime);
-            return eventDate >= yesterday && eventDate <= now;
+            // Use date.iso for consistent event time, fallback to datetime
+            const eventTimeStr = (e.date && e.date.iso) || e.datetime;
+            if (!eventTimeStr) return false;
+            const eventDate = new Date(eventTimeStr);
+            return !isNaN(eventDate.getTime()) && eventDate >= yesterday && eventDate <= now;
         });
 
         const markers = L.layerGroup();
@@ -75,7 +77,8 @@
                 const [lat, lng] = e.gps.split(',').map(Number);
                 if (!isNaN(lat) && !isNaN(lng)) {
                     eventCount++;
-                    const eventDate = new Date(e.datetime);
+                    const eventTimeStr = (e.date && e.date.iso) || e.datetime;
+                    const eventDate = new Date(eventTimeStr);
                     const diffMs = now - eventDate;
                     const diffMins = Math.floor(diffMs / 60000);
                     const diffHours = Math.floor(diffMs / 3600000);
