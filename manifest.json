@@ -31,12 +31,6 @@
             "short_name": "Statistik",
             "description": "Öppna statistikvy",
             "url": "./?view=stats"
-        },
-        {
-            "name": "Pressmeddelanden",
-            "short_name": "Press",
-            "description": "Polisens pressmeddelanden",
-            "url": "./?view=press"
         }
     ],
     "related_applications": [],
