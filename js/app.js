@@ -12,9 +12,8 @@
     const eventsGrid = document.getElementById('eventsGrid');
     const mapContainer = document.getElementById('mapContainer');
     const statsSidebar = document.getElementById('statsSidebar');
-    const pressSection = document.getElementById('pressSection');
     const viewInput = document.getElementById('viewInput');
-    let map = null, mapInit = false, pressInit = false;
+    let map = null, mapInit = false;
 
     const setView = (v) => {
         viewBtns.forEach(b => b.classList.toggle('active', b.dataset.view === v));
@@ -23,9 +22,7 @@
         eventsGrid.style.display = v === 'list' ? 'grid' : 'none';
         mapContainer.classList.toggle('active', v === 'map');
         statsSidebar.classList.toggle('active', v === 'stats');
-        pressSection.classList.toggle('active', v === 'press');
         if (v === 'map' && !mapInit) initMap();
-        if (v === 'press' && !pressInit) loadPressReleases();
         history.replaceState(null, '', `?view=${v}${window.CONFIG.filters.location ? '&location=' + encodeURIComponent(window.CONFIG.filters.location) : ''}${window.CONFIG.filters.type ? '&type=' + encodeURIComponent(window.CONFIG.filters.type) : ''}${window.CONFIG.filters.search ? '&search=' + encodeURIComponent(window.CONFIG.filters.search) : ''}`);
     };
     viewBtns.forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
@@ -144,177 +141,6 @@
     function escHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
 
     new IntersectionObserver((e) => { if (e[0].isIntersecting && eventsGrid.style.display !== 'none') loadMore(); }, { rootMargin: '150px' }).observe(loadingEl);
-
-    // Press Releases
-    const pressGrid = document.getElementById('pressGrid');
-    const pressSearch = document.getElementById('pressSearch');
-    const pressRegionSelect = document.getElementById('pressRegionSelect');
-    const pressLoadMore = document.getElementById('pressLoadMore');
-    const pressLoadMoreBtn = document.getElementById('pressLoadMoreBtn');
-    let pressPage = 1, pressLoading = false, pressHasMore = false;
-
-    async function loadPressReleases(reset = true) {
-        if (pressLoading) return;
-        pressLoading = true;
-
-        if (reset) {
-            pressPage = 1;
-            pressGrid.innerHTML = '<div class="press-loading"><div class="spinner"></div><p>Laddar pressmeddelanden...</p></div>';
-            pressLoadMore.style.display = 'none';
-        } else {
-            pressLoadMoreBtn.disabled = true;
-            pressLoadMoreBtn.textContent = 'Laddar...';
-        }
-
-        const region = pressRegionSelect.value;
-        const search = pressSearch.value.trim();
-
-        try {
-            const res = await fetch(`?ajax=press&page=${pressPage}&region=${encodeURIComponent(region)}&search=${encodeURIComponent(search)}`);
-            const data = await res.json();
-
-            if (reset) {
-                pressGrid.innerHTML = '';
-                pressInit = true;
-            }
-
-            if (data.items && data.items.length > 0) {
-                data.items.forEach((item, i) => {
-                    const card = document.createElement('article');
-                    card.className = 'press-card';
-                    card.style.animationDelay = `${i * 0.03}s`;
-                    card.innerHTML = `
-                        <div class="press-card-header">
-                            <div class="press-card-date">
-                                <div class="day">${item.date.day}</div>
-                                <div class="month">${item.date.month}</div>
-                                <div class="time">${item.date.time}</div>
-                            </div>
-                            <div class="press-card-content">
-                                <button type="button" class="press-card-region" data-region="${escHtml(item.regionSlug)}">📍 ${escHtml(item.region)}</button>
-                                <a href="${escHtml(item.link)}" target="_blank" rel="noopener noreferrer nofollow" referrerpolicy="no-referrer" class="press-card-title">${escHtml(item.title)}</a>
-                                <p class="press-card-description">${escHtml(item.description)}</p>
-                                <div class="press-card-details"></div>
-                            </div>
-                        </div>
-                        <div class="press-card-footer">
-                            <span class="press-card-relative">${item.date.relative}</span>
-                            <div class="press-card-actions">
-                                <button type="button" class="show-press-details-btn" data-url="${escHtml(item.link)}">📖 Visa detaljer</button>
-                                <a href="${escHtml(item.link)}" target="_blank" rel="noopener noreferrer nofollow" referrerpolicy="no-referrer" class="press-card-link">🔗 Läs på polisen.se</a>
-                            </div>
-                        </div>
-                    `;
-                    pressGrid.appendChild(card);
-                });
-
-                pressHasMore = data.hasMore;
-                pressLoadMore.style.display = pressHasMore ? 'block' : 'none';
-            } else if (reset) {
-                pressGrid.innerHTML = `
-                    <div class="press-empty">
-                        <div class="press-empty-icon">📭</div>
-                        <h3>Inga pressmeddelanden</h3>
-                        <p>Inga pressmeddelanden hittades${search ? ' för "' + escHtml(search) + '"' : ''}${region ? ' i vald region' : ''}.</p>
-                    </div>
-                `;
-            }
-        } catch (err) {
-            console.error('Failed to load press releases:', err);
-            if (reset) {
-                pressGrid.innerHTML = `
-                    <div class="press-empty">
-                        <div class="press-empty-icon">⚠️</div>
-                        <h3>Kunde inte ladda pressmeddelanden</h3>
-                        <p>Försök igen senare.</p>
-                    </div>
-                `;
-            }
-        } finally {
-            pressLoading = false;
-            pressLoadMoreBtn.disabled = false;
-            pressLoadMoreBtn.textContent = 'Ladda fler';
-        }
-    }
-
-    // Press filters
-    let pressSearchTimeout;
-    pressSearch.addEventListener('input', () => {
-        clearTimeout(pressSearchTimeout);
-        pressSearchTimeout = setTimeout(() => loadPressReleases(true), 400);
-    });
-    pressRegionSelect.addEventListener('change', () => loadPressReleases(true));
-    pressLoadMoreBtn.addEventListener('click', () => {
-        pressPage++;
-        loadPressReleases(false);
-    });
-
-    // Click on region tag to filter
-    document.addEventListener('click', (e) => {
-        const regionBtn = e.target.closest('.press-card-region');
-        if (!regionBtn) return;
-        const region = regionBtn.dataset.region;
-        if (region) {
-            pressRegionSelect.value = region;
-            loadPressReleases(true);
-            window.scrollTo({ top: document.getElementById('pressSection').offsetTop - 20, behavior: 'smooth' });
-        }
-    });
-
-    // Press details expansion
-    const pressDetailsCache = {};
-    document.addEventListener('click', async (e) => {
-        const btn = e.target.closest('.show-press-details-btn');
-        if (!btn) return;
-
-        const pressUrl = btn.dataset.url;
-        const detailsDiv = btn.closest('.press-card').querySelector('.press-card-details');
-        if (!pressUrl || !detailsDiv) return;
-
-        if (detailsDiv.classList.contains('visible')) {
-            detailsDiv.classList.remove('visible');
-            btn.classList.remove('expanded');
-            btn.innerHTML = '📖 Visa detaljer';
-            return;
-        }
-
-        if (pressDetailsCache[pressUrl]) {
-            detailsDiv.textContent = pressDetailsCache[pressUrl];
-            detailsDiv.classList.add('visible');
-            detailsDiv.classList.remove('error');
-            btn.classList.add('expanded');
-            btn.innerHTML = '📖 Dölj detaljer';
-            return;
-        }
-
-        btn.classList.add('loading');
-        btn.innerHTML = '⏳ Laddar...';
-
-        try {
-            const res = await fetch(`?ajax=pressdetails&url=${encodeURIComponent(pressUrl)}`);
-            const data = await res.json();
-
-            if (data.success && data.details?.content) {
-                pressDetailsCache[pressUrl] = data.details.content;
-                detailsDiv.textContent = data.details.content;
-                detailsDiv.classList.add('visible');
-                detailsDiv.classList.remove('error');
-                btn.classList.add('expanded');
-                btn.innerHTML = '📖 Dölj detaljer';
-            } else {
-                detailsDiv.textContent = 'Kunde inte hämta detaljer. Klicka på polisen.se-länken för att läsa mer.';
-                detailsDiv.classList.add('visible', 'error');
-                btn.innerHTML = '📖 Visa detaljer';
-            }
-        } catch (err) {
-            console.error('Failed to fetch press details:', err);
-            detailsDiv.textContent = 'Kunde inte hämta detaljer. Klicka på polisen.se-länken för att läsa mer.';
-            detailsDiv.classList.add('visible', 'error');
-            btn.innerHTML = '📖 Visa detaljer';
-        } finally {
-            btn.classList.remove('loading');
-        }
-    });
 
     // Filter auto-submit
     document.querySelectorAll('.filter-select').forEach(s => s.addEventListener('change', () => s.form.submit()));

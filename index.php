@@ -51,7 +51,7 @@ if (isset($_GET['ajax'])) {
 // Configuration
 define('CACHE_TIME', 120);           // 2 minutes for events (more real-time)
 define('EVENTS_PER_PAGE', 40);
-define('ASSET_VERSION', '5.7.0');    // Bump this to bust browser cache
+define('ASSET_VERSION', '6.0.0');    // Bump this to bust browser cache
 define('MAX_FETCH_RETRIES', 3);      // Max retries for API fetch
 define('USER_AGENT', 'FreshRSS/1.28.0 (Linux; https://freshrss.org)');
 define('POLICE_API_URL', 'https://polisen.se/api/events');
@@ -63,7 +63,7 @@ define('DB_PATH', DATA_DIR . '/events.db');
 define('BACKUP_DIR', DATA_DIR . '/backups');
 
 // Allowed views (security)
-define('ALLOWED_VIEWS', ['list', 'map', 'stats', 'press']);
+define('ALLOWED_VIEWS', ['list', 'map', 'stats']);
 
 // ============================================================================
 // INPUT SANITIZATION FUNCTIONS
@@ -886,23 +886,6 @@ if (isset($_GET['ajax'])) {
         exit;
     }
 
-    if ($_GET['ajax'] === 'press') {
-        echo json_encode([
-            'items' => [],
-            'hasMore' => false
-        ], JSON_UNESCAPED_UNICODE);
-        exit;
-    }
-
-    if ($_GET['ajax'] === 'pressdetails' && isset($_GET['url'])) {
-        $details = fetchDetailsText(sanitizeInput((string) $_GET['url'], 500));
-        echo json_encode([
-            'success' => (bool) $details,
-            'details' => ['content' => $details]
-        ], JSON_UNESCAPED_UNICODE);
-        exit;
-    }
-
     echo json_encode(['error' => 'Invalid endpoint'], JSON_UNESCAPED_UNICODE);
     exit;
 }
@@ -931,7 +914,7 @@ if ($basePath === '/') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sambandscentralen</title>
     <link rel="manifest" href="<?= esc($basePath) ?>/manifest.json">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>📻</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>👮</text></svg>">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
     <link rel="stylesheet" href="<?= esc($basePath) ?>/css/styles.css?v=<?= esc(ASSET_VERSION) ?>">
@@ -941,7 +924,7 @@ if ($basePath === '/') {
     <header>
         <div class="header-content">
             <a class="logo" href="<?= esc($basePath) ?>/">
-                <div class="logo-icon">📻</div>
+                <div class="logo-icon">👮</div>
                 <div class="logo-text">
                     <h1>Sambandscentralen</h1>
                     <p>Polisens händelsenotiser i realtid</p>
@@ -952,7 +935,6 @@ if ($basePath === '/') {
                     <button type="button" data-view="list" class="<?= $currentView === 'list' ? 'active' : '' ?>">📋 <span class="label">Lista</span></button>
                     <button type="button" data-view="map" class="<?= $currentView === 'map' ? 'active' : '' ?>">🗺️ <span class="label">Karta</span></button>
                     <button type="button" data-view="stats" class="<?= $currentView === 'stats' ? 'active' : '' ?>">📊 <span class="label">Statistik</span></button>
-                    <button type="button" data-view="press" class="<?= $currentView === 'press' ? 'active' : '' ?>">📰 <span class="label">Press</span></button>
                 </div>
                 <div class="live-indicator"><span class="live-dot"></span> Live</div>
             </div>
@@ -1063,31 +1045,6 @@ if ($basePath === '/') {
                 <div id="map" style="height:100%;"></div>
             </div>
 
-            <section id="pressSection" class="press-section">
-                <div class="press-header">
-                    <h2>Pressmeddelanden</h2>
-                    <p>Senaste pressmeddelanden från Polisen</p>
-                </div>
-                <div class="press-filters">
-                    <div class="press-search-wrapper">
-                        <input type="search" id="pressSearch" class="press-search" placeholder="Sök pressmeddelanden...">
-                    </div>
-                    <select id="pressRegionSelect" class="press-region-select">
-                        <option value="">Alla regioner</option>
-                        <option value="bergslagen">Bergslagen</option>
-                        <option value="mitt">Mitt</option>
-                        <option value="nord">Nord</option>
-                        <option value="stockholm">Stockholm</option>
-                        <option value="syd">Syd</option>
-                        <option value="vast">Väst</option>
-                        <option value="ost">Öst</option>
-                    </select>
-                </div>
-                <div id="pressGrid" class="press-grid"></div>
-                <div id="pressLoadMore" class="press-load-more">
-                    <button type="button" id="pressLoadMoreBtn" class="btn btn-secondary">Ladda fler</button>
-                </div>
-            </section>
         </div>
 
         <aside id="statsSidebar" class="stats-sidebar">
@@ -1136,9 +1093,8 @@ if ($basePath === '/') {
     </main>
 
     <footer>
-        <p>Data från <a href="https://polisen.se" target="_blank" rel="noopener noreferrer">Polisen</a>. <?= esc((string) $totalEvents) ?> händelser i arkivet.</p>
         <p class="api-status <?= $refreshStatus['success'] ? 'online' : 'offline' ?>">
-            API-status: <?= $refreshStatus['success'] ? 'Online' : 'Offline' ?>
+            <?= $refreshStatus['success'] ? '● Online' : '○ Offline' ?>
         </p>
     </footer>
 </div>
