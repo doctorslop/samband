@@ -541,5 +541,3 @@ function countEventsInDb(array $filters = []): int {
     $stmt->execute($params);
     return (int) $stmt->fetch()['count'];
 }
-
-[TRUNCATED FOR BREVITY: the rest of the file remains unchanged]
