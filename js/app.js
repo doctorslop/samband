@@ -172,7 +172,8 @@
                 const updatedHtml = e.wasUpdated && e.updated ? `<span class="updated-indicator" title="Uppdaterad ${escHtml(e.updated)}">✎ uppdaterad</span>` : '';
                 const typeClass = getTypeClass(e.type);
                 const sourceHtml = e.url ? `<span class="meta-separator">•</span><a class="event-source" href="https://polisen.se${escHtml(e.url)}" target="_blank" rel="noopener noreferrer nofollow" referrerpolicy="no-referrer" onclick="event.stopPropagation()">🔗 polisen.se</a>` : '';
-                card.innerHTML = `<div class="event-card-header" tabindex="0" role="button" aria-expanded="false" aria-label="Expandera händelse: ${escHtml(e.type)} i ${escHtml(e.location)}"><div class="event-header-content"><div class="event-meta-row"><span class="event-datetime">${e.date.day} ${e.date.month} ${e.date.time}</span><span class="meta-separator">•</span><span class="event-relative">${e.date.relative}</span>${sourceHtml}${updatedHtml ? `<span class="meta-separator">•</span>${updatedHtml}` : ''}</div><div class="event-title-group"><a href="?type=${encodeURIComponent(e.type)}&view=${viewInput.value}" class="event-type ${typeClass}" onclick="event.stopPropagation()">${e.icon} ${escHtml(e.type)}</a><a href="?location=${encodeURIComponent(e.location)}&view=${viewInput.value}" class="event-location-link" onclick="event.stopPropagation()">${escHtml(e.location)}</a></div><p class="event-summary">${escHtml(e.summary)}</p><div class="event-header-actions">${gpsBtn}</div></div><span class="accordion-chevron" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></span></div><div class="event-card-body"><div class="event-details"></div></div>`;
+                const expandBtn = `<button type="button" class="expand-details-btn"><span class="expand-text">📖 Läs mer</span><span class="collapse-text">📖 Dölj</span><svg class="expand-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></button>`;
+                card.innerHTML = `<div class="event-card-header" tabindex="0" role="button" aria-expanded="false" aria-label="Expandera händelse: ${escHtml(e.type)} i ${escHtml(e.location)}"><div class="event-header-content"><div class="event-meta-row"><span class="event-datetime">${e.date.day} ${e.date.month} ${e.date.time}</span><span class="meta-separator">•</span><span class="event-relative">${e.date.relative}</span>${sourceHtml}${updatedHtml ? `<span class="meta-separator">•</span>${updatedHtml}` : ''}</div><div class="event-title-group"><a href="?type=${encodeURIComponent(e.type)}&view=${viewInput.value}" class="event-type ${typeClass}" onclick="event.stopPropagation()">${e.icon} ${escHtml(e.type)}</a><a href="?location=${encodeURIComponent(e.location)}&view=${viewInput.value}" class="event-location-link" onclick="event.stopPropagation()">${escHtml(e.location)}</a></div><p class="event-summary">${escHtml(e.summary)}</p><div class="event-header-actions">${expandBtn}${gpsBtn}</div></div><span class="accordion-chevron"></span></div><div class="event-card-body"><div class="event-details"></div></div>`;
                 eventsGrid.appendChild(card);
             });
             // Update shown count
@@ -332,30 +333,36 @@
         }
     }
 
-    // Click handler for accordion headers
+    // Click handler for expand button and accordion headers
     document.addEventListener('click', function(e) {
+        // Handle expand button clicks
+        const expandBtn = e.target.closest('.expand-details-btn');
+        if (expandBtn) {
+            e.stopPropagation();
+            const card = expandBtn.closest('.event-card');
+            if (card) toggleAccordion(card);
+            return;
+        }
+
+        // Handle header clicks (but not on buttons/links)
         const header = e.target.closest('.event-card-header');
         if (!header) return;
-
-        // Don't toggle if clicking on interactive elements within header
         if (e.target.closest('a, button')) return;
 
         const card = header.closest('.event-card');
         if (card) toggleAccordion(card);
     });
 
-    // Keyboard handler for accordion headers (Enter/Space)
+    // Keyboard handler for expand button
     document.addEventListener('keydown', function(e) {
         if (e.key !== 'Enter' && e.key !== ' ') return;
 
-        const header = e.target.closest('.event-card-header');
-        if (!header) return;
-
-        // Prevent space from scrolling the page
-        if (e.key === ' ') e.preventDefault();
-
-        const card = header.closest('.event-card');
-        if (card) toggleAccordion(card);
+        const expandBtn = e.target.closest('.expand-details-btn');
+        if (expandBtn) {
+            if (e.key === ' ') e.preventDefault();
+            const card = expandBtn.closest('.event-card');
+            if (card) toggleAccordion(card);
+        }
     });
 
     // Map Modal
