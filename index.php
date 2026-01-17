@@ -1041,6 +1041,14 @@ if ($basePath === '/') {
                                     <a href="?location=<?= esc($event['location']) ?>&view=<?= esc($currentView) ?>" class="event-location-link" onclick="event.stopPropagation()"><?= esc($event['location']) ?></a>
                                 </div>
                                 <p class="event-summary"><?= esc($event['summary']) ?></p>
+                                <div class="event-header-actions">
+                                    <?php if (!empty($event['gps'])): ?>
+                                        <?php [$lat, $lng] = array_map('trim', explode(',', $event['gps'] . ',')); ?>
+                                        <button type="button" class="show-map-link" data-lat="<?= esc($lat) ?>" data-lng="<?= esc($lng) ?>" data-location="<?= esc($event['location']) ?>" onclick="event.stopPropagation()">
+                                            🗺️ Visa på karta
+                                        </button>
+                                    <?php endif; ?>
+                                </div>
                             </div>
                             <span class="accordion-chevron" aria-hidden="true">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
@@ -1048,14 +1056,6 @@ if ($basePath === '/') {
                         </div>
                         <div class="event-card-body">
                             <div class="event-details"></div>
-                            <div class="event-actions">
-                                <?php if (!empty($event['gps'])): ?>
-                                    <?php [$lat, $lng] = array_map('trim', explode(',', $event['gps'] . ',')); ?>
-                                    <button type="button" class="show-map-link" data-lat="<?= esc($lat) ?>" data-lng="<?= esc($lng) ?>" data-location="<?= esc($event['location']) ?>">
-                                        🗺️ Visa på karta
-                                    </button>
-                                <?php endif; ?>
-                            </div>
                         </div>
                     </article>
                 <?php endforeach; ?>
