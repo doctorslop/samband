@@ -51,7 +51,7 @@ if (isset($_GET['ajax'])) {
 // Configuration
 define('CACHE_TIME', 120);           // 2 minutes for events (more real-time)
 define('EVENTS_PER_PAGE', 40);
-define('ASSET_VERSION', '6.0.0');    // Bump this to bust browser cache
+define('ASSET_VERSION', '6.1.0');    // Bump this to bust browser cache
 define('MAX_FETCH_RETRIES', 3);      // Max retries for API fetch
 define('USER_AGENT', 'FreshRSS/1.28.0 (Linux; https://freshrss.org)');
 define('POLICE_API_URL', 'https://polisen.se/api/events');
@@ -978,7 +978,7 @@ if ($basePath === '/') {
                     <option value="__custom__">Annan plats...</option>
                 </select>
                 <div class="custom-location-wrapper" id="customLocationWrapper" style="display:none;">
-                    <input class="filter-input" id="customLocationInput" type="text" name="location" placeholder="Skriv plats" value="<?= esc($filters['location']) ?>">
+                    <input class="filter-input" id="customLocationInput" type="text" name="location" placeholder="Skriv plats" value="" data-initial-value="<?= esc($filters['location']) ?>">
                     <button type="button" class="custom-location-cancel" id="customLocationCancel">×</button>
                 </div>
                 <select class="filter-select" name="type">
@@ -1130,14 +1130,19 @@ if ($basePath === '/') {
                 <span class="count-item">Lagrade händelser: <span class="count-value" id="storedCount"><?= esc((string) $stats['total']) ?></span></span>
                 <span class="count-item">Visar: <span class="count-value" id="shownCount"><?= esc((string) count($events)) ?></span> av <span class="count-value" id="totalFilteredCount"><?= esc((string) $stats['total']) ?></span></span>
             </div>
-            <p class="api-status <?= $refreshStatus['success'] ? 'online' : 'offline' ?>">
-                <?= $refreshStatus['success'] ? '● Online' : '○ Offline' ?>
-            </p>
         </div>
+        <nav class="footer-links">
+            <a href="https://polisen.se" target="_blank" rel="noopener noreferrer nofollow" referrerpolicy="no-referrer">Polisen</a>
+            <a href="https://www.domstol.se" target="_blank" rel="noopener noreferrer nofollow" referrerpolicy="no-referrer">Sveriges Domstolar</a>
+            <a href="https://www.aklagare.se" target="_blank" rel="noopener noreferrer nofollow" referrerpolicy="no-referrer">Åklagarmyndigheten</a>
+            <a href="https://www.msb.se" target="_blank" rel="noopener noreferrer nofollow" referrerpolicy="no-referrer">MSB</a>
+            <a href="https://www.krisinformation.se" target="_blank" rel="noopener noreferrer nofollow" referrerpolicy="no-referrer">Krisinformation</a>
+            <a href="https://www.svt.se/nyheter/vma" target="_blank" rel="noopener noreferrer nofollow" referrerpolicy="no-referrer">VMA</a>
+        </nav>
     </footer>
 </div>
 
-<button id="scrollTop" class="scroll-top" type="button">⬆️</button>
+<button id="scrollTop" class="scroll-top" type="button" aria-label="Scrolla till toppen"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
 
 <div id="installPrompt" class="install-prompt">
     <h4>Installera Sambandscentralen</h4>
