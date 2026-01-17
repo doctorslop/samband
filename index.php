@@ -1042,11 +1042,8 @@ if ($basePath === '/') {
                                 </div>
                                 <p class="event-summary"><?= esc($event['summary']) ?></p>
                                 <div class="event-header-actions">
-                                    <button type="button" class="expand-details-btn">
-                                        <span class="expand-text">📖 Läs mer</span>
-                                        <span class="collapse-text">📖 Dölj</span>
-                                        <svg class="expand-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                                    </button>
+                                    <button type="button" class="expand-details-btn">📖 Läs mer</button>
+                                    <button type="button" class="collapse-details-btn">📖 Dölj</button>
                                     <?php if (!empty($event['gps'])): ?>
                                         <?php [$lat, $lng] = array_map('trim', explode(',', $event['gps'] . ',')); ?>
                                         <button type="button" class="show-map-link" data-lat="<?= esc($lat) ?>" data-lng="<?= esc($lng) ?>" data-location="<?= esc($event['location']) ?>" onclick="event.stopPropagation()">

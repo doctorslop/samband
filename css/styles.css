@@ -461,8 +461,9 @@ header {
     outline-offset: 2px;
 }
 
-/* Expand details button - primary action */
-.expand-details-btn {
+/* Expand/Collapse details buttons */
+.expand-details-btn,
+.collapse-details-btn {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -476,32 +477,24 @@ header {
     border-radius: 6px;
     transition: all 0.2s ease;
 }
-.expand-details-btn:hover {
+.expand-details-btn:hover,
+.collapse-details-btn:hover {
     background: rgba(16, 185, 129, 0.2);
     border-color: rgba(16, 185, 129, 0.4);
     color: var(--success);
 }
-.expand-details-btn:focus-visible {
+.expand-details-btn:focus-visible,
+.collapse-details-btn:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
 }
-.expand-details-btn .expand-icon {
-    transition: transform 0.25s ease;
-}
-.expand-details-btn .collapse-text { display: none; }
-.expand-details-btn .expand-text { display: inline; }
 
-/* When card is expanded */
-.event-card.expanded .expand-details-btn {
-    background: var(--success);
-    border-color: var(--success);
-    color: var(--primary);
-}
-.event-card.expanded .expand-details-btn .expand-icon {
-    transform: rotate(180deg);
-}
-.event-card.expanded .expand-details-btn .collapse-text { display: inline; }
-.event-card.expanded .expand-details-btn .expand-text { display: none; }
+/* Hide collapse button by default, show expand */
+.collapse-details-btn { display: none; }
+
+/* When card is expanded: hide expand, show collapse */
+.event-card.expanded .expand-details-btn { display: none; }
+.event-card.expanded .collapse-details-btn { display: inline-flex; }
 
 /* Hide the old chevron in header - using button instead */
 .accordion-chevron { display: none; }
