@@ -107,13 +107,51 @@
         if (markers.getLayers().length) map.fitBounds(markers.getBounds(), { padding: [40, 40] });
     }
 
-    // Infinite Scroll
+    // Type class mapping for dynamic cards
+    const typeClassMap = {
+        'Inbrott': 'event-type--inbrott',
+        'Brand': 'event-type--brand',
+        'Rån': 'event-type--ran',
+        'Trafikolycka': 'event-type--trafikolycka',
+        'Misshandel': 'event-type--misshandel',
+        'Skadegörelse': 'event-type--skadegorelse',
+        'Bedrägeri': 'event-type--bedrageri',
+        'Narkotikabrott': 'event-type--narkotikabrott',
+        'Ofredande': 'event-type--ofredande',
+        'Sammanfattning': 'event-type--sammanfattning',
+        'Stöld': 'event-type--stold',
+        'Stöld/inbrott': 'event-type--stold',
+        'Mord/dråp': 'event-type--mord',
+        'Rattfylleri': 'event-type--ratta'
+    };
+    function getTypeClass(type) {
+        if (typeClassMap[type]) return typeClassMap[type];
+        for (const key in typeClassMap) {
+            if (type.toLowerCase().includes(key.toLowerCase())) return typeClassMap[key];
+        }
+        return 'event-type--default';
+    }
+
+    // Load More Button
     let page = 1, loading = false, hasMore = window.CONFIG.hasMore;
-    const loadingEl = document.getElementById('loadingMore');
+    const loadMoreBtn = document.getElementById('loadMoreBtn');
+    const shownCountEl = document.getElementById('shownCount');
+
+    function updateLoadMoreButton() {
+        if (!hasMore) {
+            loadMoreBtn.classList.add('hidden');
+        } else {
+            loadMoreBtn.classList.remove('hidden');
+        }
+    }
 
     async function loadMore() {
         if (loading || !hasMore) return;
-        loading = true; loadingEl.style.display = 'flex'; page++;
+        loading = true;
+        loadMoreBtn.disabled = true;
+        loadMoreBtn.classList.add('loading');
+        loadMoreBtn.innerHTML = '<span class="spinner-small"></span> Laddar...';
+        page++;
         try {
             const res = await fetch(`?ajax=events&page=${page}&location=${encodeURIComponent(window.CONFIG.filters.location)}&type=${encodeURIComponent(window.CONFIG.filters.type)}&search=${encodeURIComponent(window.CONFIG.filters.search)}`);
             const data = await res.json();
@@ -122,25 +160,42 @@
             data.events.forEach((e, i) => {
                 const card = document.createElement('article');
                 card.className = 'event-card';
+                card.dataset.url = e.url || '';
                 card.style.animationDelay = `${i * 0.02}s`;
                 let gpsBtn = '';
                 if (e.gps) {
                     const [lat, lng] = e.gps.split(',').map(s => s.trim());
                     if (lat && lng) {
-                        gpsBtn = `<button type="button" class="show-map-btn" data-lat="${lat}" data-lng="${lng}" data-location="${escHtml(e.location)}">🗺️ Visa på karta</button>`;
+                        gpsBtn = `<button type="button" class="show-map-link" data-lat="${lat}" data-lng="${lng}" data-location="${escHtml(e.location)}">🗺️ Visa på karta</button>`;
                     }
                 }
-                // Show updated indicator if event was updated
-                const updatedHtml = e.wasUpdated && e.updated ? `<div class="updated-indicator" title="Uppdaterad ${escHtml(e.updated)}">uppdaterad ${escHtml(e.updated)}</div>` : '';
-                card.innerHTML = `<div class="event-card-inner"><div class="event-date"><div class="day">${e.date.day}</div><div class="month">${e.date.month}</div><div class="time">${e.date.time}</div><div class="relative">${e.date.relative}</div>${updatedHtml}</div><div class="event-content"><div class="event-header"><div class="event-title-group"><a href="?type=${encodeURIComponent(e.type)}&view=${viewInput.value}" class="event-type" style="background:${e.color}20;color:${e.color}">${e.icon} ${escHtml(e.type)}</a><a href="?location=${encodeURIComponent(e.location)}&view=${viewInput.value}" class="event-location-link">${escHtml(e.location)}</a></div></div><p class="event-summary">${escHtml(e.summary)}</p><div class="event-meta">${e.url ? `<button type="button" class="show-details-btn" data-url="${escHtml(e.url)}">📖 Visa detaljer</button>` : ''}${gpsBtn}${e.url ? `<a href="https://polisen.se${escHtml(e.url)}" target="_blank" rel="noopener noreferrer nofollow" referrerpolicy="no-referrer" class="read-more-link"><span>🔗</span> polisen.se</a>` : ''}</div><div class="event-details"></div></div></div>`;
+                const updatedHtml = e.wasUpdated && e.updated ? `<span class="updated-indicator" title="Uppdaterad ${escHtml(e.updated)}">✎ uppdaterad</span>` : '';
+                const typeClass = getTypeClass(e.type);
+                const sourceHtml = e.url ? `<span class="meta-separator">•</span><a class="event-source" href="https://polisen.se${escHtml(e.url)}" target="_blank" rel="noopener noreferrer nofollow" referrerpolicy="no-referrer" onclick="event.stopPropagation()">🔗 polisen.se</a>` : '';
+                card.innerHTML = `<div class="event-card-header" tabindex="0" role="button" aria-expanded="false" aria-label="Expandera händelse: ${escHtml(e.type)} i ${escHtml(e.location)}"><div class="event-header-content"><div class="event-meta-row"><span class="event-datetime">${e.date.day} ${e.date.month} ${e.date.time}</span><span class="meta-separator">•</span><span class="event-relative">${e.date.relative}</span>${sourceHtml}${updatedHtml ? `<span class="meta-separator">•</span>${updatedHtml}` : ''}</div><div class="event-title-group"><a href="?type=${encodeURIComponent(e.type)}&view=${viewInput.value}" class="event-type ${typeClass}" onclick="event.stopPropagation()">${e.icon} ${escHtml(e.type)}</a><a href="?location=${encodeURIComponent(e.location)}&view=${viewInput.value}" class="event-location-link" onclick="event.stopPropagation()">${escHtml(e.location)}</a></div><p class="event-summary">${escHtml(e.summary)}</p></div><span class="accordion-chevron" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></span></div><div class="event-card-body"><div class="event-details"></div><div class="event-actions">${gpsBtn}</div></div>`;
                 eventsGrid.appendChild(card);
             });
-        } catch (err) { console.error(err); } finally { loading = false; loadingEl.style.display = 'none'; }
+            // Update shown count
+            if (shownCountEl) {
+                const currentCount = eventsGrid.querySelectorAll('.event-card').length;
+                shownCountEl.textContent = currentCount;
+            }
+            updateLoadMoreButton();
+        } catch (err) { console.error(err); } finally {
+            loading = false;
+            loadMoreBtn.disabled = false;
+            loadMoreBtn.classList.remove('loading');
+            loadMoreBtn.textContent = 'Ladda fler';
+        }
     }
 
     function escHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
 
-    new IntersectionObserver((e) => { if (e[0].isIntersecting && eventsGrid.style.display !== 'none') loadMore(); }, { rootMargin: '150px' }).observe(loadingEl);
+    // Load more button click handler
+    if (loadMoreBtn) {
+        loadMoreBtn.addEventListener('click', loadMore);
+        updateLoadMoreButton();
+    }
 
     // Filter auto-submit
     document.querySelectorAll('.filter-select').forEach(s => s.addEventListener('change', () => s.form.submit()));
@@ -222,39 +277,42 @@
     // Keyboard
     document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); document.getElementById('searchInput')?.focus(); } });
 
-    // Event details expansion - click anywhere on card to show/hide details
+    // Event accordion - details cache keyed by URL
     const detailsCache = {};
 
-    async function toggleEventDetails(card) {
+    async function toggleAccordion(card) {
         if (!card) return;
-        const btn = card.querySelector('.show-details-btn');
+        const header = card.querySelector('.event-card-header');
         const detailsDiv = card.querySelector('.event-details');
-        if (!btn || !detailsDiv) return;
+        if (!header || !detailsDiv) return;
 
-        const eventUrl = btn.dataset.url;
-        if (!eventUrl) return;
+        const eventUrl = card.dataset.url;
+        const isExpanded = card.classList.contains('expanded');
 
-        // Toggle visibility
-        if (detailsDiv.classList.contains('visible')) {
-            detailsDiv.classList.remove('visible');
-            btn.classList.remove('expanded');
-            btn.textContent = '📖 Visa detaljer';
+        // Toggle expanded state
+        if (isExpanded) {
+            card.classList.remove('expanded');
+            header.setAttribute('aria-expanded', 'false');
             return;
         }
 
-        // Show cached content immediately
+        // Expand the card
+        card.classList.add('expanded');
+        header.setAttribute('aria-expanded', 'true');
+
+        // Skip fetching if no URL or already has content
+        if (!eventUrl || detailsDiv.textContent.trim()) return;
+
+        // Check cache first
         if (detailsCache[eventUrl]) {
             detailsDiv.textContent = detailsCache[eventUrl];
-            detailsDiv.classList.add('visible');
             detailsDiv.classList.remove('error');
-            btn.classList.add('expanded');
-            btn.textContent = '📖 Dölj detaljer';
             return;
         }
 
-        // Fetch details from server
-        btn.classList.add('loading');
-        btn.textContent = '⏳ Laddar...';
+        // Fetch details from server (lazy load on first expand)
+        detailsDiv.textContent = 'Laddar detaljer...';
+        detailsDiv.classList.remove('error');
 
         try {
             const res = await fetch('?ajax=details&url=' + encodeURIComponent(eventUrl));
@@ -263,43 +321,41 @@
             if (data.success && data.details && data.details.content) {
                 detailsCache[eventUrl] = data.details.content;
                 detailsDiv.textContent = data.details.content;
-                detailsDiv.classList.add('visible');
                 detailsDiv.classList.remove('error');
-                btn.classList.add('expanded');
-                btn.textContent = '📖 Dölj detaljer';
             } else {
                 detailsDiv.textContent = 'Kunde inte hämta detaljer. Klicka på polisen.se-länken för att läsa mer.';
-                detailsDiv.classList.add('visible', 'error');
-                btn.textContent = '📖 Visa detaljer';
+                detailsDiv.classList.add('error');
             }
         } catch (err) {
             detailsDiv.textContent = 'Kunde inte hämta detaljer. Klicka på polisen.se-länken för att läsa mer.';
-            detailsDiv.classList.add('visible', 'error');
-            btn.textContent = '📖 Visa detaljer';
-        } finally {
-            btn.classList.remove('loading');
+            detailsDiv.classList.add('error');
         }
     }
 
-    // Single click handler for event cards - handles both card clicks and button clicks
+    // Click handler for accordion headers
     document.addEventListener('click', function(e) {
-        // Check if clicked on details button directly
-        var btn = e.target.closest('.show-details-btn');
-        if (btn) {
-            var card = btn.closest('.event-card');
-            if (card) toggleEventDetails(card);
-            return;
-        }
+        const header = e.target.closest('.event-card-header');
+        if (!header) return;
 
-        // Check if clicked on event card (but not on interactive elements)
-        var card = e.target.closest('.event-card');
-        if (!card) return;
+        // Don't toggle if clicking on interactive elements within header
+        if (e.target.closest('a, button')) return;
 
-        // Skip if clicking on links, buttons, or the action bar
-        if (e.target.closest('a, button, .event-meta')) return;
+        const card = header.closest('.event-card');
+        if (card) toggleAccordion(card);
+    });
 
-        // Toggle details on card click
-        toggleEventDetails(card);
+    // Keyboard handler for accordion headers (Enter/Space)
+    document.addEventListener('keydown', function(e) {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+
+        const header = e.target.closest('.event-card-header');
+        if (!header) return;
+
+        // Prevent space from scrolling the page
+        if (e.key === ' ') e.preventDefault();
+
+        const card = header.closest('.event-card');
+        if (card) toggleAccordion(card);
     });
 
     // Map Modal
@@ -347,8 +403,9 @@
     }
 
     document.addEventListener('click', (e) => {
-        const btn = e.target.closest('.show-map-btn');
+        const btn = e.target.closest('.show-map-link');
         if (btn) {
+            e.stopPropagation(); // Prevent accordion toggle
             const lat = parseFloat(btn.dataset.lat);
             const lng = parseFloat(btn.dataset.lng);
             const location = btn.dataset.location || '';

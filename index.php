@@ -690,18 +690,40 @@ function refreshEventsIfNeeded(): array {
 
 function getTypeStyles(): array {
     return [
-        'Inbrott' => ['icon' => '🔓', 'color' => '#f97316'],
-        'Brand' => ['icon' => '🔥', 'color' => '#ef4444'],
-        'Rån' => ['icon' => '💰', 'color' => '#f59e0b'],
-        'Trafikolycka' => ['icon' => '🚗', 'color' => '#3b82f6'],
-        'Misshandel' => ['icon' => '👊', 'color' => '#ef4444'],
-        'Skadegörelse' => ['icon' => '🔨', 'color' => '#f59e0b'],
-        'Bedrägeri' => ['icon' => '🕵️', 'color' => '#8b5cf6'],
-        'Narkotikabrott' => ['icon' => '💊', 'color' => '#10b981'],
-        'Ofredande' => ['icon' => '🚨', 'color' => '#f43f5e'],
-        'Sammanfattning' => ['icon' => '📊', 'color' => '#22c55e'],
-        'default' => ['icon' => '📌', 'color' => '#fcd34d']
+        'Inbrott' => ['icon' => '🔓', 'color' => '#f97316', 'class' => 'event-type--inbrott'],
+        'Brand' => ['icon' => '🔥', 'color' => '#ef4444', 'class' => 'event-type--brand'],
+        'Rån' => ['icon' => '💰', 'color' => '#f59e0b', 'class' => 'event-type--ran'],
+        'Trafikolycka' => ['icon' => '🚗', 'color' => '#3b82f6', 'class' => 'event-type--trafikolycka'],
+        'Misshandel' => ['icon' => '👊', 'color' => '#ef4444', 'class' => 'event-type--misshandel'],
+        'Skadegörelse' => ['icon' => '🔨', 'color' => '#f59e0b', 'class' => 'event-type--skadegorelse'],
+        'Bedrägeri' => ['icon' => '🕵️', 'color' => '#8b5cf6', 'class' => 'event-type--bedrageri'],
+        'Narkotikabrott' => ['icon' => '💊', 'color' => '#10b981', 'class' => 'event-type--narkotikabrott'],
+        'Ofredande' => ['icon' => '🚨', 'color' => '#f43f5e', 'class' => 'event-type--ofredande'],
+        'Sammanfattning' => ['icon' => '📊', 'color' => '#22c55e', 'class' => 'event-type--sammanfattning'],
+        'Stöld' => ['icon' => '🔓', 'color' => '#f97316', 'class' => 'event-type--stold'],
+        'Stöld/inbrott' => ['icon' => '🔓', 'color' => '#f97316', 'class' => 'event-type--stold'],
+        'Mord/dråp' => ['icon' => '⚠️', 'color' => '#dc2626', 'class' => 'event-type--mord'],
+        'Rattfylleri' => ['icon' => '🚗', 'color' => '#ef4444', 'class' => 'event-type--ratta'],
+        'default' => ['icon' => '📌', 'color' => '#fcd34d', 'class' => 'event-type--default']
     ];
+}
+
+/**
+ * Get CSS class for event type
+ */
+function getTypeClass(string $type): string {
+    $typeStyles = getTypeStyles();
+    // Try exact match first
+    if (isset($typeStyles[$type])) {
+        return $typeStyles[$type]['class'];
+    }
+    // Try partial match for compound types like "Stöld/inbrott"
+    foreach ($typeStyles as $key => $style) {
+        if (stripos($type, $key) !== false || stripos($key, $type) !== false) {
+            return $style['class'];
+        }
+    }
+    return $typeStyles['default']['class'];
 }
 
 function formatRelativeTime(DateTimeImmutable $date, DateTimeImmutable $now): string {
@@ -994,51 +1016,55 @@ if ($basePath === '/') {
                     </div>
                 <?php endif; ?>
                 <?php foreach ($events as $event): ?>
-                    <article class="event-card">
-                        <div class="event-card-inner">
-                            <div class="event-date">
-                                <div class="day"><?= esc($event['date']['day']) ?></div>
-                                <div class="month"><?= esc($event['date']['month']) ?></div>
-                                <div class="time"><?= esc($event['date']['time']) ?></div>
-                                <div class="relative"><?= esc($event['date']['relative']) ?></div>
-                                <?php if ($event['wasUpdated'] && $event['updated']): ?>
-                                    <div class="updated-indicator" title="Uppdaterad <?= esc($event['updated']) ?>">uppdaterad <?= esc($event['updated']) ?></div>
-                                <?php endif; ?>
-                            </div>
-                            <div class="event-content">
-                                <div class="event-header">
-                                    <div class="event-title-group">
-                                        <a href="?type=<?= esc($event['type']) ?>&view=<?= esc($currentView) ?>" class="event-type" style="background:<?= esc($event['color']) ?>20;color:<?= esc($event['color']) ?>">
-                                            <?= esc($event['icon']) ?> <?= esc($event['type']) ?>
+                    <?php $typeClass = getTypeClass($event['type']); ?>
+                    <article class="event-card" data-url="<?= esc($event['url'] ?? '') ?>">
+                        <div class="event-card-header" tabindex="0" role="button" aria-expanded="false" aria-label="Expandera händelse: <?= esc($event['type']) ?> i <?= esc($event['location']) ?>">
+                            <div class="event-header-content">
+                                <div class="event-meta-row">
+                                    <span class="event-datetime"><?= esc($event['date']['day']) ?> <?= esc($event['date']['month']) ?> <?= esc($event['date']['time']) ?></span>
+                                    <span class="meta-separator">•</span>
+                                    <span class="event-relative"><?= esc($event['date']['relative']) ?></span>
+                                    <?php if (!empty($event['url'])): ?>
+                                        <span class="meta-separator">•</span>
+                                        <a class="event-source" href="https://polisen.se<?= esc($event['url']) ?>" target="_blank" rel="noopener noreferrer nofollow" referrerpolicy="no-referrer" onclick="event.stopPropagation()">
+                                            🔗 polisen.se
                                         </a>
-                                        <a href="?location=<?= esc($event['location']) ?>&view=<?= esc($currentView) ?>" class="event-location-link"><?= esc($event['location']) ?></a>
-                                    </div>
+                                    <?php endif; ?>
+                                    <?php if ($event['wasUpdated'] && $event['updated']): ?>
+                                        <span class="updated-indicator" title="Uppdaterad <?= esc($event['updated']) ?>">✎ uppdaterad</span>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="event-title-group">
+                                    <a href="?type=<?= esc($event['type']) ?>&view=<?= esc($currentView) ?>" class="event-type <?= esc($typeClass) ?>" onclick="event.stopPropagation()">
+                                        <?= esc($event['icon']) ?> <?= esc($event['type']) ?>
+                                    </a>
+                                    <a href="?location=<?= esc($event['location']) ?>&view=<?= esc($currentView) ?>" class="event-location-link" onclick="event.stopPropagation()"><?= esc($event['location']) ?></a>
                                 </div>
                                 <p class="event-summary"><?= esc($event['summary']) ?></p>
-                                <div class="event-meta">
-                                    <?php if (!empty($event['url'])): ?>
-                                        <button type="button" class="show-details-btn" data-url="<?= esc($event['url']) ?>">📖 Visa detaljer</button>
-                                    <?php endif; ?>
-                                    <?php if (!empty($event['gps'])): ?>
-                                        <?php [$lat, $lng] = array_map('trim', explode(',', $event['gps'] . ',')); ?>
-                                        <button type="button" class="show-map-btn" data-lat="<?= esc($lat) ?>" data-lng="<?= esc($lng) ?>" data-location="<?= esc($event['location']) ?>">🗺️ Visa på karta</button>
-                                    <?php endif; ?>
-                                    <?php if (!empty($event['url'])): ?>
-                                        <a class="read-more-link" href="https://polisen.se<?= esc($event['url']) ?>" target="_blank" rel="noopener noreferrer nofollow" referrerpolicy="no-referrer">
-                                            <span>🔗</span> polisen.se
-                                        </a>
-                                    <?php endif; ?>
-                                </div>
-                                <div class="event-details"></div>
+                            </div>
+                            <span class="accordion-chevron" aria-hidden="true">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                            </span>
+                        </div>
+                        <div class="event-card-body">
+                            <div class="event-details"></div>
+                            <div class="event-actions">
+                                <?php if (!empty($event['gps'])): ?>
+                                    <?php [$lat, $lng] = array_map('trim', explode(',', $event['gps'] . ',')); ?>
+                                    <button type="button" class="show-map-link" data-lat="<?= esc($lat) ?>" data-lng="<?= esc($lng) ?>" data-location="<?= esc($event['location']) ?>">
+                                        🗺️ Visa på karta
+                                    </button>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </article>
                 <?php endforeach; ?>
             </section>
 
-            <div id="loadingMore" class="press-loading" style="display:none;">
-                <div class="spinner"></div>
-                <p>Laddar fler händelser...</p>
+            <div class="load-more-container">
+                <button id="loadMoreBtn" class="load-more-btn" type="button">
+                    Ladda fler
+                </button>
             </div>
 
             <div id="mapContainer" class="map-container">
@@ -1093,9 +1119,15 @@ if ($basePath === '/') {
     </main>
 
     <footer>
-        <p class="api-status <?= $refreshStatus['success'] ? 'online' : 'offline' ?>">
-            <?= $refreshStatus['success'] ? '● Online' : '○ Offline' ?>
-        </p>
+        <div class="footer-status">
+            <div class="status-counts">
+                <span class="count-item">Lagrade händelser: <span class="count-value" id="storedCount"><?= esc((string) $stats['total']) ?></span></span>
+                <span class="count-item">Visar: <span class="count-value" id="shownCount"><?= esc((string) count($events)) ?></span> av <span class="count-value" id="totalFilteredCount"><?= esc((string) $stats['total']) ?></span></span>
+            </div>
+            <p class="api-status <?= $refreshStatus['success'] ? 'online' : 'offline' ?>">
+                <?= $refreshStatus['success'] ? '● Online' : '○ Offline' ?>
+            </p>
+        </div>
     </footer>
 </div>
 
