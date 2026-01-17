@@ -322,7 +322,6 @@
         detailsDiv.classList.remove('error');
 
         // Add loading state to button
-        const expandBtn = card.querySelector('.expand-details-btn');
         if (expandBtn) expandBtn.classList.add('loading');
 
         try {
