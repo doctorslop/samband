@@ -164,9 +164,9 @@
                 card.style.animationDelay = `${i * 0.02}s`;
                 let gpsBtn = '';
                 if (e.gps) {
-                    const [lat, lng] = e.gps.split(',').map(s => s.trim());
-                    if (lat && lng) {
-                        gpsBtn = `<button type="button" class="show-map-link" data-lat="${lat}" data-lng="${lng}" data-location="${escHtml(e.location)}" onclick="event.stopPropagation()">🗺️ Visa på karta</button>`;
+                    const [lat, lng] = e.gps.split(',').map(s => parseFloat(s.trim()));
+                    if (!isNaN(lat) && !isNaN(lng)) {
+                        gpsBtn = `<button type="button" class="show-map-link" data-lat="${lat}" data-lng="${lng}" data-location="${escHtml(e.location)}">🗺️ Visa på karta</button>`;
                     }
                 }
                 const updatedHtml = e.wasUpdated && e.updated ? `<span class="updated-indicator" title="Uppdaterad ${escHtml(e.updated)}">✎ uppdaterad</span>` : '';
