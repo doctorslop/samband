@@ -34,20 +34,49 @@
     const customLocationCancel = document.getElementById('customLocationCancel');
 
     if (locationSelect && customLocationWrapper && customLocationInput && customLocationCancel) {
+        // Fix: Disable name on custom input initially so only select is submitted
+        customLocationInput.removeAttribute('name');
+
         locationSelect.addEventListener('change', function() {
             if (this.value === '__custom__') {
+                // Switch to custom input mode
                 locationSelect.style.display = 'none';
+                locationSelect.removeAttribute('name');
                 customLocationWrapper.style.display = 'flex';
+                customLocationInput.setAttribute('name', 'location');
+                customLocationInput.value = '';
                 customLocationInput.focus();
+            } else {
+                // Ensure select has name and custom input doesn't
+                locationSelect.setAttribute('name', 'location');
+                customLocationInput.removeAttribute('name');
             }
         });
 
         customLocationCancel.addEventListener('click', function() {
+            // Switch back to select mode
             customLocationWrapper.style.display = 'none';
-            locationSelect.style.display = '';
-            locationSelect.value = '';
+            customLocationInput.removeAttribute('name');
             customLocationInput.value = '';
+            locationSelect.style.display = '';
+            locationSelect.setAttribute('name', 'location');
+            locationSelect.value = '';
         });
+
+        // Handle case where page loads with a custom location (not in dropdown)
+        if (locationSelect.value === '' && customLocationInput.dataset.initialValue) {
+            const initialValue = customLocationInput.dataset.initialValue;
+            // Check if value exists in select options
+            const optionExists = Array.from(locationSelect.options).some(opt => opt.value === initialValue);
+            if (!optionExists && initialValue) {
+                // Show custom input with the initial value
+                locationSelect.style.display = 'none';
+                locationSelect.removeAttribute('name');
+                customLocationWrapper.style.display = 'flex';
+                customLocationInput.setAttribute('name', 'location');
+                customLocationInput.value = initialValue;
+            }
+        }
     }
 
     // Map
