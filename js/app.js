@@ -293,12 +293,14 @@
         // Toggle expanded state
         if (isExpanded) {
             card.classList.remove('expanded');
+            detailsDiv.classList.remove('visible');
             header.setAttribute('aria-expanded', 'false');
             return;
         }
 
         // Expand the card
         card.classList.add('expanded');
+        detailsDiv.classList.add('visible');
         header.setAttribute('aria-expanded', 'true');
 
         // Skip fetching if no URL or already has content
@@ -313,7 +315,12 @@
 
         // Fetch details from server (lazy load on first expand)
         detailsDiv.textContent = 'Laddar detaljer...';
+        detailsDiv.classList.add('loading');
         detailsDiv.classList.remove('error');
+
+        // Add loading state to button
+        const expandBtn = card.querySelector('.expand-details-btn');
+        if (expandBtn) expandBtn.classList.add('loading');
 
         try {
             const res = await fetch('?ajax=details&url=' + encodeURIComponent(eventUrl));
@@ -322,14 +329,18 @@
             if (data.success && data.details && data.details.content) {
                 detailsCache[eventUrl] = data.details.content;
                 detailsDiv.textContent = data.details.content;
-                detailsDiv.classList.remove('error');
+                detailsDiv.classList.remove('error', 'loading');
             } else {
                 detailsDiv.textContent = 'Kunde inte hämta detaljer. Klicka på polisen.se-länken för att läsa mer.';
                 detailsDiv.classList.add('error');
+                detailsDiv.classList.remove('loading');
             }
         } catch (err) {
             detailsDiv.textContent = 'Kunde inte hämta detaljer. Klicka på polisen.se-länken för att läsa mer.';
             detailsDiv.classList.add('error');
+            detailsDiv.classList.remove('loading');
+        } finally {
+            if (expandBtn) expandBtn.classList.remove('loading');
         }
     }
 
