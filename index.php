@@ -1044,10 +1044,16 @@ if ($basePath === '/') {
                                 <div class="event-header-actions">
                                     <button type="button" class="expand-details-btn">📖 Läs mer</button>
                                     <?php if (!empty($event['gps'])): ?>
-                                        <?php [$lat, $lng] = array_map('trim', explode(',', $event['gps'] . ',')); ?>
-                                        <button type="button" class="show-map-link" data-lat="<?= esc($lat) ?>" data-lng="<?= esc($lng) ?>" data-location="<?= esc($event['location']) ?>" onclick="event.stopPropagation()">
-                                            🗺️ Visa på karta
-                                        </button>
+                                        <?php
+                                        $gpsParts = explode(',', $event['gps']);
+                                        $latStr = isset($gpsParts[0]) ? trim($gpsParts[0]) : '';
+                                        $lngStr = isset($gpsParts[1]) ? trim($gpsParts[1]) : '';
+                                        if ($latStr !== '' && is_numeric($latStr) && $lngStr !== '' && is_numeric($lngStr)):
+                                            $lat = (float) $latStr;
+                                            $lng = (float) $lngStr;
+                                        ?>
+                                        <button type="button" class="show-map-link" data-lat="<?= esc((string)$lat) ?>" data-lng="<?= esc((string)$lng) ?>" data-location="<?= esc($event['location']) ?>">🗺️ Visa på karta</button>
+                                        <?php endif; ?>
                                     <?php endif; ?>
                                 </div>
                             </div>
