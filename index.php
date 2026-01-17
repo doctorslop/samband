@@ -1043,7 +1043,6 @@ if ($basePath === '/') {
                                 <p class="event-summary"><?= esc($event['summary']) ?></p>
                                 <div class="event-header-actions">
                                     <button type="button" class="expand-details-btn">📖 Läs mer</button>
-                                    <button type="button" class="collapse-details-btn">📖 Dölj</button>
                                     <?php if (!empty($event['gps'])): ?>
                                         <?php [$lat, $lng] = array_map('trim', explode(',', $event['gps'] . ',')); ?>
                                         <button type="button" class="show-map-link" data-lat="<?= esc($lat) ?>" data-lng="<?= esc($lng) ?>" data-location="<?= esc($event['location']) ?>" onclick="event.stopPropagation()">

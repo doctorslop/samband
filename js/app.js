@@ -172,7 +172,7 @@
                 const updatedHtml = e.wasUpdated && e.updated ? `<span class="updated-indicator" title="Uppdaterad ${escHtml(e.updated)}">✎ uppdaterad</span>` : '';
                 const typeClass = getTypeClass(e.type);
                 const sourceHtml = e.url ? `<span class="meta-separator">•</span><a class="event-source" href="https://polisen.se${escHtml(e.url)}" target="_blank" rel="noopener noreferrer nofollow" referrerpolicy="no-referrer" onclick="event.stopPropagation()">🔗 polisen.se</a>` : '';
-                const expandBtn = `<button type="button" class="expand-details-btn">📖 Läs mer</button><button type="button" class="collapse-details-btn">📖 Dölj</button>`;
+                const expandBtn = `<button type="button" class="expand-details-btn">📖 Läs mer</button>`;
                 card.innerHTML = `<div class="event-card-header" tabindex="0" role="button" aria-expanded="false" aria-label="Expandera händelse: ${escHtml(e.type)} i ${escHtml(e.location)}"><div class="event-header-content"><div class="event-meta-row"><span class="event-datetime">${e.date.day} ${e.date.month} ${e.date.time}</span><span class="meta-separator">•</span><span class="event-relative">${e.date.relative}</span>${sourceHtml}${updatedHtml ? `<span class="meta-separator">•</span>${updatedHtml}` : ''}</div><div class="event-title-group"><a href="?type=${encodeURIComponent(e.type)}&view=${viewInput.value}" class="event-type ${typeClass}" onclick="event.stopPropagation()">${e.icon} ${escHtml(e.type)}</a><a href="?location=${encodeURIComponent(e.location)}&view=${viewInput.value}" class="event-location-link" onclick="event.stopPropagation()">${escHtml(e.location)}</a></div><p class="event-summary">${escHtml(e.summary)}</p><div class="event-header-actions">${expandBtn}${gpsBtn}</div></div><span class="accordion-chevron"></span></div><div class="event-card-body"><div class="event-details"></div></div>`;
                 eventsGrid.appendChild(card);
             });
@@ -285,6 +285,7 @@
         if (!card) return;
         const header = card.querySelector('.event-card-header');
         const detailsDiv = card.querySelector('.event-details');
+        const expandBtn = card.querySelector('.expand-details-btn');
         if (!header || !detailsDiv) return;
 
         const eventUrl = card.dataset.url;
@@ -295,6 +296,7 @@
             card.classList.remove('expanded');
             detailsDiv.classList.remove('visible');
             header.setAttribute('aria-expanded', 'false');
+            if (expandBtn) expandBtn.innerHTML = '📖 Läs mer';
             return;
         }
 
@@ -302,6 +304,7 @@
         card.classList.add('expanded');
         detailsDiv.classList.add('visible');
         header.setAttribute('aria-expanded', 'true');
+        if (expandBtn) expandBtn.innerHTML = '📖 Dölj';
 
         // Skip fetching if no URL or already has content
         if (!eventUrl || detailsDiv.textContent.trim()) return;
@@ -344,22 +347,13 @@
         }
     }
 
-    // Click handler for expand/collapse buttons and accordion headers
+    // Click handler for expand button and accordion headers
     document.addEventListener('click', function(e) {
         // Handle expand button clicks
         const expandBtn = e.target.closest('.expand-details-btn');
         if (expandBtn) {
             e.stopPropagation();
             const card = expandBtn.closest('.event-card');
-            if (card) toggleAccordion(card);
-            return;
-        }
-
-        // Handle collapse button clicks
-        const collapseBtn = e.target.closest('.collapse-details-btn');
-        if (collapseBtn) {
-            e.stopPropagation();
-            const card = collapseBtn.closest('.event-card');
             if (card) toggleAccordion(card);
             return;
         }
@@ -373,15 +367,14 @@
         if (card) toggleAccordion(card);
     });
 
-    // Keyboard handler for expand/collapse buttons
+    // Keyboard handler for expand button
     document.addEventListener('keydown', function(e) {
         if (e.key !== 'Enter' && e.key !== ' ') return;
 
         const expandBtn = e.target.closest('.expand-details-btn');
-        const collapseBtn = e.target.closest('.collapse-details-btn');
-        if (expandBtn || collapseBtn) {
+        if (expandBtn) {
             if (e.key === ' ') e.preventDefault();
-            const card = (expandBtn || collapseBtn).closest('.event-card');
+            const card = expandBtn.closest('.event-card');
             if (card) toggleAccordion(card);
         }
     });
