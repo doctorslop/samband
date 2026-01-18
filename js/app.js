@@ -12,8 +12,10 @@
     const eventsGrid = document.getElementById('eventsGrid');
     const mapContainer = document.getElementById('mapContainer');
     const statsSidebar = document.getElementById('statsSidebar');
+    const vmaContainer = document.getElementById('vmaContainer');
     const viewInput = document.getElementById('viewInput');
     let map = null, mapInit = false;
+    let vmaInit = false, vmaLoading = false;
 
     const setView = (v) => {
         viewBtns.forEach(b => b.classList.toggle('active', b.dataset.view === v));
@@ -22,7 +24,9 @@
         eventsGrid.style.display = v === 'list' ? 'grid' : 'none';
         mapContainer.classList.toggle('active', v === 'map');
         statsSidebar.classList.toggle('active', v === 'stats');
+        vmaContainer.classList.toggle('active', v === 'vma');
         if (v === 'map' && !mapInit) initMap();
+        if (v === 'vma' && !vmaInit) loadVmaAlerts();
         history.replaceState(null, '', `?view=${v}${window.CONFIG.filters.location ? '&location=' + encodeURIComponent(window.CONFIG.filters.location) : ''}${window.CONFIG.filters.type ? '&type=' + encodeURIComponent(window.CONFIG.filters.type) : ''}${window.CONFIG.filters.search ? '&search=' + encodeURIComponent(window.CONFIG.filters.search) : ''}`);
     };
     viewBtns.forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
@@ -134,6 +138,191 @@
         info.addTo(map);
 
         if (markers.getLayers().length) map.fitBounds(markers.getBounds(), { padding: [40, 40] });
+    }
+
+    // VMA (Viktigt Meddelande till Allmänheten) functionality
+    const vmaContent = document.getElementById('vmaContent');
+    const vmaRefreshBtn = document.getElementById('vmaRefreshBtn');
+
+    async function loadVmaAlerts(forceRefresh = false) {
+        if (vmaLoading) return;
+        if (vmaInit && !forceRefresh) return;
+
+        vmaLoading = true;
+        vmaInit = true;
+
+        // Show loading state
+        vmaContent.innerHTML = `
+            <div class="vma-loading">
+                <div class="spinner"></div>
+                <p>Hämtar VMA-meddelanden...</p>
+            </div>
+        `;
+
+        if (vmaRefreshBtn) {
+            vmaRefreshBtn.disabled = true;
+            vmaRefreshBtn.innerHTML = '<span class="spinner-small"></span> Laddar...';
+        }
+
+        try {
+            const res = await fetch('?ajax=vma');
+            const data = await res.json();
+
+            if (!data.success) {
+                throw new Error(data.error || 'Kunde inte hämta VMA');
+            }
+
+            renderVmaAlerts(data);
+        } catch (err) {
+            console.error('VMA fetch error:', err);
+            vmaContent.innerHTML = `
+                <div class="vma-error">
+                    <div class="vma-error-icon">⚠️</div>
+                    <h3>Kunde inte hämta VMA</h3>
+                    <p>${escHtml(err.message || 'Ett fel uppstod vid hämtning av VMA-meddelanden.')}</p>
+                    <button type="button" class="btn" onclick="window.retryVma()">Försök igen</button>
+                </div>
+            `;
+        } finally {
+            vmaLoading = false;
+            if (vmaRefreshBtn) {
+                vmaRefreshBtn.disabled = false;
+                vmaRefreshBtn.innerHTML = '🔄 Uppdatera';
+            }
+        }
+    }
+
+    // Expose retry function globally
+    window.retryVma = () => loadVmaAlerts(true);
+
+    function renderVmaAlerts(data) {
+        const { current, recent } = data;
+        const hasCurrentAlerts = current && current.length > 0;
+        const hasRecentAlerts = recent && recent.length > 0;
+
+        if (!hasCurrentAlerts && !hasRecentAlerts) {
+            vmaContent.innerHTML = `
+                <div class="vma-empty">
+                    <div class="vma-empty-icon">✓</div>
+                    <h3>Inga VMA-meddelanden</h3>
+                    <p>Det finns inga aktiva eller nyliga VMA-meddelanden just nu. Systemet övervakas kontinuerligt.</p>
+                </div>
+            `;
+            return;
+        }
+
+        let html = '';
+
+        // Current/Active alerts section
+        if (hasCurrentAlerts) {
+            html += `
+                <div class="vma-section vma-active-section">
+                    <div class="vma-section-header">
+                        <h3>🚨 Aktiva VMA</h3>
+                        <span class="vma-section-count">${current.length}</span>
+                    </div>
+                    <div class="vma-alerts-list">
+                        ${current.map(alert => renderVmaAlertCard(alert, true)).join('')}
+                    </div>
+                </div>
+            `;
+        } else {
+            html += `
+                <div class="vma-no-active">
+                    <div class="vma-no-active-icon">✓</div>
+                    <h4>Inga aktiva VMA</h4>
+                    <p>Det finns inga pågående VMA-meddelanden just nu.</p>
+                </div>
+            `;
+        }
+
+        // Recent/Historical alerts section
+        if (hasRecentAlerts) {
+            html += `
+                <div class="vma-section">
+                    <div class="vma-section-header">
+                        <h3>📜 Senaste VMA</h3>
+                        <span class="vma-section-count">${recent.length}</span>
+                    </div>
+                    <div class="vma-alerts-list">
+                        ${recent.map(alert => renderVmaAlertCard(alert, false)).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        vmaContent.innerHTML = html;
+    }
+
+    function renderVmaAlertCard(alert, isActive) {
+        const statusClass = isActive ? 'vma-alert-status--active' : 'vma-alert-status--inactive';
+        const statusText = isActive ? '🔴 Aktiv' : 'Avslutad';
+        const cardClass = isActive ? 'vma-alert vma-alert--active' : 'vma-alert';
+
+        const instructionHtml = alert.instruction ? `
+            <div class="vma-alert-instruction">
+                <div class="vma-alert-instruction-title">📋 Instruktioner</div>
+                <div class="vma-alert-instruction-text">${escHtml(alert.instruction)}</div>
+            </div>
+        ` : '';
+
+        const webLinkHtml = alert.web ? `
+            <a href="${escHtml(alert.web)}" target="_blank" rel="noopener noreferrer" class="vma-alert-link">
+                🔗 Läs mer på SR
+            </a>
+        ` : '';
+
+        return `
+            <article class="${cardClass}" data-id="${escHtml(alert.id)}">
+                <div class="vma-alert-header" tabindex="0" role="button" aria-expanded="false">
+                    <div class="vma-alert-meta">
+                        <span class="vma-alert-status ${statusClass}">${statusText}</span>
+                        <span class="vma-severity ${escHtml(alert.severityClass)}">${escHtml(alert.severityLabel)}</span>
+                        <span class="vma-alert-time">
+                            ${alert.sentDate ? escHtml(alert.sentDate) : ''}
+                            ${alert.relativeTime ? `<span class="vma-alert-time-relative"> • ${escHtml(alert.relativeTime)}</span>` : ''}
+                        </span>
+                    </div>
+                    <h3 class="vma-alert-headline">${escHtml(alert.headline)}</h3>
+                    <div class="vma-alert-areas">
+                        <span class="vma-alert-areas-icon">📍</span>
+                        <span>${escHtml(alert.areaText)}</span>
+                    </div>
+                    ${alert.description ? `<p class="vma-alert-description">${escHtml(alert.description)}</p>` : ''}
+                </div>
+                <div class="vma-alert-body">
+                    ${alert.description ? `<div class="vma-alert-full-description">${escHtml(alert.description)}</div>` : ''}
+                    ${instructionHtml}
+                    <div class="vma-alert-footer">
+                        <div class="vma-alert-info">
+                            <span class="vma-alert-info-item">📝 ${escHtml(alert.msgTypeLabel)}</span>
+                            ${alert.urgency && alert.urgency !== 'Unknown' ? `<span class="vma-alert-info-item">⏱️ ${escHtml(alert.urgency)}</span>` : ''}
+                            ${alert.certainty && alert.certainty !== 'Unknown' ? `<span class="vma-alert-info-item">📊 ${escHtml(alert.certainty)}</span>` : ''}
+                        </div>
+                        ${webLinkHtml}
+                    </div>
+                </div>
+            </article>
+        `;
+    }
+
+    // VMA alert accordion click handler
+    document.addEventListener('click', function(e) {
+        const header = e.target.closest('.vma-alert-header');
+        if (!header) return;
+        if (e.target.closest('a')) return;
+
+        const alert = header.closest('.vma-alert');
+        if (alert) {
+            const isExpanded = alert.classList.contains('expanded');
+            alert.classList.toggle('expanded');
+            header.setAttribute('aria-expanded', !isExpanded);
+        }
+    });
+
+    // VMA refresh button handler
+    if (vmaRefreshBtn) {
+        vmaRefreshBtn.addEventListener('click', () => loadVmaAlerts(true));
     }
 
     // Type class mapping for dynamic cards
@@ -497,4 +686,9 @@
 
     // Init view
     if (window.CONFIG.currentView !== 'list') setView(window.CONFIG.currentView);
+
+    // Load VMA on page load if vma view is active
+    if (window.CONFIG.currentView === 'vma') {
+        loadVmaAlerts();
+    }
 })();
