@@ -24,7 +24,7 @@ header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: SAMEORIGIN');
 header('X-XSS-Protection: 1; mode=block');
 header('Referrer-Policy: strict-origin-when-cross-origin');
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.basemaps.cartocdn.com; connect-src 'self'");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.basemaps.cartocdn.com; connect-src 'self' https://vmaapi.sr.se");
 
 // Admin authentication for sensitive endpoints
 define('ADMIN_KEY', 'loltrappa123');
@@ -51,7 +51,7 @@ if (isset($_GET['ajax'])) {
 // Configuration
 define('CACHE_TIME', 120);           // 2 minutes for events (more real-time)
 define('EVENTS_PER_PAGE', 40);
-define('ASSET_VERSION', '6.1.0');    // Bump this to bust browser cache
+define('ASSET_VERSION', '6.2.0');    // Bump this to bust browser cache
 define('MAX_FETCH_RETRIES', 3);      // Max retries for API fetch
 define('USER_AGENT', 'FreshRSS/1.28.0 (Linux; https://freshrss.org)');
 define('POLICE_API_URL', 'https://polisen.se/api/events');
@@ -63,7 +63,11 @@ define('DB_PATH', DATA_DIR . '/events.db');
 define('BACKUP_DIR', DATA_DIR . '/backups');
 
 // Allowed views (security)
-define('ALLOWED_VIEWS', ['list', 'map', 'stats']);
+define('ALLOWED_VIEWS', ['list', 'map', 'stats', 'vma']);
+
+// VMA API configuration
+define('VMA_API_URL', 'https://vmaapi.sr.se/api/v2/alerts');
+define('VMA_API_TIMEOUT', 15);
 
 // ============================================================================
 // INPUT SANITIZATION FUNCTIONS
@@ -867,6 +871,185 @@ function fetchDetailsText(string $url): ?string {
     return implode("\n\n", array_slice($text, 0, 4));
 }
 
+/**
+ * Fetch VMA alerts from Sveriges Radio API
+ * Returns both current and recent historical alerts
+ */
+function fetchVmaAlerts(): array {
+    $result = [
+        'success' => false,
+        'current' => [],
+        'recent' => [],
+        'error' => null
+    ];
+
+    $ch = curl_init();
+    curl_setopt_array($ch, [
+        CURLOPT_URL => VMA_API_URL,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => VMA_API_TIMEOUT,
+        CURLOPT_USERAGENT => USER_AGENT,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_HTTPHEADER => ['Accept: application/json']
+    ]);
+
+    $response = curl_exec($ch);
+    $error = curl_error($ch);
+    $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+
+    if ($response === false || $status >= 400) {
+        $result['error'] = $error ?: 'HTTP error ' . $status;
+        return $result;
+    }
+
+    $data = json_decode($response, true);
+    if (!is_array($data)) {
+        $result['error'] = 'Invalid JSON response';
+        return $result;
+    }
+
+    $result['success'] = true;
+    $now = new DateTimeImmutable('now', new DateTimeZone('Europe/Stockholm'));
+
+    // Process alerts - the API returns an array of alerts
+    $alerts = $data['alerts'] ?? $data;
+    if (!is_array($alerts)) {
+        $alerts = [];
+    }
+
+    foreach ($alerts as $alert) {
+        $formatted = formatVmaAlert($alert, $now);
+        if ($formatted) {
+            // Check if alert is currently active
+            if ($formatted['isActive']) {
+                $result['current'][] = $formatted;
+            } else {
+                $result['recent'][] = $formatted;
+            }
+        }
+    }
+
+    // Sort recent alerts by sent time (newest first)
+    usort($result['recent'], function($a, $b) {
+        return strtotime($b['sentAt']) - strtotime($a['sentAt']);
+    });
+
+    // Limit recent alerts to last 20
+    $result['recent'] = array_slice($result['recent'], 0, 20);
+
+    return $result;
+}
+
+/**
+ * Format a VMA alert for display
+ */
+function formatVmaAlert(array $alert, DateTimeImmutable $now): ?array {
+    $identifier = $alert['identifier'] ?? $alert['id'] ?? null;
+    if (!$identifier) {
+        return null;
+    }
+
+    // Parse timestamps
+    $sentAt = $alert['sent'] ?? $alert['sentAt'] ?? null;
+    $expiresAt = $alert['expires'] ?? $alert['expiresAt'] ?? null;
+
+    // Determine if alert is active
+    $isActive = true;
+    if ($expiresAt) {
+        try {
+            $expiresDate = new DateTimeImmutable($expiresAt);
+            $isActive = $expiresDate > $now;
+        } catch (Exception $e) {
+            // Keep as active if date parsing fails
+        }
+    }
+
+    // Get info section (first info element typically)
+    $info = $alert['info'][0] ?? $alert['info'] ?? $alert;
+
+    // Extract fields
+    $headline = $info['headline'] ?? $alert['headline'] ?? 'VMA';
+    $description = $info['description'] ?? $alert['description'] ?? '';
+    $instruction = $info['instruction'] ?? $alert['instruction'] ?? '';
+    $severity = $info['severity'] ?? $alert['severity'] ?? 'Unknown';
+    $urgency = $info['urgency'] ?? $alert['urgency'] ?? 'Unknown';
+    $certainty = $info['certainty'] ?? $alert['certainty'] ?? 'Unknown';
+    $msgType = $alert['msgType'] ?? $alert['messageType'] ?? 'Alert';
+    $web = $info['web'] ?? $alert['web'] ?? '';
+
+    // Get areas
+    $areas = [];
+    $areaData = $info['area'] ?? $alert['areas'] ?? [];
+    if (!is_array($areaData)) {
+        $areaData = [$areaData];
+    }
+    foreach ($areaData as $area) {
+        if (is_array($area)) {
+            $areaName = $area['areaDesc'] ?? $area['description'] ?? $area['name'] ?? '';
+        } else {
+            $areaName = (string) $area;
+        }
+        if ($areaName) {
+            $areas[] = $areaName;
+        }
+    }
+
+    // Parse sent time for display
+    $sentDate = null;
+    $relativeTime = 'Okänd tid';
+    if ($sentAt) {
+        try {
+            $sentDate = new DateTimeImmutable($sentAt);
+            $relativeTime = formatRelativeTime($sentDate, $now);
+        } catch (Exception $e) {
+            // Keep default
+        }
+    }
+
+    // Map severity to display values
+    $severityMap = [
+        'Extreme' => ['label' => 'Extrem', 'class' => 'vma-severity--extreme'],
+        'Severe' => ['label' => 'Allvarlig', 'class' => 'vma-severity--severe'],
+        'Moderate' => ['label' => 'Måttlig', 'class' => 'vma-severity--moderate'],
+        'Minor' => ['label' => 'Mindre', 'class' => 'vma-severity--minor'],
+        'Unknown' => ['label' => 'Okänd', 'class' => 'vma-severity--unknown']
+    ];
+    $severityInfo = $severityMap[$severity] ?? $severityMap['Unknown'];
+
+    // Map message type
+    $msgTypeMap = [
+        'Alert' => 'Varning',
+        'Update' => 'Uppdatering',
+        'Cancel' => 'Avslutad',
+        'Ack' => 'Bekräftelse',
+        'Error' => 'Fel'
+    ];
+    $msgTypeLabel = $msgTypeMap[$msgType] ?? $msgType;
+
+    return [
+        'id' => $identifier,
+        'headline' => $headline,
+        'description' => $description,
+        'instruction' => $instruction,
+        'severity' => $severity,
+        'severityLabel' => $severityInfo['label'],
+        'severityClass' => $severityInfo['class'],
+        'urgency' => $urgency,
+        'certainty' => $certainty,
+        'msgType' => $msgType,
+        'msgTypeLabel' => $msgTypeLabel,
+        'areas' => $areas,
+        'areaText' => implode(', ', $areas) ?: 'Hela Sverige',
+        'sentAt' => $sentAt,
+        'sentDate' => $sentDate ? $sentDate->format('Y-m-d H:i') : '',
+        'relativeTime' => $relativeTime,
+        'expiresAt' => $expiresAt,
+        'isActive' => $isActive,
+        'web' => $web
+    ];
+}
+
 // ============================================================================
 // REQUEST HANDLING
 // ============================================================================
@@ -905,6 +1088,12 @@ if (isset($_GET['ajax'])) {
             'success' => (bool) $details,
             'details' => ['content' => $details]
         ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    if ($_GET['ajax'] === 'vma') {
+        $vmaData = fetchVmaAlerts();
+        echo json_encode($vmaData, JSON_UNESCAPED_UNICODE);
         exit;
     }
 
@@ -957,6 +1146,7 @@ if ($basePath === '/') {
                     <button type="button" data-view="list" class="<?= $currentView === 'list' ? 'active' : '' ?>">📋 <span class="label">Lista</span></button>
                     <button type="button" data-view="map" class="<?= $currentView === 'map' ? 'active' : '' ?>">🗺️ <span class="label">Karta</span></button>
                     <button type="button" data-view="stats" class="<?= $currentView === 'stats' ? 'active' : '' ?>">📊 <span class="label">Statistik</span></button>
+                    <button type="button" data-view="vma" class="<?= $currentView === 'vma' ? 'active' : '' ?>">⚠️ <span class="label">VMA</span></button>
                 </div>
                 <div class="live-indicator"><span class="live-dot"></span> Live</div>
             </div>
@@ -1122,6 +1312,23 @@ if ($basePath === '/') {
                 </div>
             </div>
         </aside>
+
+        <section id="vmaContainer" class="vma-container">
+            <div class="vma-header">
+                <div class="vma-title">
+                    <h2>⚠️ Viktigt Meddelande till Allmänheten</h2>
+                    <p>Aktuella och senaste VMA från Sveriges Radio</p>
+                </div>
+                <button type="button" id="vmaRefreshBtn" class="btn btn-secondary">🔄 Uppdatera</button>
+            </div>
+
+            <div id="vmaContent" class="vma-content">
+                <div class="vma-loading">
+                    <div class="spinner"></div>
+                    <p>Hämtar VMA-meddelanden...</p>
+                </div>
+            </div>
+        </section>
     </main>
 
     <footer>
