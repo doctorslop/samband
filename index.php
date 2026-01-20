@@ -66,8 +66,10 @@ define('BACKUP_DIR', DATA_DIR . '/backups');
 define('ALLOWED_VIEWS', ['list', 'map', 'stats', 'vma']);
 
 // VMA API configuration
-define('VMA_API_URL', 'https://vmaapi.sr.se/api/v2/alerts');
+define('VMA_API_URL', 'https://vmaapi.sr.se/api/v3/alerts/feed.atom');
 define('VMA_API_TIMEOUT', 15);
+define('VMA_CACHE_FILE', DATA_DIR . '/vma_cache.json');
+define('VMA_CACHE_TTL', 300); // 5 minutes
 
 // ============================================================================
 // INPUT SANITIZATION FUNCTIONS
@@ -872,16 +874,147 @@ function fetchDetailsText(string $url): ?string {
 }
 
 /**
- * Fetch VMA alerts from Sveriges Radio API
+ * Get cached VMA data if still valid
+ */
+function getVmaCache(): ?array {
+    if (!file_exists(VMA_CACHE_FILE)) {
+        return null;
+    }
+
+    $cacheData = @file_get_contents(VMA_CACHE_FILE);
+    if ($cacheData === false) {
+        return null;
+    }
+
+    $cache = json_decode($cacheData, true);
+    if (!is_array($cache) || !isset($cache['timestamp'], $cache['data'])) {
+        return null;
+    }
+
+    // Check if cache is still valid
+    if (time() - $cache['timestamp'] > VMA_CACHE_TTL) {
+        return null;
+    }
+
+    return $cache['data'];
+}
+
+/**
+ * Save VMA data to cache
+ */
+function saveVmaCache(array $data): void {
+    $cache = [
+        'timestamp' => time(),
+        'data' => $data
+    ];
+    @file_put_contents(VMA_CACHE_FILE, json_encode($cache, JSON_UNESCAPED_UNICODE));
+}
+
+/**
+ * Parse ATOM feed entry into alert array
+ */
+function parseAtomEntry(SimpleXMLElement $entry, array $namespaces): ?array {
+    // Get the entry ID
+    $id = (string) $entry->id;
+    if (empty($id)) {
+        return null;
+    }
+
+    // Basic ATOM fields
+    $title = (string) $entry->title;
+    $summary = (string) $entry->summary;
+    $content = (string) $entry->content;
+    $published = (string) $entry->published;
+    $updated = (string) $entry->updated;
+
+    // Get link to web page
+    $web = '';
+    foreach ($entry->link as $link) {
+        $rel = (string) $link['rel'];
+        if ($rel === 'alternate' || empty($rel)) {
+            $web = (string) $link['href'];
+            break;
+        }
+    }
+
+    // Try to get CAP (Common Alerting Protocol) data if available
+    $cap = null;
+    if (isset($namespaces['cap'])) {
+        $cap = $entry->children($namespaces['cap']);
+    }
+
+    // Extract severity, urgency, certainty from CAP or content
+    $severity = 'Unknown';
+    $urgency = 'Unknown';
+    $certainty = 'Unknown';
+    $msgType = 'Alert';
+    $instruction = '';
+    $areas = [];
+    $expires = null;
+
+    if ($cap && count($cap) > 0) {
+        $severity = (string) ($cap->severity ?? 'Unknown');
+        $urgency = (string) ($cap->urgency ?? 'Unknown');
+        $certainty = (string) ($cap->certainty ?? 'Unknown');
+        $msgType = (string) ($cap->msgType ?? 'Alert');
+        $instruction = (string) ($cap->instruction ?? '');
+        $expires = (string) ($cap->expires ?? '');
+
+        // Get areas from CAP
+        foreach ($cap->area as $area) {
+            $areaDesc = (string) ($area->areaDesc ?? '');
+            if ($areaDesc) {
+                $areas[] = $areaDesc;
+            }
+        }
+    }
+
+    // Parse areas from title or content if not found in CAP
+    if (empty($areas)) {
+        // Try to extract area from title (often format: "VMA: Area - Description")
+        if (preg_match('/^VMA:\s*([^-–]+)\s*[-–]/u', $title, $matches)) {
+            $areas[] = trim($matches[1]);
+        }
+    }
+
+    // Use published or updated as sent time
+    $sentAt = $published ?: $updated;
+
+    return [
+        'identifier' => $id,
+        'headline' => $title,
+        'description' => $content ?: $summary,
+        'instruction' => $instruction,
+        'severity' => $severity,
+        'urgency' => $urgency,
+        'certainty' => $certainty,
+        'msgType' => $msgType,
+        'areas' => $areas,
+        'sent' => $sentAt,
+        'expires' => $expires ?: null,
+        'web' => $web
+    ];
+}
+
+/**
+ * Fetch VMA alerts from Sveriges Radio ATOM feed
  * Returns both current and recent historical alerts
  */
-function fetchVmaAlerts(): array {
+function fetchVmaAlerts(bool $forceRefresh = false): array {
     $result = [
         'success' => false,
         'current' => [],
         'recent' => [],
         'error' => null
     ];
+
+    // Check cache first (unless force refresh)
+    if (!$forceRefresh) {
+        $cached = getVmaCache();
+        if ($cached !== null) {
+            return $cached;
+        }
+    }
 
     $ch = curl_init();
     curl_setopt_array($ch, [
@@ -890,7 +1023,7 @@ function fetchVmaAlerts(): array {
         CURLOPT_TIMEOUT => VMA_API_TIMEOUT,
         CURLOPT_USERAGENT => USER_AGENT,
         CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_HTTPHEADER => ['Accept: application/json']
+        CURLOPT_HTTPHEADER => ['Accept: application/atom+xml, application/xml, text/xml']
     ]);
 
     $response = curl_exec($ch);
@@ -903,29 +1036,31 @@ function fetchVmaAlerts(): array {
         return $result;
     }
 
-    $data = json_decode($response, true);
-    if (!is_array($data)) {
-        $result['error'] = 'Invalid JSON response';
+    // Parse ATOM XML
+    libxml_use_internal_errors(true);
+    $xml = simplexml_load_string($response);
+    if ($xml === false) {
+        $result['error'] = 'Invalid XML response';
         return $result;
     }
+
+    // Get namespaces used in the feed
+    $namespaces = $xml->getNamespaces(true);
 
     $result['success'] = true;
     $now = new DateTimeImmutable('now', new DateTimeZone('Europe/Stockholm'));
 
-    // Process alerts - the API returns an array of alerts
-    $alerts = $data['alerts'] ?? $data;
-    if (!is_array($alerts)) {
-        $alerts = [];
-    }
-
-    foreach ($alerts as $alert) {
-        $formatted = formatVmaAlert($alert, $now);
-        if ($formatted) {
-            // Check if alert is currently active
-            if ($formatted['isActive']) {
-                $result['current'][] = $formatted;
-            } else {
-                $result['recent'][] = $formatted;
+    // Process each entry in the feed
+    foreach ($xml->entry as $entry) {
+        $alertData = parseAtomEntry($entry, $namespaces);
+        if ($alertData) {
+            $formatted = formatVmaAlert($alertData, $now);
+            if ($formatted) {
+                if ($formatted['isActive']) {
+                    $result['current'][] = $formatted;
+                } else {
+                    $result['recent'][] = $formatted;
+                }
             }
         }
     }
@@ -935,8 +1070,11 @@ function fetchVmaAlerts(): array {
         return strtotime($b['sentAt']) - strtotime($a['sentAt']);
     });
 
-    // Limit recent alerts to last 20
-    $result['recent'] = array_slice($result['recent'], 0, 20);
+    // Limit recent alerts to last 50 (increased since feed has all events)
+    $result['recent'] = array_slice($result['recent'], 0, 50);
+
+    // Save to cache
+    saveVmaCache($result);
 
     return $result;
 }
@@ -1092,7 +1230,8 @@ if (isset($_GET['ajax'])) {
     }
 
     if ($_GET['ajax'] === 'vma') {
-        $vmaData = fetchVmaAlerts();
+        $forceRefresh = isset($_GET['refresh']) && $_GET['refresh'] === '1';
+        $vmaData = fetchVmaAlerts($forceRefresh);
         echo json_encode($vmaData, JSON_UNESCAPED_UNICODE);
         exit;
     }

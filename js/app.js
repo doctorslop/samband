@@ -165,7 +165,8 @@
         }
 
         try {
-            const res = await fetch('?ajax=vma');
+            const url = forceRefresh ? '?ajax=vma&refresh=1' : '?ajax=vma';
+            const res = await fetch(url);
             const data = await res.json();
 
             if (!data.success) {
