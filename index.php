@@ -51,7 +51,7 @@ if (isset($_GET['ajax'])) {
 // Configuration
 define('CACHE_TIME', 120);           // 2 minutes for events (more real-time)
 define('EVENTS_PER_PAGE', 40);
-define('ASSET_VERSION', '6.2.0');    // Bump this to bust browser cache
+define('ASSET_VERSION', '6.2.1');    // Bump this to bust browser cache
 define('MAX_FETCH_RETRIES', 3);      // Max retries for API fetch
 define('USER_AGENT', 'FreshRSS/1.28.0 (Linux; https://freshrss.org)');
 define('POLICE_API_URL', 'https://polisen.se/api/events');
