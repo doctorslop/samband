@@ -803,33 +803,107 @@ function getStatsSummary(): array {
     $now = new DateTimeImmutable('now');
     $since24h = $now->modify('-24 hours')->format('c');
     $since7d = $now->modify('-7 days')->format('c');
+    $since30d = $now->modify('-30 days')->format('c');
 
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM events WHERE event_time >= ?");
-    $stmt->execute([$since24h]);
+    // Exkludera sammanfattningar från statistiken
+    $excludeType = 'Sammanfattning';
+
+    // Senaste 24h (exkl. sammanfattningar)
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM events WHERE event_time >= ? AND type != ?");
+    $stmt->execute([$since24h, $excludeType]);
     $last24h = (int) $stmt->fetchColumn();
 
-    $stmt->execute([$since7d]);
+    // Senaste 7 dagar (exkl. sammanfattningar)
+    $stmt->execute([$since7d, $excludeType]);
     $last7d = (int) $stmt->fetchColumn();
 
-    $total = (int) $pdo->query("SELECT COUNT(*) FROM events")->fetchColumn();
+    // Senaste 30 dagar (exkl. sammanfattningar)
+    $stmt->execute([$since30d, $excludeType]);
+    $last30d = (int) $stmt->fetchColumn();
 
-    $topTypes = $pdo->query("SELECT type AS label, COUNT(*) AS total FROM events GROUP BY type ORDER BY total DESC LIMIT 5")->fetchAll();
-    $topLocations = $pdo->query("SELECT location_name AS label, COUNT(*) AS total FROM events GROUP BY location_name ORDER BY total DESC LIMIT 5")->fetchAll();
+    // Totalt antal (exkl. sammanfattningar)
+    $totalStmt = $pdo->prepare("SELECT COUNT(*) FROM events WHERE type != ?");
+    $totalStmt->execute([$excludeType]);
+    $total = (int) $totalStmt->fetchColumn();
 
-    $hourStmt = $pdo->prepare("SELECT strftime('%H', event_time) AS hour, COUNT(*) AS total FROM events WHERE event_time >= ? GROUP BY hour ORDER BY hour");
-    $hourStmt->execute([$since24h]);
+    // Äldsta händelsen för att beräkna genomsnitt
+    $oldestStmt = $pdo->prepare("SELECT MIN(event_time) FROM events WHERE type != ?");
+    $oldestStmt->execute([$excludeType]);
+    $oldestDate = $oldestStmt->fetchColumn();
+
+    $avgPerDay = 0;
+    if ($oldestDate) {
+        $oldest = new DateTimeImmutable($oldestDate);
+        $daysDiff = max(1, (int) $now->diff($oldest)->days);
+        $avgPerDay = round($total / $daysDiff, 1);
+    }
+
+    // Topp händelsetyper (exkl. sammanfattningar)
+    $topTypesStmt = $pdo->prepare("SELECT type AS label, COUNT(*) AS total FROM events WHERE type != ? GROUP BY type ORDER BY total DESC LIMIT 8");
+    $topTypesStmt->execute([$excludeType]);
+    $topTypes = $topTypesStmt->fetchAll();
+
+    // Topp platser (exkl. sammanfattningar)
+    $topLocationsStmt = $pdo->prepare("SELECT location_name AS label, COUNT(*) AS total FROM events WHERE type != ? GROUP BY location_name ORDER BY total DESC LIMIT 8");
+    $topLocationsStmt->execute([$excludeType]);
+    $topLocations = $topLocationsStmt->fetchAll();
+
+    // Per timme senaste 24h (exkl. sammanfattningar)
+    $hourStmt = $pdo->prepare("SELECT strftime('%H', event_time) AS hour, COUNT(*) AS total FROM events WHERE event_time >= ? AND type != ? GROUP BY hour ORDER BY hour");
+    $hourStmt->execute([$since24h, $excludeType]);
     $hourly = array_fill(0, 24, 0);
     foreach ($hourStmt->fetchAll() as $row) {
         $hourly[(int) $row['hour']] = (int) $row['total'];
+    }
+
+    // Per veckodag senaste 30 dagarna (exkl. sammanfattningar)
+    // SQLite: %w = weekday (0=Sunday, 1=Monday, ...)
+    $weekdayStmt = $pdo->prepare("SELECT strftime('%w', event_time) AS weekday, COUNT(*) AS total FROM events WHERE event_time >= ? AND type != ? GROUP BY weekday ORDER BY weekday");
+    $weekdayStmt->execute([$since30d, $excludeType]);
+    $weekdayData = array_fill(0, 7, 0);
+    foreach ($weekdayStmt->fetchAll() as $row) {
+        $weekdayData[(int) $row['weekday']] = (int) $row['total'];
+    }
+    // Konvertera till måndag-söndag ordning (svenskt)
+    $weekdays = [
+        $weekdayData[1], // Måndag
+        $weekdayData[2], // Tisdag
+        $weekdayData[3], // Onsdag
+        $weekdayData[4], // Torsdag
+        $weekdayData[5], // Fredag
+        $weekdayData[6], // Lördag
+        $weekdayData[0], // Söndag
+    ];
+
+    // Händelser per dag senaste 7 dagarna (för trendgraf)
+    $dailyStmt = $pdo->prepare("SELECT date(event_time) AS day, COUNT(*) AS total FROM events WHERE event_time >= ? AND type != ? GROUP BY day ORDER BY day");
+    $dailyStmt->execute([$since7d, $excludeType]);
+    $dailyData = [];
+    foreach ($dailyStmt->fetchAll() as $row) {
+        $dailyData[$row['day']] = (int) $row['total'];
+    }
+    // Fyll i alla 7 dagar
+    $daily = [];
+    for ($i = 6; $i >= 0; $i--) {
+        $date = $now->modify("-{$i} days")->format('Y-m-d');
+        $daily[] = [
+            'date' => $date,
+            'day' => (new DateTimeImmutable($date))->format('D'),
+            'count' => $dailyData[$date] ?? 0
+        ];
     }
 
     return [
         'total' => $total,
         'last24h' => $last24h,
         'last7d' => $last7d,
+        'last30d' => $last30d,
+        'avgPerDay' => $avgPerDay,
         'topTypes' => $topTypes,
         'topLocations' => $topLocations,
-        'hourly' => $hourly
+        'hourly' => $hourly,
+        'weekdays' => $weekdays,
+        'daily' => $daily
     ];
 }
 
@@ -1409,10 +1483,11 @@ if ($basePath === '/') {
         </div>
 
         <aside id="statsSidebar" class="stats-sidebar">
-            <div class="stats-card">
+            <div class="stats-card stats-card-overview">
                 <h3>📊 Översikt</h3>
                 <div class="stat-number"><?= esc((string) $stats['total']) ?></div>
                 <div class="stat-label">Totalt antal händelser</div>
+                <div class="stat-meta">~<?= esc((string) $stats['avgPerDay']) ?> händelser/dag i genomsnitt</div>
             </div>
             <div class="stats-card">
                 <h3>⏱️ Senaste 24h</h3>
@@ -1423,6 +1498,59 @@ if ($basePath === '/') {
                 <h3>📅 Senaste 7 dagar</h3>
                 <div class="stat-number"><?= esc((string) $stats['last7d']) ?></div>
                 <div class="stat-label">Händelser senaste veckan</div>
+            </div>
+            <div class="stats-card">
+                <h3>📆 Senaste 30 dagar</h3>
+                <div class="stat-number"><?= esc((string) $stats['last30d']) ?></div>
+                <div class="stat-label">Händelser senaste månaden</div>
+            </div>
+            <div class="stats-card stats-card-wide">
+                <h3>📈 Trend (7 dagar)</h3>
+                <div class="daily-chart">
+                    <?php
+                    $maxDaily = max(array_column($stats['daily'], 'count')) ?: 1;
+                    foreach ($stats['daily'] as $day):
+                        $height = max(4, ($day['count'] / $maxDaily) * 60);
+                    ?>
+                        <div class="daily-bar-container">
+                            <div class="daily-bar" style="height: <?= $height ?>px;" title="<?= esc($day['date']) ?>: <?= esc((string) $day['count']) ?>"></div>
+                            <div class="daily-label"><?= esc(substr($day['day'], 0, 2)) ?></div>
+                            <div class="daily-count"><?= esc((string) $day['count']) ?></div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <div class="stats-card stats-card-wide">
+                <h3>📊 Per veckodag (30d)</h3>
+                <div class="weekday-chart">
+                    <?php
+                    $weekdayNames = ['Mån', 'Tis', 'Ons', 'Tor', 'Fre', 'Lör', 'Sön'];
+                    $maxWeekday = max($stats['weekdays']) ?: 1;
+                    foreach ($stats['weekdays'] as $i => $count):
+                        $height = max(4, ($count / $maxWeekday) * 50);
+                    ?>
+                        <div class="weekday-bar-container">
+                            <div class="weekday-bar" style="height: <?= $height ?>px;"></div>
+                            <div class="weekday-label"><?= esc($weekdayNames[$i]) ?></div>
+                            <div class="weekday-count"><?= esc((string) $count) ?></div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <div class="stats-card stats-card-wide">
+                <h3>🕒 Per timme (24h)</h3>
+                <div class="hour-chart">
+                    <?php
+                    $maxHourly = max($stats['hourly']) ?: 1;
+                    foreach ($stats['hourly'] as $hour => $count):
+                        $height = max(2, ($count / $maxHourly) * 50);
+                    ?>
+                        <div class="hour-bar" style="height: <?= $height ?>px;" title="<?= sprintf('%02d', $hour) ?>:00 - <?= esc((string) $count) ?> händelser"></div>
+                    <?php endforeach; ?>
+                </div>
+                <div class="hour-labels">
+                    <span>00</span><span>06</span><span>12</span><span>18</span><span>23</span>
+                </div>
             </div>
             <div class="stats-card">
                 <h3>🏷️ Vanligaste typer</h3>
@@ -1441,14 +1569,6 @@ if ($basePath === '/') {
                         <div class="stat-row-value"><?= esc((string) $row['total']) ?></div>
                     </div>
                 <?php endforeach; ?>
-            </div>
-            <div class="stats-card">
-                <h3>🕒 Per timme (24h)</h3>
-                <div class="hour-chart">
-                    <?php foreach ($stats['hourly'] as $count): ?>
-                        <div class="hour-bar" style="height: <?= 2 + ($count * 4) ?>px;"></div>
-                    <?php endforeach; ?>
-                </div>
             </div>
         </aside>
 
