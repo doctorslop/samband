@@ -834,6 +834,7 @@ footer {
 /* Tablet and smaller desktop responsiveness */
 @media (max-width: 1024px) {
     .stats-sidebar { display: none !important; }
+    body.view-stats .stats-sidebar { display: block !important; }
     .main-content { flex-direction: column; }
     .container { padding: 0 24px; }
     header { margin: 0 -24px 16px; padding: 16px 24px; width: calc(100% + 48px); }
