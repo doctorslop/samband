@@ -565,7 +565,7 @@
         }
     }
 
-    // Click handler for expand button and accordion headers
+    // Click handler for expand button and event cards
     document.addEventListener('click', function(e) {
         // Handle expand button clicks
         const expandBtn = e.target.closest('.expand-details-btn');
@@ -576,13 +576,12 @@
             return;
         }
 
-        // Handle header clicks (but not on buttons/links)
-        const header = e.target.closest('.event-card-header');
-        if (!header) return;
-        if (e.target.closest('a, button')) return;
+        // Handle card clicks (but not on buttons/links/details content)
+        const card = e.target.closest('.event-card');
+        if (!card) return;
+        if (e.target.closest('a, button, .event-details')) return;
 
-        const card = header.closest('.event-card');
-        if (card) toggleAccordion(card);
+        toggleAccordion(card);
     });
 
     // Keyboard handler for expand button
