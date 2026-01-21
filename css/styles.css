@@ -228,6 +228,7 @@ header {
     animation: slideIn 0.4s ease-out backwards;
     position: relative;
     -webkit-tap-highlight-color: transparent;
+    cursor: pointer;
 }
 .event-card::before {
     content: '';
@@ -581,6 +582,7 @@ header {
     border-left: 3px solid var(--success);
     word-wrap: break-word;
     overflow-wrap: break-word;
+    cursor: auto;
 }
 .event-details.visible { display: block; animation: detailsSlideIn 0.25s ease-out; }
 .event-details.loading {
