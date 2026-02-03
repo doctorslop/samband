@@ -2,10 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getEventsFromDb, countEventsInDb } from '@/lib/db';
 import { refreshEventsIfNeeded } from '@/lib/policeApi';
 import { formatEventForUi, sanitizeLocation, sanitizeType, sanitizeSearch } from '@/lib/utils';
+import { checkRateLimit, rateLimitResponse, addRateLimitHeaders } from '@/lib/rateLimit';
 
 const EVENTS_PER_PAGE = 40;
 
 export async function GET(request: NextRequest) {
+  // Check rate limit
+  const rateLimitResult = checkRateLimit(request);
+  if (!rateLimitResult.allowed) {
+    return rateLimitResponse(rateLimitResult);
+  }
+
   // Refresh events if needed
   await refreshEventsIfNeeded();
 
@@ -24,11 +31,12 @@ export async function GET(request: NextRequest) {
     const total = countEventsInDb(filters);
     const formattedEvents = events.map(formatEventForUi);
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       events: formattedEvents,
       hasMore: (offset + EVENTS_PER_PAGE) < total,
       total,
     });
+    return addRateLimitHeaders(response, rateLimitResult);
   } catch (error) {
     console.error('Error fetching events:', error);
     return NextResponse.json(

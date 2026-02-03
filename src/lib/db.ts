@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import { EventFilters, EventWithMetadata, RawEvent, Statistics, DailyStats, TopItem } from '@/types';
+import { escapeLikeWildcards } from './utils';
 
 // Database configuration
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -49,6 +50,9 @@ function initializeDatabase(database: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_events_location ON events(location_name);
     CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);
     CREATE INDEX IF NOT EXISTS idx_fetch_log_fetched_at ON fetch_log(fetched_at);
+    CREATE INDEX IF NOT EXISTS idx_events_content_hash ON events(content_hash);
+    CREATE INDEX IF NOT EXISTS idx_events_composite ON events(event_time DESC, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_events_location_type ON events(location_name, type);
   `);
 }
 
@@ -166,17 +170,24 @@ function extractEventTime(event: RawEvent): string | null {
   return datetime ? normalizeDateTime(datetime) : null;
 }
 
-// Generate content hash for change detection
+// Generate content hash for change detection using FNV-1a algorithm
+// FNV-1a provides better distribution and fewer collisions than simple djb2
 function generateContentHash(event: RawEvent): string {
   const content = `${event.name || ''}|${event.summary || ''}|${event.type || ''}`;
-  // Simple hash function
-  let hash = 0;
+
+  // FNV-1a 32-bit parameters
+  const FNV_PRIME = 0x01000193;
+  const FNV_OFFSET_BASIS = 0x811c9dc5;
+
+  let hash = FNV_OFFSET_BASIS;
   for (let i = 0; i < content.length; i++) {
-    const char = content.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32bit integer
+    hash ^= content.charCodeAt(i);
+    // Multiply by prime using BigInt to avoid overflow, then convert back
+    hash = Math.imul(hash, FNV_PRIME) >>> 0; // >>> 0 ensures unsigned 32-bit
   }
-  return hash.toString(16);
+
+  // Return as 8-character hex string (zero-padded)
+  return hash.toString(16).padStart(8, '0');
 }
 
 // Insert or update event in database
@@ -277,8 +288,8 @@ export function getEventsFromDb(filters: EventFilters = {}, limit = 500, offset 
   }
 
   if (filters.date) {
-    query += ' AND event_time LIKE ?';
-    params.push(filters.date + '%');
+    query += " AND event_time LIKE ? ESCAPE '\\'";
+    params.push(escapeLikeWildcards(filters.date) + '%');
   }
 
   if (filters.from) {
@@ -292,8 +303,8 @@ export function getEventsFromDb(filters: EventFilters = {}, limit = 500, offset 
   }
 
   if (filters.search) {
-    query += ' AND (name LIKE ? OR summary LIKE ? OR location_name LIKE ?)';
-    const searchTerm = '%' + filters.search + '%';
+    query += " AND (name LIKE ? ESCAPE '\\' OR summary LIKE ? ESCAPE '\\' OR location_name LIKE ? ESCAPE '\\')";
+    const searchTerm = '%' + escapeLikeWildcards(filters.search) + '%';
     params.push(searchTerm, searchTerm, searchTerm);
   }
 
@@ -336,8 +347,8 @@ export function countEventsInDb(filters: EventFilters = {}): number {
   }
 
   if (filters.search) {
-    query += ' AND (name LIKE ? OR summary LIKE ? OR location_name LIKE ?)';
-    const searchTerm = '%' + filters.search + '%';
+    query += " AND (name LIKE ? ESCAPE '\\' OR summary LIKE ? ESCAPE '\\' OR location_name LIKE ? ESCAPE '\\')";
+    const searchTerm = '%' + escapeLikeWildcards(filters.search) + '%';
     params.push(searchTerm, searchTerm, searchTerm);
   }
 

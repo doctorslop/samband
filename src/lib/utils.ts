@@ -89,3 +89,12 @@ export function sanitizeType(type: string): string {
 export function sanitizeSearch(search: string): string {
   return sanitizeInput(search, 200);
 }
+
+// Escape SQL LIKE wildcards to prevent wildcard injection
+export function escapeLikeWildcards(value: string): string {
+  // Escape %, _, and \ characters for use in SQLite LIKE queries
+  return value
+    .replace(/\\/g, '\\\\')  // Escape backslash first
+    .replace(/%/g, '\\%')    // Escape percent
+    .replace(/_/g, '\\_');   // Escape underscore
+}
