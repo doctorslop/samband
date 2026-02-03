@@ -9,6 +9,49 @@ const DB_PATH = path.join(DATA_DIR, 'events.db');
 // Singleton database instance
 let db: Database.Database | null = null;
 
+// Initialize database tables if they don't exist
+function initializeDatabase(database: Database.Database): void {
+  // Create events table
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS events (
+      id INTEGER PRIMARY KEY,
+      datetime TEXT,
+      event_time TEXT,
+      publish_time TEXT,
+      last_updated TEXT,
+      name TEXT,
+      summary TEXT,
+      url TEXT,
+      type TEXT,
+      location_name TEXT,
+      location_gps TEXT,
+      raw_data TEXT,
+      fetched_at TEXT,
+      content_hash TEXT
+    )
+  `);
+
+  // Create fetch_log table
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS fetch_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      fetched_at TEXT,
+      events_fetched INTEGER,
+      events_new INTEGER,
+      success INTEGER,
+      error_message TEXT
+    )
+  `);
+
+  // Create indexes for better query performance
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_events_event_time ON events(event_time);
+    CREATE INDEX IF NOT EXISTS idx_events_location ON events(location_name);
+    CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);
+    CREATE INDEX IF NOT EXISTS idx_fetch_log_fetched_at ON fetch_log(fetched_at);
+  `);
+}
+
 export function getDatabase(): Database.Database {
   if (!db) {
     db = new Database(DB_PATH, { readonly: false });
@@ -19,6 +62,9 @@ export function getDatabase(): Database.Database {
     db.pragma('cache_size = -64000'); // 64MB cache
     db.pragma('temp_store = MEMORY');
     db.pragma('foreign_keys = ON');
+
+    // Initialize tables
+    initializeDatabase(db);
   }
   return db;
 }
