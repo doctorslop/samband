@@ -147,7 +147,7 @@ function parseAtomEntry(entry: string): ParsedAlert | null {
 
   // Extract areas from title (format: "VMA: Area - Description")
   const areas: string[] = [];
-  const areaMatch = title.match(/^VMA:\s*([^-–]+)\s*[-–]/u);
+  const areaMatch = title.match(/^VMA:\s*([^-–]+)\s*[-–]/);
   if (areaMatch) {
     areas.push(areaMatch[1].trim());
   }

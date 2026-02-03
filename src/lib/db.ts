@@ -115,7 +115,7 @@ function extractEventTime(event: RawEvent): string | null {
   }
 
   // Primary: Extract time from name field format "DD månad HH.MM, Type, Location"
-  const nameMatch = name.match(/^(\d{1,2})\s+\w+\s+(\d{1,2})[\.:,](\d{2})/u);
+  const nameMatch = name.match(/^(\d{1,2})\s+\w+\s+(\d{1,2})[\.:,](\d{2})/);
   if (nameMatch && datetime) {
     const day = parseInt(nameMatch[1], 10);
     const hour = parseInt(nameMatch[2], 10);
@@ -314,7 +314,7 @@ export function getEventsFromDb(filters: EventFilters = {}, limit = 500, offset 
       event_time: row.event_time,
       publish_time: row.publish_time,
       last_updated: row.last_updated,
-      was_updated: row.last_updated && row.publish_time && row.last_updated !== row.publish_time,
+      was_updated: Boolean(row.last_updated && row.publish_time && row.last_updated !== row.publish_time),
     };
   });
 }
