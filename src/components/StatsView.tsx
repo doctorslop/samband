@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { Statistics } from '@/types';
 
 interface StatsViewProps {
@@ -7,99 +8,119 @@ interface StatsViewProps {
   isActive: boolean;
 }
 
-export default function StatsView({ stats, isActive }: StatsViewProps) {
-  const maxDaily = Math.max(...stats.daily.map(d => d.count)) || 1;
-  const maxWeekday = Math.max(...stats.weekdays) || 1;
-  const maxHourly = Math.max(...stats.hourly) || 1;
-  const weekdayNames = ['M', 'Ti', 'O', 'To', 'F', 'L', 'S'];
+function StatsView({ stats, isActive }: StatsViewProps) {
+  const maxDaily = Math.max(...stats.daily.map(d => d.count), 1);
+  const maxWeekday = Math.max(...stats.weekdays, 1);
+  const maxHourly = Math.max(...stats.hourly, 1);
+  const weekdayNames = ['Mån', 'Tis', 'Ons', 'Tor', 'Fre', 'Lör', 'Sön'];
 
   return (
-    <aside id="statsSidebar" className={`stats-sidebar${isActive ? ' active' : ''}`}>
-      <div className="stats-grid">
-        {/* Key metrics */}
-        <div className="stats-metrics">
-          <div className="metric">
-            <span className="metric-value">{stats.total}</span>
-            <span className="metric-label">Totalt</span>
+    <section
+      className={`stats-view${isActive ? ' active' : ''}`}
+      aria-hidden={!isActive}
+      role="region"
+      aria-label="Statistik"
+    >
+      {/* Hero metrics */}
+      <div className="stats-hero">
+        <div className="stats-hero-grid">
+          <div className="stats-metric stats-metric--primary">
+            <span className="stats-metric__value">{stats.total.toLocaleString('sv-SE')}</span>
+            <span className="stats-metric__label">Totalt antal händelser</span>
           </div>
-          <div className="metric">
-            <span className="metric-value">{stats.last24h}</span>
-            <span className="metric-label">24h</span>
+          <div className="stats-metric">
+            <span className="stats-metric__value">{stats.last24h}</span>
+            <span className="stats-metric__label">Senaste 24h</span>
           </div>
-          <div className="metric">
-            <span className="metric-value">{stats.last7d}</span>
-            <span className="metric-label">7 dagar</span>
+          <div className="stats-metric">
+            <span className="stats-metric__value">{stats.last7d}</span>
+            <span className="stats-metric__label">Senaste 7 dagar</span>
           </div>
-          <div className="metric">
-            <span className="metric-value">{stats.last30d}</span>
-            <span className="metric-label">30 dagar</span>
+          <div className="stats-metric">
+            <span className="stats-metric__value">{stats.last30d}</span>
+            <span className="stats-metric__label">Senaste 30 dagar</span>
           </div>
-          <div className="metric metric-avg">
-            <span className="metric-value">~{stats.avgPerDay}</span>
-            <span className="metric-label">per dag</span>
+          <div className="stats-metric stats-metric--highlight">
+            <span className="stats-metric__value">~{stats.avgPerDay}</span>
+            <span className="stats-metric__label">Genomsnitt/dag</span>
           </div>
         </div>
+      </div>
 
-        {/* Trend last 7 days */}
-        <div className="stats-card">
-          <h3>Senaste 7 dagarna</h3>
+      {/* Trend section */}
+      <div className="stats-section">
+        <h2 className="stats-section__title">Senaste 7 dagarna</h2>
+        <div className="stats-card stats-card--chart">
           <div className="trend-chart">
             {stats.daily.map((day, i) => {
               const pct = (day.count / maxDaily) * 100;
               return (
-                <div key={i} className="trend-col">
-                  <div className="trend-bar-wrap">
+                <div key={i} className="trend-chart__col">
+                  <div className="trend-chart__bar-container">
                     <div
-                      className="trend-bar"
+                      className="trend-chart__bar"
                       style={{ height: `${pct}%` }}
-                      title={day.date}
+                      title={`${day.date}: ${day.count} händelser`}
                     />
                   </div>
-                  <span className="trend-val">{day.count}</span>
-                  <span className="trend-day">{day.day.substring(0, 2)}</span>
+                  <span className="trend-chart__value">{day.count}</span>
+                  <span className="trend-chart__label">{day.day.substring(0, 3)}</span>
                 </div>
               );
             })}
           </div>
         </div>
+      </div>
 
-        {/* Row with two charts */}
-        <div className="stats-row">
+      {/* Distribution section */}
+      <div className="stats-section">
+        <h2 className="stats-section__title">Fördelning</h2>
+        <div className="stats-grid stats-grid--2col">
+          {/* Weekday distribution */}
           <div className="stats-card">
-            <h3>Per veckodag</h3>
-            <div className="bar-chart bar-chart-weekday">
+            <h3 className="stats-card__title">Per veckodag</h3>
+            <div className="bar-chart bar-chart--weekday">
               {stats.weekdays.map((count, i) => {
                 const pct = (count / maxWeekday) * 100;
                 return (
-                  <div key={i} className="bar-col">
-                    <div className="bar-wrap">
-                      <div className="bar" style={{ height: `${pct}%` }} />
+                  <div key={i} className="bar-chart__col">
+                    <div className="bar-chart__bar-container">
+                      <div
+                        className="bar-chart__bar"
+                        style={{ height: `${pct}%` }}
+                        title={`${weekdayNames[i]}: ${count} händelser`}
+                      />
                     </div>
-                    <span className="bar-label">{weekdayNames[i]}</span>
+                    <span className="bar-chart__label">{weekdayNames[i]}</span>
                   </div>
                 );
               })}
             </div>
           </div>
+
+          {/* Hourly distribution */}
           <div className="stats-card">
-            <h3>Per timme</h3>
-            <div className="bar-chart bar-chart-hourly">
+            <h3 className="stats-card__title">Per timme</h3>
+            <div className="bar-chart bar-chart--hourly">
               {stats.hourly.map((count, hour) => {
                 const pct = (count / maxHourly) * 100;
                 return (
                   <div
                     key={hour}
-                    className="bar-col bar-col-hour"
-                    title={`${String(hour).padStart(2, '0')}:00: ${count}`}
+                    className="bar-chart__col bar-chart__col--hour"
+                    title={`${String(hour).padStart(2, '0')}:00 - ${count} händelser`}
                   >
-                    <div className="bar-wrap">
-                      <div className="bar" style={{ height: `${pct}%` }} />
+                    <div className="bar-chart__bar-container">
+                      <div
+                        className="bar-chart__bar"
+                        style={{ height: `${pct}%` }}
+                      />
                     </div>
                   </div>
                 );
               })}
             </div>
-            <div className="hour-axis">
+            <div className="bar-chart__axis">
               <span>00</span>
               <span>06</span>
               <span>12</span>
@@ -108,45 +129,55 @@ export default function StatsView({ stats, isActive }: StatsViewProps) {
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Top lists row */}
-        <div className="stats-row">
+      {/* Top lists section */}
+      <div className="stats-section">
+        <h2 className="stats-section__title">Vanligast förekommande</h2>
+        <div className="stats-grid stats-grid--2col">
+          {/* Top event types */}
           <div className="stats-card">
-            <h3>Vanligaste händelser</h3>
-            <div className="top-list">
+            <h3 className="stats-card__title">Händelsetyper</h3>
+            <ul className="top-list">
               {stats.topTypes.map((row, i) => {
                 const pct = stats.total > 0 ? Math.round((row.total / stats.total) * 100) : 0;
                 return (
-                  <div key={i} className="top-item">
-                    <span className="top-name">{row.label}</span>
-                    <div className="top-bar-wrap">
-                      <div className="top-bar" style={{ width: `${pct}%` }} />
+                  <li key={i} className="top-list__item">
+                    <span className="top-list__rank">{i + 1}</span>
+                    <span className="top-list__name">{row.label}</span>
+                    <div className="top-list__bar-container">
+                      <div className="top-list__bar" style={{ width: `${pct}%` }} />
                     </div>
-                    <span className="top-count">{row.total}</span>
-                  </div>
+                    <span className="top-list__count">{row.total.toLocaleString('sv-SE')}</span>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
           </div>
+
+          {/* Top locations */}
           <div className="stats-card">
-            <h3>Vanligaste platser</h3>
-            <div className="top-list">
+            <h3 className="stats-card__title">Platser</h3>
+            <ul className="top-list">
               {stats.topLocations.map((row, i) => {
                 const pct = stats.total > 0 ? Math.round((row.total / stats.total) * 100) : 0;
                 return (
-                  <div key={i} className="top-item">
-                    <span className="top-name">{row.label}</span>
-                    <div className="top-bar-wrap">
-                      <div className="top-bar" style={{ width: `${pct}%` }} />
+                  <li key={i} className="top-list__item">
+                    <span className="top-list__rank">{i + 1}</span>
+                    <span className="top-list__name">{row.label}</span>
+                    <div className="top-list__bar-container">
+                      <div className="top-list__bar" style={{ width: `${pct}%` }} />
                     </div>
-                    <span className="top-count">{row.total}</span>
-                  </div>
+                    <span className="top-list__count">{row.total.toLocaleString('sv-SE')}</span>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
           </div>
         </div>
       </div>
-    </aside>
+    </section>
   );
 }
+
+export default memo(StatsView);
