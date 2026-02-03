@@ -4,7 +4,7 @@ import { insertEvent, logFetch, getLastFetchTime } from './db';
 const POLICE_API_URL = 'https://polisen.se/api/events';
 const POLICE_API_TIMEOUT = 30000;
 const USER_AGENT = 'FreshRSS/1.28.0 (Linux; https://freshrss.org)';
-const CACHE_TIME = 120; // 2 minutes in seconds
+const CACHE_TIME = 1800; // 30 minutes in seconds
 const MAX_FETCH_RETRIES = 3;
 
 async function fetchWithRetry(url: string, retries = MAX_FETCH_RETRIES): Promise<RawEvent[]> {
@@ -132,7 +132,28 @@ export function decodeHtmlEntities(text: string): string {
 
 // Fetch event details from polisen.se
 export async function fetchDetailsText(url: string): Promise<string | null> {
-  const absoluteUrl = url.startsWith('http') ? url : 'https://polisen.se' + url;
+  // Validate and construct URL safely using URL constructor
+  let absoluteUrl: string;
+  try {
+    // If url is relative, resolve against polisen.se base
+    const baseUrl = 'https://polisen.se';
+    const parsedUrl = new URL(url, baseUrl);
+
+    // Security: Only allow https protocol and polisen.se hostname
+    if (parsedUrl.protocol !== 'https:') {
+      console.error('Invalid protocol in URL:', parsedUrl.protocol);
+      return null;
+    }
+    if (parsedUrl.hostname !== 'polisen.se' && !parsedUrl.hostname.endsWith('.polisen.se')) {
+      console.error('Invalid hostname in URL:', parsedUrl.hostname);
+      return null;
+    }
+
+    absoluteUrl = parsedUrl.href;
+  } catch {
+    console.error('Invalid URL format:', url);
+    return null;
+  }
 
   try {
     const controller = new AbortController();

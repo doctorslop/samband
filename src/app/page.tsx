@@ -7,8 +7,8 @@ import ClientApp from '@/components/ClientApp';
 const EVENTS_PER_PAGE = 40;
 const ALLOWED_VIEWS = ['list', 'map', 'stats', 'vma'];
 
-// Revalidate every 2 minutes to match the original cache time
-export const revalidate = 120;
+// Revalidate every 30 minutes to match the polisen.se API fetch interval
+export const revalidate = 1800;
 
 interface PageProps {
   searchParams: Promise<{

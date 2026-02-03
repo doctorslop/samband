@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Revalidate data every 2 minutes (matches the PHP CACHE_TIME)
+  // Revalidate data every 30 minutes (matches the polisen.se API fetch interval)
   experimental: {
     // Enable server actions
     serverActions: {
@@ -17,6 +17,18 @@ const nextConfig = {
           { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
           { key: 'X-XSS-Protection', value: '1; mode=block' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: https://*.tile.openstreetmap.org blob:",
+              "font-src 'self'",
+              "connect-src 'self' https://polisen.se https://vmaapi.sr.se",
+              "frame-ancestors 'self'",
+            ].join('; '),
+          },
         ],
       },
     ];
