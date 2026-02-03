@@ -22,9 +22,9 @@ const nextConfig = {
             value: [
               "default-src 'self'",
               "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
-              "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: https://*.tile.openstreetmap.org blob:",
-              "font-src 'self'",
+              "style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com",
+              "img-src 'self' data: https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com blob:",
+              "font-src 'self' https://fonts.gstatic.com",
               "connect-src 'self' https://polisen.se",
               "frame-ancestors 'self'",
             ].join('; '),
