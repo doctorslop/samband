@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { FormattedEvent } from '@/types';
 
 interface EventMapProps {
@@ -11,17 +11,31 @@ interface EventMapProps {
 export default function EventMap({ events, isActive }: EventMapProps) {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const [initialized, setInitialized] = useState(false);
+  const initializingRef = useRef(false);
 
   useEffect(() => {
-    if (!isActive || initialized) return;
+    if (!isActive) return;
+
+    // Prevent double initialization (React Strict Mode)
+    if (mapRef.current || initializingRef.current) return;
+
+    initializingRef.current = true;
 
     const initMap = async () => {
       const L = await import('leaflet');
       // @ts-ignore - CSS imports don't have type declarations
       await import('leaflet/dist/leaflet.css');
 
-      if (!mapContainerRef.current) return;
+      if (!mapContainerRef.current) {
+        initializingRef.current = false;
+        return;
+      }
+
+      // Double-check the container doesn't already have a map
+      if (mapRef.current) {
+        initializingRef.current = false;
+        return;
+      }
 
       const map = L.map(mapContainerRef.current).setView([62.5, 17.5], 5);
       L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
@@ -113,11 +127,20 @@ export default function EventMap({ events, isActive }: EventMapProps) {
       }
 
       mapRef.current = map;
-      setInitialized(true);
+      initializingRef.current = false;
     };
 
     initMap();
-  }, [isActive, initialized, events]);
+
+    // Cleanup function to destroy map on unmount
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+      initializingRef.current = false;
+    };
+  }, [isActive, events]);
 
   return (
     <div id="mapContainer" className={`map-container${isActive ? ' active' : ''}`}>

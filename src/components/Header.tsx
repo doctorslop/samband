@@ -68,35 +68,59 @@ export default function Header({ currentView, onViewChange }: HeaderProps) {
           </div>
         </Link>
         <div className="header-controls">
-          <div className="view-toggle">
+          <nav className="view-toggle" role="tablist" aria-label="Vy-navigering">
             <button
               type="button"
+              role="tab"
+              aria-selected={currentView === 'list'}
               data-view="list"
               className={currentView === 'list' ? 'active' : ''}
               onClick={() => onViewChange('list')}
             >
-              📋 <span className="label">Lista</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="8" y1="6" x2="21" y2="6"></line>
+                <line x1="8" y1="12" x2="21" y2="12"></line>
+                <line x1="8" y1="18" x2="21" y2="18"></line>
+                <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                <line x1="3" y1="18" x2="3.01" y2="18"></line>
+              </svg>
+              <span className="label">Lista</span>
             </button>
             <button
               type="button"
+              role="tab"
+              aria-selected={currentView === 'map'}
               data-view="map"
               className={currentView === 'map' ? 'active' : ''}
               onClick={() => onViewChange('map')}
             >
-              🗺️ <span className="label">Karta</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
+                <line x1="8" y1="2" x2="8" y2="18"></line>
+                <line x1="16" y1="6" x2="16" y2="22"></line>
+              </svg>
+              <span className="label">Karta</span>
             </button>
             <button
               type="button"
+              role="tab"
+              aria-selected={currentView === 'stats'}
               data-view="stats"
               className={currentView === 'stats' ? 'active' : ''}
               onClick={() => onViewChange('stats')}
             >
-              📊 <span className="label">Statistik</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="20" x2="18" y2="10"></line>
+                <line x1="12" y1="20" x2="12" y2="4"></line>
+                <line x1="6" y1="20" x2="6" y2="14"></line>
+              </svg>
+              <span className="label">Statistik</span>
             </button>
-          </div>
+          </nav>
           <div className="live-indicator">
             <span className="live-dot" />
-            Live
+            <span className="live-text">Live</span>
           </div>
         </div>
       </div>
