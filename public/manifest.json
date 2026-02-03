@@ -1,0 +1,38 @@
+{
+    "name": "Sambandscentralen",
+    "short_name": "Samband",
+    "description": "Aktuella händelsenotiser från Svenska Polisen i realtid",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#0a1628",
+    "theme_color": "#0a1628",
+    "orientation": "portrait-primary",
+    "scope": "/",
+    "lang": "sv-SE",
+    "categories": ["news", "utilities"],
+    "icons": [
+        {
+            "src": "/icons/icon.svg",
+            "sizes": "any",
+            "type": "image/svg+xml",
+            "purpose": "any"
+        }
+    ],
+    "screenshots": [],
+    "shortcuts": [
+        {
+            "name": "Visa på karta",
+            "short_name": "Karta",
+            "description": "Öppna kartvy",
+            "url": "/?view=map"
+        },
+        {
+            "name": "Visa statistik",
+            "short_name": "Statistik",
+            "description": "Öppna statistikvy",
+            "url": "/?view=stats"
+        }
+    ],
+    "related_applications": [],
+    "prefer_related_applications": false
+}
