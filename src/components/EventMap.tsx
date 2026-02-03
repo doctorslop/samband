@@ -18,6 +18,7 @@ export default function EventMap({ events, isActive }: EventMapProps) {
 
     const initMap = async () => {
       const L = await import('leaflet');
+      // @ts-ignore - CSS imports don't have type declarations
       await import('leaflet/dist/leaflet.css');
 
       if (!mapContainerRef.current) return;

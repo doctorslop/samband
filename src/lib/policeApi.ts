@@ -99,7 +99,7 @@ const HTML_ENTITIES: Record<string, string> = {
   'copy': '©', 'reg': '®', 'trade': '™', 'euro': '€', 'pound': '£', 'yen': '¥',
   'cent': '¢', 'deg': '°', 'plusmn': '±', 'times': '×', 'divide': '÷',
   'frac12': '½', 'frac14': '¼', 'frac34': '¾',
-  'hellip': '…', 'mdash': '—', 'ndash': '–', 'lsquo': ''', 'rsquo': ''',
+  'hellip': '…', 'mdash': '—', 'ndash': '–', 'lsquo': "'", 'rsquo': "'",
   'ldquo': '"', 'rdquo': '"', 'bull': '•', 'middot': '·',
   // Other Nordic/European characters
   'eacute': 'é', 'Eacute': 'É', 'egrave': 'è', 'Egrave': 'È',
