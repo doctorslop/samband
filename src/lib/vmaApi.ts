@@ -5,12 +5,46 @@ import path from 'path';
 const VMA_API_URL = 'https://vmaapi.sr.se/api/v3/alerts/feed.atom';
 const VMA_API_TIMEOUT = 15000;
 const USER_AGENT = 'FreshRSS/1.28.0 (Linux; https://freshrss.org)';
-const VMA_CACHE_FILE = path.join(process.cwd(), 'data', 'vma_cache.json');
+const DATA_DIR = path.join(process.cwd(), 'data');
+const VMA_CACHE_FILE = path.join(DATA_DIR, 'vma_cache.json');
 const VMA_CACHE_TTL = 300; // 5 minutes
+
+// HTML entities map for decoding
+const HTML_ENTITIES: Record<string, string> = {
+  'aring': 'å', 'Aring': 'Å', 'auml': 'ä', 'Auml': 'Ä', 'ouml': 'ö', 'Ouml': 'Ö',
+  'nbsp': ' ', 'amp': '&', 'lt': '<', 'gt': '>', 'quot': '"', 'apos': "'",
+  'eacute': 'é', 'egrave': 'è', 'aacute': 'á', 'agrave': 'à', 'oacute': 'ó',
+  'uacute': 'ú', 'iacute': 'í', 'ntilde': 'ñ', 'ccedil': 'ç', 'uuml': 'ü',
+  'oslash': 'ø', 'Oslash': 'Ø', 'aelig': 'æ', 'AElig': 'Æ',
+  'hellip': '…', 'mdash': '—', 'ndash': '–',
+};
+
+function decodeHtmlEntities(text: string): string {
+  let decoded = text.replace(/&([a-zA-Z]+);/g, (match, entity) => {
+    return HTML_ENTITIES[entity] || match;
+  });
+  decoded = decoded.replace(/&#x([0-9A-Fa-f]+);/g, (_, hex) =>
+    String.fromCharCode(parseInt(hex, 16))
+  );
+  decoded = decoded.replace(/&#(\d+);/g, (_, dec) =>
+    String.fromCharCode(parseInt(dec, 10))
+  );
+  return decoded;
+}
 
 interface VmaCache {
   timestamp: number;
   data: VMAResponse;
+}
+
+function ensureDataDir(): void {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+  } catch {
+    // Ignore directory creation errors
+  }
 }
 
 function getVmaCache(): VMAResponse | null {
@@ -34,6 +68,7 @@ function getVmaCache(): VMAResponse | null {
 
 function saveVmaCache(data: VMAResponse): void {
   try {
+    ensureDataDir();
     const cache: VmaCache = {
       timestamp: Math.floor(Date.now() / 1000),
       data,
@@ -87,17 +122,19 @@ function parseAtomEntry(entry: string): ParsedAlert | null {
 
   const id = idMatch[1];
 
-  // Extract title
+  // Extract title and decode entities
   const titleMatch = entry.match(/<title[^>]*>([^<]*)<\/title>/);
-  const title = titleMatch?.[1] || 'VMA';
+  const title = decodeHtmlEntities(titleMatch?.[1] || 'VMA');
 
-  // Extract summary
+  // Extract summary and decode entities
   const summaryMatch = entry.match(/<summary[^>]*>([^<]*)<\/summary>/);
-  const summary = summaryMatch?.[1] || '';
+  const summary = decodeHtmlEntities(summaryMatch?.[1] || '');
 
-  // Extract content
+  // Extract content and decode entities
   const contentMatch = entry.match(/<content[^>]*>([\s\S]*?)<\/content>/);
-  const content = contentMatch?.[1]?.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').trim() || '';
+  let content = contentMatch?.[1]?.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').trim() || '';
+  // Remove HTML tags and decode entities
+  content = decodeHtmlEntities(content.replace(/<[^>]+>/g, ''));
 
   // Extract published/updated
   const publishedMatch = entry.match(/<published>([^<]*)<\/published>/);

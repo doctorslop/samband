@@ -87,6 +87,49 @@ export async function refreshEventsIfNeeded(): Promise<RefreshResult> {
   }
 }
 
+// Map of HTML named entities to their character equivalents
+// Includes Swedish characters and common entities
+const HTML_ENTITIES: Record<string, string> = {
+  // Swedish characters
+  'aring': 'å', 'Aring': 'Å',
+  'auml': 'ä', 'Auml': 'Ä',
+  'ouml': 'ö', 'Ouml': 'Ö',
+  // Common entities
+  'nbsp': ' ', 'amp': '&', 'lt': '<', 'gt': '>', 'quot': '"', 'apos': "'",
+  'copy': '©', 'reg': '®', 'trade': '™', 'euro': '€', 'pound': '£', 'yen': '¥',
+  'cent': '¢', 'deg': '°', 'plusmn': '±', 'times': '×', 'divide': '÷',
+  'frac12': '½', 'frac14': '¼', 'frac34': '¾',
+  'hellip': '…', 'mdash': '—', 'ndash': '–', 'lsquo': ''', 'rsquo': ''',
+  'ldquo': '"', 'rdquo': '"', 'bull': '•', 'middot': '·',
+  // Other Nordic/European characters
+  'eacute': 'é', 'Eacute': 'É', 'egrave': 'è', 'Egrave': 'È',
+  'aacute': 'á', 'Aacute': 'Á', 'agrave': 'à', 'Agrave': 'À',
+  'oacute': 'ó', 'Oacute': 'Ó', 'ograve': 'ò', 'Ograve': 'Ò',
+  'uacute': 'ú', 'Uacute': 'Ú', 'ugrave': 'ù', 'Ugrave': 'Ù',
+  'iacute': 'í', 'Iacute': 'Í', 'igrave': 'ì', 'Igrave': 'Ì',
+  'ntilde': 'ñ', 'Ntilde': 'Ñ', 'ccedil': 'ç', 'Ccedil': 'Ç',
+  'uuml': 'ü', 'Uuml': 'Ü', 'oslash': 'ø', 'Oslash': 'Ø',
+  'aelig': 'æ', 'AElig': 'Æ', 'szlig': 'ß',
+};
+
+// Decode all HTML entities (named and numeric)
+export function decodeHtmlEntities(text: string): string {
+  // First decode named entities
+  let decoded = text.replace(/&([a-zA-Z]+);/g, (match, entity) => {
+    return HTML_ENTITIES[entity] || match;
+  });
+
+  // Decode numeric entities (&#xNN; hex and &#NNN; decimal)
+  decoded = decoded.replace(/&#x([0-9A-Fa-f]+);/g, (_, hex) =>
+    String.fromCharCode(parseInt(hex, 16))
+  );
+  decoded = decoded.replace(/&#(\d+);/g, (_, dec) =>
+    String.fromCharCode(parseInt(dec, 10))
+  );
+
+  return decoded;
+}
+
 // Fetch event details from polisen.se
 export async function fetchDetailsText(url: string): Promise<string | null> {
   const absoluteUrl = url.startsWith('http') ? url : 'https://polisen.se' + url;
@@ -124,18 +167,10 @@ export async function fetchDetailsText(url: string): Promise<string | null> {
 
     while ((match = pRegex.exec(content)) !== null) {
       // Remove HTML tags from paragraph content
-      let text = match[1]
-        .replace(/<[^>]+>/g, '')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&apos;/g, "'");
+      let text = match[1].replace(/<[^>]+>/g, '');
 
-      // Decode numeric HTML entities (&#xNN; and &#NNN;)
-      text = text.replace(/&#x([0-9A-Fa-f]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
-      text = text.replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(parseInt(dec, 10)));
+      // Decode all HTML entities (named and numeric)
+      text = decodeHtmlEntities(text);
 
       text = text.trim();
 
