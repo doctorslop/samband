@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import EventCard from './EventCard';
 import { FormattedEvent } from '@/types';
 
@@ -27,6 +27,19 @@ export default function EventList({
   const [hasMore, setHasMore] = useState(initialHasMore);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
+
+  // Create a stable filter key to detect when filters change
+  const filterKey = useMemo(
+    () => `${filters.location}|${filters.type}|${filters.search}`,
+    [filters.location, filters.type, filters.search]
+  );
+
+  // Reset state when filters change (new initial events from server)
+  useEffect(() => {
+    setEvents(initialEvents);
+    setHasMore(initialHasMore);
+    setPage(1);
+  }, [filterKey, initialEvents, initialHasMore]);
 
   const loadMore = useCallback(async () => {
     if (loading || !hasMore) return;
