@@ -1,14 +1,13 @@
 # Sambandscentralen
 
-A real-time Swedish police event notification service built with Next.js. Fetches and displays police events from the Swedish Police API with interactive maps, statistics, and VMA (Important Public Announcements) integration.
+A real-time Swedish police event notification service built with Next.js. Fetches and displays police events from the Swedish Police API with interactive maps and statistics.
 
 ## Features
 
 - **Real-time Events** - Automatically fetches police events every 2 minutes
-- **Multiple Views** - List, Map, Statistics, and VMA views
+- **Multiple Views** - List, Map, and Statistics views
 - **Interactive Map** - Leaflet-powered map showing events from the last 24 hours
 - **Statistics Dashboard** - Visual charts showing event trends, top locations, and hourly distribution
-- **VMA Integration** - Displays Important Public Announcements from Sveriges Radio
 - **Advanced Filtering** - Filter by location, event type, or search terms
 - **Event Details** - Lazy-loaded detailed information for each event
 - **Responsive Design** - Works on desktop, tablet, and mobile
@@ -22,9 +21,7 @@ A real-time Swedish police event notification service built with Next.js. Fetche
 - **Database**: [SQLite](https://www.sqlite.org/) via [better-sqlite3](https://github.com/WiseLibs/better-sqlite3)
 - **Maps**: [Leaflet](https://leafletjs.com/) with [react-leaflet](https://react-leaflet.js.org/)
 - **Styling**: Custom CSS with CSS variables
-- **Data Sources**:
-  - [Swedish Police API](https://polisen.se/api/events)
-  - [VMA API (Sveriges Radio)](https://vmaapi.sr.se/)
+- **Data Source**: [Swedish Police API](https://polisen.se/api/events)
 
 ## Getting Started
 
@@ -71,8 +68,7 @@ samband/
 │   │   ├── globals.css         # Global styles
 │   │   └── api/                # API Route Handlers
 │   │       ├── events/         # GET /api/events
-│   │       ├── details/        # GET /api/details
-│   │       └── vma/            # GET /api/vma
+│   │       └── details/        # GET /api/details
 │   │
 │   ├── components/             # React Components
 │   │   ├── ClientApp.tsx       # Main client-side wrapper
@@ -83,14 +79,12 @@ samband/
 │   │   ├── Filters.tsx         # Search and filter controls
 │   │   ├── Header.tsx          # Sticky header with navigation
 │   │   ├── StatsView.tsx       # Statistics dashboard
-│   │   ├── VMAView.tsx         # VMA alerts view
 │   │   ├── Footer.tsx          # Footer with links
 │   │   └── ScrollToTop.tsx     # Scroll to top button
 │   │
 │   ├── lib/                    # Server-side utilities
 │   │   ├── db.ts               # SQLite database operations
 │   │   ├── policeApi.ts        # Police API client
-│   │   ├── vmaApi.ts           # VMA API client
 │   │   └── utils.ts            # Formatting utilities
 │   │
 │   └── types/                  # TypeScript definitions
@@ -152,24 +146,6 @@ Fetches detailed text content for a specific event from polisen.se.
 }
 ```
 
-### GET /api/vma
-
-Fetches VMA (Important Public Announcements) from Sveriges Radio.
-
-**Query Parameters:**
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `refresh` | string | Set to `1` to force cache refresh |
-
-**Response:**
-```json
-{
-  "success": true,
-  "current": [...],
-  "recent": [...]
-}
-```
-
 ## Database Schema
 
 The SQLite database stores events with the following structure:
@@ -214,7 +190,6 @@ No environment variables are required for basic operation. The application uses 
 |---------|-------|-------------|
 | Page revalidation | 120s | How often Server Components refetch data |
 | Police API cache | 120s | Minimum time between API calls |
-| VMA cache | 300s | VMA feed cache duration |
 
 ### Next.js Config
 
@@ -247,14 +222,6 @@ Dashboard with:
 - Hourly distribution (last 24h)
 - Top event types
 - Top locations
-
-### VMA View
-Important Public Announcements with:
-- Active alerts (highlighted)
-- Recent/historical alerts
-- Severity indicators
-- Expandable details
-- Links to official sources
 
 ## Event Types
 
@@ -341,7 +308,6 @@ npm run build
 │                    API Routes (on demand)                    │
 │  - /api/events - Pagination                                  │
 │  - /api/details - Lazy-load event details                   │
-│  - /api/vma - VMA alerts                                     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -369,14 +335,11 @@ The original PHP files are preserved in the repository for reference.
 
 ## License
 
-This project fetches data from public APIs. Please respect the terms of service of:
-- [Polisen.se](https://polisen.se)
-- [Sveriges Radio VMA API](https://sverigesradio.se)
+This project fetches data from public APIs. Please respect the terms of service of [Polisen.se](https://polisen.se).
 
 ## Acknowledgments
 
 - Swedish Police for the public events API
-- Sveriges Radio for the VMA feed
 - OpenStreetMap contributors
 - CartoDB for the dark map theme
 - Leaflet.js for mapping
