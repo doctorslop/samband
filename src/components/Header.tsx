@@ -93,14 +93,6 @@ export default function Header({ currentView, onViewChange }: HeaderProps) {
             >
               📊 <span className="label">Statistik</span>
             </button>
-            <button
-              type="button"
-              data-view="vma"
-              className={currentView === 'vma' ? 'active' : ''}
-              onClick={() => onViewChange('vma')}
-            >
-              ⚠️ <span className="label">VMA</span>
-            </button>
           </div>
           <div className="live-indicator">
             <span className="live-dot" />

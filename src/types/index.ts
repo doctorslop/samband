@@ -50,36 +50,6 @@ export interface EventFilters {
   to?: string;
 }
 
-// VMA types
-export interface VMAAlert {
-  id: string;
-  headline: string;
-  description: string;
-  instruction: string;
-  severity: string;
-  severityLabel: string;
-  severityClass: string;
-  urgency: string;
-  certainty: string;
-  msgType: string;
-  msgTypeLabel: string;
-  areas: string[];
-  areaText: string;
-  sentAt: string;
-  sentDate: string;
-  relativeTime: string;
-  expiresAt: string | null;
-  isActive: boolean;
-  web: string;
-}
-
-export interface VMAResponse {
-  success: boolean;
-  current: VMAAlert[];
-  recent: VMAAlert[];
-  error: string | null;
-}
-
 // Statistics types
 export interface DailyStats {
   date: string;

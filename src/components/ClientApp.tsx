@@ -7,7 +7,6 @@ import Header from './Header';
 import Filters from './Filters';
 import EventList from './EventList';
 import StatsView from './StatsView';
-import VMAView from './VMAView';
 import Footer from './Footer';
 import ScrollToTop from './ScrollToTop';
 import MapModal from './MapModal';
@@ -88,7 +87,7 @@ function ClientAppContent({
       <div className={`container view-${currentView}`}>
         <Header currentView={currentView} onViewChange={handleViewChange} />
 
-        {currentView !== 'map' && currentView !== 'stats' && currentView !== 'vma' && (
+        {currentView !== 'map' && currentView !== 'stats' && (
           <Filters
             locations={locations}
             types={types}
@@ -113,7 +112,6 @@ function ClientAppContent({
           </div>
 
           <StatsView stats={stats} isActive={currentView === 'stats'} />
-          <VMAView isActive={currentView === 'vma'} />
         </main>
 
         <Footer total={stats.total} shown={initialEvents.length} />

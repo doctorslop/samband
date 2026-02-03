@@ -25,7 +25,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: https://*.tile.openstreetmap.org blob:",
               "font-src 'self'",
-              "connect-src 'self' https://polisen.se https://vmaapi.sr.se",
+              "connect-src 'self' https://polisen.se",
               "frame-ancestors 'self'",
             ].join('; '),
           },
