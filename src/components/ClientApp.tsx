@@ -16,9 +16,12 @@ import { FormattedEvent, Statistics } from '@/types';
 const EventMap = dynamic(() => import('./EventMap'), {
   ssr: false,
   loading: () => (
-    <div id="mapContainer" className="map-container active">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-        <div className="spinner" />
+    <div className="map-wrapper active">
+      <div className="map-container map-loading">
+        <div className="map-loading-content">
+          <div className="spinner" />
+          <span>Laddar karta...</span>
+        </div>
       </div>
     </div>
   ),
