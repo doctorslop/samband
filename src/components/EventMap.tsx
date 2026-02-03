@@ -39,7 +39,7 @@ export default function EventMap({ events, isActive }: EventMapProps) {
         return !isNaN(eventDate.getTime()) && eventDate >= yesterday && eventDate <= now;
       });
 
-      const markers = L.layerGroup();
+      const markers = L.featureGroup();
       let eventCount = 0;
 
       recentEvents.forEach((e) => {

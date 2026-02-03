@@ -54,6 +54,15 @@ export default function Filters({ locations, types, currentView, filters }: Filt
     } else {
       setShowCustomLocation(false);
       setLocation(value);
+      // Navigate immediately when location is selected
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('view', currentView);
+      if (value) {
+        params.set('location', value);
+      } else {
+        params.delete('location');
+      }
+      router.push(`/?${params.toString()}`);
     }
   };
 
@@ -66,7 +75,11 @@ export default function Filters({ locations, types, currentView, filters }: Filt
   const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const params = new URLSearchParams(searchParams.toString());
     params.set('view', currentView);
-    params.set(e.target.name, e.target.value);
+    if (e.target.value) {
+      params.set(e.target.name, e.target.value);
+    } else {
+      params.delete(e.target.name);
+    }
     router.push(`/?${params.toString()}`);
   };
 
