@@ -124,14 +124,20 @@ export async function fetchDetailsText(url: string): Promise<string | null> {
 
     while ((match = pRegex.exec(content)) !== null) {
       // Remove HTML tags from paragraph content
-      const text = match[1]
+      let text = match[1]
         .replace(/<[^>]+>/g, '')
         .replace(/&nbsp;/g, ' ')
         .replace(/&amp;/g, '&')
         .replace(/&lt;/g, '<')
         .replace(/&gt;/g, '>')
         .replace(/&quot;/g, '"')
-        .trim();
+        .replace(/&apos;/g, "'");
+
+      // Decode numeric HTML entities (&#xNN; and &#NNN;)
+      text = text.replace(/&#x([0-9A-Fa-f]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+      text = text.replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(parseInt(dec, 10)));
+
+      text = text.trim();
 
       if (text) {
         paragraphs.push(text);
