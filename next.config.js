@@ -7,6 +7,8 @@ const nextConfig = {
       allowedOrigins: ['localhost:3000'],
     },
   },
+  // Transpile leaflet to avoid webpack issues
+  transpilePackages: ['leaflet', 'react-leaflet'],
   // Security headers
   async headers() {
     return [
@@ -33,7 +35,7 @@ const nextConfig = {
       },
     ];
   },
-  // Webpack config for better-sqlite3
+  // Webpack config for better-sqlite3 and leaflet
   webpack: (config, { isServer }) => {
     if (!isServer) {
       // Don't bundle better-sqlite3 on client
@@ -43,7 +45,23 @@ const nextConfig = {
         path: false,
         crypto: false,
       };
+
+      // Ensure leaflet is handled correctly on client
+      config.resolve.alias = {
+        ...config.resolve.alias,
+      };
     }
+
+    // Ignore CSS files from leaflet (we load via CDN)
+    // This prevents webpack from trying to process leaflet CSS imports
+    config.module.rules.push({
+      test: /leaflet[\\/]dist[\\/]leaflet\.css$/,
+      type: 'asset/resource',
+      generator: {
+        emit: false,
+      },
+    });
+
     return config;
   },
 };
