@@ -1,84 +1,129 @@
 'use client';
 
-import { useEffect, useRef, useCallback, memo } from 'react';
+import { useEffect, useRef, useState, memo } from 'react';
 import { FormattedEvent } from '@/types';
+import L from 'leaflet';
 
 interface HeatmapViewProps {
   events: FormattedEvent[];
   isActive: boolean;
 }
 
-// Extend Leaflet types for heat plugin
+// Extend Window and Leaflet types for heat plugin
 declare global {
   interface Window {
-    L: typeof import('leaflet') & {
-      heatLayer: (
-        latlngs: [number, number, number][],
-        options?: {
-          radius?: number;
-          blur?: number;
-          maxZoom?: number;
-          max?: number;
-          minOpacity?: number;
-          gradient?: Record<number, string>;
-        }
-      ) => L.Layer;
-    };
+    L: typeof L;
   }
 }
 
+interface HeatLayerInstance extends L.Layer {
+  setLatLngs: (latlngs: [number, number, number][]) => void;
+}
+
+type HeatLayerFactory = (latlngs: [number, number, number][], options?: Record<string, unknown>) => HeatLayerInstance;
+
+// Extended L type with heatLayer
+interface LeafletWithHeat {
+  heatLayer?: HeatLayerFactory;
+}
+
 function HeatmapView({ events, isActive }: HeatmapViewProps) {
-  const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const heatLayerRef = useRef<L.Layer | null>(null);
+  const mapInstanceRef = useRef<L.Map | null>(null);
+  const heatLayerRef = useRef<HeatLayerInstance | null>(null);
   const infoControlRef = useRef<L.Control | null>(null);
-  const initializingRef = useRef(false);
-  const leafletRef = useRef<typeof import('leaflet') | null>(null);
-  const heatPluginLoadedRef = useRef(false);
-  const eventsRef = useRef<FormattedEvent[]>(events);
+  const [isReady, setIsReady] = useState(false);
+  const [heatLayerFn, setHeatLayerFn] = useState<HeatLayerFactory | null>(null);
 
-  // Update events ref when events change
-  eventsRef.current = events;
+  // Load the heat plugin once
+  useEffect(() => {
+    // Set window.L for plugins that require it
+    if (typeof window !== 'undefined') {
+      window.L = L;
+    }
 
-  // Load leaflet.heat plugin dynamically
-  const loadHeatPlugin = useCallback((): Promise<void> => {
-    return new Promise((resolve, reject) => {
+    // Load heat plugin script
+    const loadHeatPlugin = async () => {
+      const LWithHeat = L as unknown as LeafletWithHeat;
+
       // Check if already loaded
-      if (heatPluginLoadedRef.current) {
-        resolve();
-        return;
-      }
-      // Check if heatLayer exists on window.L
-      if (typeof window !== 'undefined' && window.L && 'heatLayer' in window.L) {
-        heatPluginLoadedRef.current = true;
-        resolve();
+      if (LWithHeat.heatLayer) {
+        setHeatLayerFn(() => LWithHeat.heatLayer as HeatLayerFactory);
+        setIsReady(true);
         return;
       }
 
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js';
-      script.async = true;
-      script.onload = () => {
-        heatPluginLoadedRef.current = true;
-        resolve();
-      };
-      script.onerror = () => reject(new Error('Failed to load leaflet.heat'));
-      document.head.appendChild(script);
-    });
+      return new Promise<void>((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js';
+        script.async = true;
+        script.onload = () => {
+          const LAfterLoad = L as unknown as LeafletWithHeat;
+          if (LAfterLoad.heatLayer) {
+            setHeatLayerFn(() => LAfterLoad.heatLayer as HeatLayerFactory);
+            setIsReady(true);
+            resolve();
+          } else {
+            reject(new Error('heatLayer not found after loading script'));
+          }
+        };
+        script.onerror = () => reject(new Error('Failed to load leaflet.heat'));
+        document.head.appendChild(script);
+      });
+    };
+
+    loadHeatPlugin().catch(console.error);
   }, []);
 
-  // Create heatmap from events
-  const updateHeatmap = useCallback(() => {
-    const L = leafletRef.current;
-    const map = mapRef.current;
-    if (!L || !map || !window.L?.heatLayer) return;
+  // Initialize map when active and ready
+  useEffect(() => {
+    if (!isActive || !isReady || !mapContainerRef.current) return;
 
-    // Remove existing heat layer
+    // Already initialized
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.invalidateSize();
+      return;
+    }
+
+    // Create map centered on Sweden
+    const map = L.map(mapContainerRef.current, {
+      center: [62.5, 17.5],
+      zoom: 5,
+      zoomControl: true,
+      attributionControl: true,
+    });
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '© OpenStreetMap',
+      maxZoom: 18,
+    }).addTo(map);
+
+    mapInstanceRef.current = map;
+
+    // Ensure map is properly sized
+    setTimeout(() => {
+      map.invalidateSize();
+    }, 100);
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+      heatLayerRef.current = null;
+      infoControlRef.current = null;
+    };
+  }, [isActive, isReady]);
+
+  // Update heatmap data when events change
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !heatLayerFn || !isActive) return;
+
+    // Remove existing layers
     if (heatLayerRef.current) {
       map.removeLayer(heatLayerRef.current);
     }
-
-    // Remove old info control
     if (infoControlRef.current) {
       map.removeControl(infoControlRef.current);
     }
@@ -86,32 +131,29 @@ function HeatmapView({ events, isActive }: HeatmapViewProps) {
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    // Get events from last 7 days with GPS coordinates
-    const recentEvents = eventsRef.current.filter((e) => {
-      const eventTimeStr = e.date?.iso || e.datetime;
-      if (!eventTimeStr || !e.gps) return false;
-      const eventDate = new Date(eventTimeStr);
-      return !isNaN(eventDate.getTime()) && eventDate >= weekAgo && eventDate <= now;
-    });
-
-    // Convert events to heatmap data points [lat, lng, intensity]
+    // Filter events with GPS from last 7 days
     const heatData: [number, number, number][] = [];
 
-    recentEvents.forEach((e) => {
-      if (e.gps) {
-        const [lat, lng] = e.gps.split(',').map(Number);
-        if (!isNaN(lat) && !isNaN(lng)) {
-          // Calculate intensity based on recency (more recent = higher intensity)
-          const eventDate = new Date(e.date?.iso || e.datetime);
-          const hoursAgo = (now.getTime() - eventDate.getTime()) / (1000 * 60 * 60);
-          const intensity = Math.max(0.3, 1 - (hoursAgo / (7 * 24))); // Scale from 0.3 to 1.0
-          heatData.push([lat, lng, intensity]);
-        }
-      }
+    events.forEach((e) => {
+      if (!e.gps) return;
+
+      const eventTimeStr = e.date?.iso || e.datetime;
+      if (!eventTimeStr) return;
+
+      const eventDate = new Date(eventTimeStr);
+      if (isNaN(eventDate.getTime()) || eventDate < weekAgo || eventDate > now) return;
+
+      const [lat, lng] = e.gps.split(',').map(Number);
+      if (isNaN(lat) || isNaN(lng)) return;
+
+      // Intensity based on recency
+      const hoursAgo = (now.getTime() - eventDate.getTime()) / (1000 * 60 * 60);
+      const intensity = Math.max(0.3, 1 - (hoursAgo / (7 * 24)));
+      heatData.push([lat, lng, intensity]);
     });
 
-    // Create heat layer with custom gradient
-    heatLayerRef.current = window.L.heatLayer(heatData, {
+    // Create heat layer
+    const heatLayer = heatLayerFn(heatData, {
       radius: 25,
       blur: 15,
       maxZoom: 10,
@@ -127,9 +169,10 @@ function HeatmapView({ events, isActive }: HeatmapViewProps) {
       },
     });
 
-    heatLayerRef.current.addTo(map);
+    heatLayer.addTo(map);
+    heatLayerRef.current = heatLayer;
 
-    // Add info control
+    // Add legend control
     const InfoControl = L.Control.extend({
       onAdd: function () {
         const div = L.DomUtil.create('div', 'map-info heatmap-info');
@@ -152,92 +195,16 @@ function HeatmapView({ events, isActive }: HeatmapViewProps) {
       },
     });
 
-    infoControlRef.current = new InfoControl({ position: 'topright' });
-    infoControlRef.current.addTo(map);
-  }, []);
+    const infoControl = new InfoControl({ position: 'topright' });
+    infoControl.addTo(map);
+    infoControlRef.current = infoControl;
+  }, [events, heatLayerFn, isActive]);
 
-  // Initialize map only once
+  // Handle visibility changes
   useEffect(() => {
-    if (!isActive) return;
-    if (mapRef.current || initializingRef.current) return;
-
-    initializingRef.current = true;
-
-    const initMap = async () => {
-      try {
-        const L = await import('leaflet');
-        leafletRef.current = L;
-
-        // Load heat plugin
-        await loadHeatPlugin();
-
-        if (!mapContainerRef.current) {
-          initializingRef.current = false;
-          return;
-        }
-
-        // Double-check the container doesn't already have a map
-        if (mapRef.current) {
-          initializingRef.current = false;
-          return;
-        }
-
-        // Create map with Sweden centered
-        const map = L.map(mapContainerRef.current, {
-          center: [62.5, 17.5],
-          zoom: 5,
-          zoomControl: true,
-          attributionControl: true,
-        });
-
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-          attribution: '© OpenStreetMap',
-          maxZoom: 18,
-        }).addTo(map);
-
-        mapRef.current = map;
-        initializingRef.current = false;
-
-        // Add heatmap after map is ready
-        updateHeatmap();
-
-        // Invalidate size after a short delay to ensure container is properly sized
-        setTimeout(() => {
-          map.invalidateSize();
-        }, 100);
-      } catch (error) {
-        console.error('Failed to initialize heatmap:', error);
-        initializingRef.current = false;
-      }
-    };
-
-    initMap();
-
-    return () => {
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
-      }
-      heatLayerRef.current = null;
-      infoControlRef.current = null;
-      leafletRef.current = null;
-      initializingRef.current = false;
-    };
-  }, [isActive, updateHeatmap, loadHeatPlugin]);
-
-  // Update heatmap when events change (but don't reinitialize the map)
-  useEffect(() => {
-    if (mapRef.current && leafletRef.current && heatPluginLoadedRef.current) {
-      updateHeatmap();
-    }
-  }, [events, updateHeatmap]);
-
-  // Invalidate map size when becoming active (handles visibility changes)
-  useEffect(() => {
-    if (isActive && mapRef.current) {
-      // Use requestAnimationFrame to ensure the container is visible first
+    if (isActive && mapInstanceRef.current) {
       requestAnimationFrame(() => {
-        mapRef.current?.invalidateSize();
+        mapInstanceRef.current?.invalidateSize();
       });
     }
   }, [isActive]);
@@ -256,5 +223,4 @@ function HeatmapView({ events, isActive }: HeatmapViewProps) {
   );
 }
 
-// Memoize to prevent unnecessary re-renders from parent
 export default memo(HeatmapView);
