@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, Suspense } from 'react';
+import { useState, useCallback, Suspense, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import Header from './Header';
@@ -10,6 +10,7 @@ import StatsView from './StatsView';
 import Footer from './Footer';
 import ScrollToTop from './ScrollToTop';
 import MapModal from './MapModal';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { FormattedEvent, Statistics } from '@/types';
 
 // Dynamic import for EventMap to avoid SSR issues with Leaflet
@@ -106,6 +107,33 @@ function ClientAppContent({
     },
     [router]
   );
+
+  // Focus search input
+  const focusSearch = useCallback(() => {
+    const searchInput = document.querySelector('.search-input') as HTMLInputElement;
+    if (searchInput) {
+      searchInput.focus();
+      searchInput.select();
+    }
+  }, []);
+
+  // Scroll to top
+  const scrollToTop = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
+  // Keyboard shortcuts handlers - memoized to prevent re-renders
+  const shortcutHandlers = useMemo(() => ({
+    onSearch: focusSearch,
+    onEscape: handleCloseMapModal,
+    onListView: () => handleViewChange('list'),
+    onMapView: () => handleViewChange('map'),
+    onStatsView: () => handleViewChange('stats'),
+    onScrollTop: scrollToTop,
+  }), [focusSearch, handleCloseMapModal, handleViewChange, scrollToTop]);
+
+  // Register keyboard shortcuts
+  useKeyboardShortcuts(shortcutHandlers);
 
   return (
     <>

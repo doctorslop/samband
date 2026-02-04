@@ -2,8 +2,9 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Sambandscentralen',
-  description: 'Polisens händelsenotiser i realtid',
+  title: 'Sambandscentralen - Polishändelser i realtid',
+  description: 'Följ polisens händelser i realtid över hela Sverige. Se aktuella polishändelser på karta, filtrera efter plats och händelsetyp.',
+  keywords: ['polis', 'polishändelser', 'Sverige', 'realtid', 'brott', 'olyckor', 'karta'],
   manifest: '/manifest.json',
   icons: {
     icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>👮</text></svg>",
@@ -12,6 +13,12 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: 'default',
     title: 'Sambandscentralen',
+  },
+  openGraph: {
+    title: 'Sambandscentralen - Polishändelser i realtid',
+    description: 'Följ polisens händelser i realtid över hela Sverige.',
+    type: 'website',
+    locale: 'sv_SE',
   },
 };
 
@@ -41,7 +48,12 @@ export default function RootLayout({
           crossOrigin=""
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <a href="#eventsGrid" className="skip-link">
+          Hoppa till innehåll
+        </a>
+        {children}
+      </body>
     </html>
   );
 }
