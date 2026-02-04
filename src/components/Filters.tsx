@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 interface FiltersProps {
@@ -14,6 +14,23 @@ interface FiltersProps {
   };
 }
 
+// Custom hook for debouncing
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
 export default function Filters({ locations, types, currentView, filters }: FiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -23,6 +40,10 @@ export default function Filters({ locations, types, currentView, filters }: Filt
   const [search, setSearch] = useState(filters.search);
   const [location, setLocation] = useState(filters.location);
   const [type, setType] = useState(filters.type);
+  const isInitialMount = useRef(true);
+
+  // Debounce search input (300ms delay)
+  const debouncedSearch = useDebounce(search, 300);
 
   // Check if current location is not in dropdown
   useEffect(() => {
@@ -31,6 +52,42 @@ export default function Filters({ locations, types, currentView, filters }: Filt
       setCustomLocation(filters.location);
     }
   }, [filters.location, locations]);
+
+  // Auto-search when debounced search value changes
+  useEffect(() => {
+    // Skip the initial mount to prevent unnecessary navigation
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    // Only auto-search if the debounced value is different from filters.search
+    if (debouncedSearch !== filters.search) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('view', currentView);
+      if (debouncedSearch) {
+        params.set('search', debouncedSearch);
+      } else {
+        params.delete('search');
+      }
+      router.push(`/?${params.toString()}`);
+    }
+  }, [debouncedSearch, currentView, searchParams, router, filters.search]);
+
+  // Check if any filters are active
+  const hasActiveFilters = filters.location || filters.type || filters.search;
+
+  // Clear all filters at once
+  const clearAllFilters = useCallback(() => {
+    const params = new URLSearchParams();
+    params.set('view', currentView);
+    setSearch('');
+    setLocation('');
+    setType('');
+    setShowCustomLocation(false);
+    setCustomLocation('');
+    router.push(`/?${params.toString()}`);
+  }, [currentView, router]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,9 +148,9 @@ export default function Filters({ locations, types, currentView, filters }: Filt
   };
 
   return (
-    <section className="filters-section">
+    <section className="filters-section" role="search" aria-label="Filtrera händelser">
       <div className="search-bar">
-        <form className="search-form" onSubmit={handleSubmit}>
+        <form className="search-form" onSubmit={handleSubmit} role="search">
           <input type="hidden" name="view" value={currentView} />
           <div className="search-input-wrapper">
             <input
@@ -103,7 +160,12 @@ export default function Filters({ locations, types, currentView, filters }: Filt
               placeholder="Sök händelser..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              aria-label="Sök händelser"
+              title="Sök efter nyckelord i händelser (tryck / för snabbsökning)"
             />
+            <span className="keyboard-hint" aria-hidden="true">
+              <kbd className="kbd">/</kbd>
+            </span>
           </div>
 
           {!showCustomLocation ? (
@@ -112,6 +174,8 @@ export default function Filters({ locations, types, currentView, filters }: Filt
               name="location"
               value={location}
               onChange={(e) => handleLocationChange(e.target.value)}
+              aria-label="Välj plats"
+              title="Filtrera efter plats eller välj 'Annan plats' för fritext"
             >
               <option value="">Alla platser</option>
               {locations.map((loc) => (
@@ -131,11 +195,15 @@ export default function Filters({ locations, types, currentView, filters }: Filt
                 value={customLocation}
                 onChange={(e) => setCustomLocation(e.target.value)}
                 autoFocus
+                aria-label="Ange egen plats"
+                title="Skriv in ett platsnamn, t.ex. stad eller område"
               />
               <button
                 type="button"
                 className="custom-location-cancel"
                 onClick={handleCancelCustomLocation}
+                aria-label="Avbryt anpassad plats"
+                title="Återgå till platslistan"
               >
                 ×
               </button>
@@ -150,6 +218,8 @@ export default function Filters({ locations, types, currentView, filters }: Filt
               setType(e.target.value);
               handleSelectChange(e);
             }}
+            aria-label="Välj händelsetyp"
+            title="Filtrera efter typ av händelse"
           >
             <option value="">Alla typer</option>
             {types.map((t) => (
@@ -159,38 +229,65 @@ export default function Filters({ locations, types, currentView, filters }: Filt
             ))}
           </select>
 
-          <button className="btn" type="submit">
+          <button className="btn" type="submit" title="Tillämpa filter">
             Filtrera
           </button>
         </form>
       </div>
 
-      {(filters.location || filters.type || filters.search) && (
-        <div className="active-filters">
+      {hasActiveFilters && (
+        <div className="active-filters" role="status" aria-live="polite" aria-label="Aktiva filter">
           {filters.location && (
             <span className="filter-tag">
               📍 {filters.location}{' '}
-              <a href="#" onClick={(e) => { e.preventDefault(); removeFilter('location'); }}>
+              <button
+                type="button"
+                className="filter-tag-remove"
+                onClick={() => removeFilter('location')}
+                aria-label={`Ta bort platsfilter: ${filters.location}`}
+                title="Ta bort detta filter"
+              >
                 ×
-              </a>
+              </button>
             </span>
           )}
           {filters.type && (
             <span className="filter-tag">
               🏷️ {filters.type}{' '}
-              <a href="#" onClick={(e) => { e.preventDefault(); removeFilter('type'); }}>
+              <button
+                type="button"
+                className="filter-tag-remove"
+                onClick={() => removeFilter('type')}
+                aria-label={`Ta bort typfilter: ${filters.type}`}
+                title="Ta bort detta filter"
+              >
                 ×
-              </a>
+              </button>
             </span>
           )}
           {filters.search && (
             <span className="filter-tag">
               🔍 {filters.search}{' '}
-              <a href="#" onClick={(e) => { e.preventDefault(); removeFilter('search'); }}>
+              <button
+                type="button"
+                className="filter-tag-remove"
+                onClick={() => removeFilter('search')}
+                aria-label={`Ta bort sökfilter: ${filters.search}`}
+                title="Ta bort detta filter"
+              >
                 ×
-              </a>
+              </button>
             </span>
           )}
+          <button
+            type="button"
+            className="clear-all-filters"
+            onClick={clearAllFilters}
+            aria-label="Rensa alla filter"
+            title="Ta bort alla aktiva filter"
+          >
+            Rensa alla
+          </button>
         </div>
       )}
     </section>
