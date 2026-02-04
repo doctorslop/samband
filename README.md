@@ -8,11 +8,14 @@ A real-time Swedish police event notification service built with Next.js. Fetche
 - **Multiple Views** - List, Map, and Statistics views
 - **Interactive Map** - Leaflet-powered map showing events from the last 24 hours
 - **Statistics Dashboard** - Visual charts showing event trends, top locations, and hourly distribution
+- **Operational Dashboard** - Hidden system monitoring page with fetch logs and health metrics
 - **Advanced Filtering** - Filter by location, event type, or search terms
 - **Event Details** - Lazy-loaded detailed information for each event
+- **Keyboard Shortcuts** - Quick navigation with keyboard shortcuts (1/2/3 for views, / for search)
 - **Responsive Design** - Works on desktop, tablet, and mobile
 - **PWA Support** - Installable as a Progressive Web App
 - **Dark Theme** - Modern dark UI optimized for readability
+- **Rate Limiting** - API protection with per-IP rate limiting
 
 ## Tech Stack
 
@@ -20,6 +23,7 @@ A real-time Swedish police event notification service built with Next.js. Fetche
 - **Language**: [TypeScript](https://www.typescriptlang.org/)
 - **Database**: [SQLite](https://www.sqlite.org/) via [better-sqlite3](https://github.com/WiseLibs/better-sqlite3)
 - **Maps**: [Leaflet](https://leafletjs.com/) with [react-leaflet](https://react-leaflet.js.org/)
+- **Testing**: [Jest](https://jestjs.io/) with [Testing Library](https://testing-library.com/)
 - **Styling**: Custom CSS with CSS variables
 - **Data Source**: [Swedish Police API](https://polisen.se/api/events)
 
@@ -66,6 +70,8 @@ samband/
 │   │   ├── layout.tsx          # Root layout with metadata
 │   │   ├── page.tsx            # Home page (Server Component)
 │   │   ├── globals.css         # Global styles
+│   │   ├── stats/              # Operational dashboard
+│   │   │   └── page.tsx        # System status page
 │   │   └── api/                # API Route Handlers
 │   │       ├── events/         # GET /api/events
 │   │       └── details/        # GET /api/details
@@ -75,17 +81,27 @@ samband/
 │   │   ├── EventCard.tsx       # Individual event card
 │   │   ├── EventList.tsx       # Event grid with pagination
 │   │   ├── EventMap.tsx        # Full map view (Leaflet)
+│   │   ├── EventSkeleton.tsx   # Loading skeleton placeholder
 │   │   ├── MapModal.tsx        # Single location map modal
 │   │   ├── Filters.tsx         # Search and filter controls
 │   │   ├── Header.tsx          # Sticky header with navigation
 │   │   ├── StatsView.tsx       # Statistics dashboard
+│   │   ├── OperationalDashboard.tsx  # System monitoring dashboard
 │   │   ├── Footer.tsx          # Footer with links
 │   │   └── ScrollToTop.tsx     # Scroll to top button
+│   │
+│   ├── hooks/                  # Custom React hooks
+│   │   └── useKeyboardShortcuts.ts  # Keyboard shortcut handling
 │   │
 │   ├── lib/                    # Server-side utilities
 │   │   ├── db.ts               # SQLite database operations
 │   │   ├── policeApi.ts        # Police API client
+│   │   ├── rateLimit.ts        # API rate limiting
 │   │   └── utils.ts            # Formatting utilities
+│   │
+│   ├── __tests__/              # Test files
+│   │   ├── utils.test.ts       # Utility function tests
+│   │   └── htmlEntities.test.ts # HTML entity tests
 │   │
 │   └── types/                  # TypeScript definitions
 │       └── index.ts            # Shared type definitions
@@ -191,6 +207,13 @@ No environment variables are required for basic operation. The application uses 
 | Page revalidation | 120s | How often Server Components refetch data |
 | Police API cache | 120s | Minimum time between API calls |
 
+### Rate Limiting
+
+API endpoints are protected by in-memory rate limiting:
+- 60 requests per minute per IP address
+- Returns 429 status with `Retry-After` header when exceeded
+- Includes `X-RateLimit-*` headers in responses
+
 ### Next.js Config
 
 Key settings in `next.config.js`:
@@ -223,6 +246,16 @@ Dashboard with:
 - Top event types
 - Top locations
 
+### Operational Dashboard (/stats)
+Hidden system monitoring page at `/stats` with:
+- System health overview (uptime, success rate, data freshness)
+- Fetch operation statistics (total, successful, failed)
+- Hourly fetch chart (24h)
+- Database health metrics (total events, locations, event types)
+- Data coverage (oldest/newest events, GPS coverage)
+- Recent error log
+- Recent fetch log table
+
 ## Event Types
 
 Events are color-coded by type:
@@ -238,7 +271,10 @@ Events are color-coded by type:
 | Bedrägeri (Fraud) | Purple | 🕵️ |
 | Skadegörelse (Vandalism) | Amber | 🔨 |
 | Stöld (Theft) | Orange | 🔓 |
+| Stöld/inbrott | Orange | 🔓 |
 | Mord/dråp (Murder) | Dark Red | ⚠️ |
+| Ofredande (Harassment) | Rose | 🚨 |
+| Rattfylleri (DUI) | Red | 🚗 |
 | Sammanfattning (Summary) | Green | 📊 |
 | Default | Yellow | 📌 |
 
@@ -249,6 +285,17 @@ The application is a Progressive Web App with:
 - Offline-capable manifest
 - App shortcuts for Map and Statistics views
 - Custom app icon
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `1` | Switch to List view |
+| `2` | Switch to Map view |
+| `3` | Switch to Statistics view |
+| `/` or `Ctrl+K` | Focus search input |
+| `Escape` | Close modals, clear focus |
+| `t` or `Home` | Scroll to top |
 
 ## Development
 
@@ -264,6 +311,14 @@ The development server runs on port 3000 with hot reload.
 
 ```bash
 npm run lint
+```
+
+### Testing
+
+```bash
+npm run test           # Run tests once
+npm run test:watch     # Run tests in watch mode
+npm run test:coverage  # Run tests with coverage report
 ```
 
 ### Type Checking
@@ -317,21 +372,6 @@ npm run build
 - Firefox
 - Safari
 - Edge
-
-## Migration from PHP
-
-This project was converted from a PHP application. Key differences:
-
-| Aspect | PHP Version | Next.js Version |
-|--------|-------------|-----------------|
-| Rendering | Server-side PHP | Server Components + Client hydration |
-| Routing | Query params (`?view=`) | App Router (URL state preserved) |
-| API | PHP endpoints | Route Handlers |
-| Database | PDO | better-sqlite3 |
-| Frontend | Vanilla JS | React Components |
-| Build | None | Webpack via Next.js |
-
-The original PHP files are preserved in the repository for reference.
 
 ## License
 
