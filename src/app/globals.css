@@ -1578,3 +1578,53 @@ footer {
 @media print { body::before, .scroll-top, .refresh-btn, .search-bar, .view-toggle, .theme-toggle, .install-prompt { display: none !important; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
+/* Skip link for accessibility - hidden until focused */
+.skip-link {
+    position: absolute;
+    top: -100px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--accent);
+    color: var(--primary);
+    padding: 12px 24px;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    z-index: 1000;
+    transition: top 0.2s;
+    text-decoration: none;
+}
+.skip-link:focus {
+    top: 10px;
+}
+
+/* Keyboard shortcut hints */
+.keyboard-hint {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: none;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--text-muted);
+    pointer-events: none;
+}
+.search-input-wrapper:focus-within .keyboard-hint { display: none; }
+@media (min-width: 769px) {
+    .search-input-wrapper:not(:focus-within) .keyboard-hint { display: flex; }
+}
+.kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    padding: 2px 5px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 10px;
+    line-height: 1.2;
+}
