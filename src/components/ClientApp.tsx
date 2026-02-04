@@ -85,6 +85,28 @@ function ClientAppContent({
     setMapModal((prev) => ({ ...prev, isOpen: false }));
   }, []);
 
+  const handleTypeClick = useCallback(
+    (type: string) => {
+      setCurrentView('list');
+      const params = new URLSearchParams();
+      params.set('view', 'list');
+      params.set('type', type);
+      router.push(`/?${params.toString()}`, { scroll: false });
+    },
+    [router]
+  );
+
+  const handleLocationClick = useCallback(
+    (location: string) => {
+      setCurrentView('list');
+      const params = new URLSearchParams();
+      params.set('view', 'list');
+      params.set('location', location);
+      router.push(`/?${params.toString()}`, { scroll: false });
+    },
+    [router]
+  );
+
   return (
     <>
       <div className={`container view-${currentView}`}>
@@ -114,7 +136,12 @@ function ClientAppContent({
             <EventMap events={mapEvents} isActive={currentView === 'map'} />
           </div>
 
-          <StatsView stats={stats} isActive={currentView === 'stats'} />
+          <StatsView
+              stats={stats}
+              isActive={currentView === 'stats'}
+              onTypeClick={handleTypeClick}
+              onLocationClick={handleLocationClick}
+            />
         </main>
 
         <Footer total={stats.total} shown={initialEvents.length} />
