@@ -1,3 +1,0 @@
-# Deny all direct access to backup files
-Order allow,deny
-Deny from all
