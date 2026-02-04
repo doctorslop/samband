@@ -113,6 +113,10 @@ header {
     border-radius: 10px; display: flex; align-items: center; justify-content: center;
     font-size: 22px; box-shadow: 0 4px 16px var(--accent-glow);
     transition: transform 0.3s, width 0.3s ease, height 0.3s ease, min-width 0.3s ease, min-height 0.3s ease, font-size 0.3s ease;
+    /* Fix Firefox Android rendering artifacts */
+    transform: translateZ(0);
+    isolation: isolate;
+    -moz-appearance: none;
 }
 .logo:hover .logo-icon { transform: scale(1.05) rotate(-3deg); }
 .logo-icon.radio-playing { animation: radioGlow 1.5s ease-in-out infinite; }
@@ -147,6 +151,10 @@ header {
     padding: 4px;
     border: 1px solid var(--border);
     gap: 2px;
+    /* Fix Firefox Android rendering artifacts */
+    transform: translateZ(0);
+    isolation: isolate;
+    overflow: hidden;
 }
 .view-toggle button {
     padding: 8px 16px;
@@ -173,6 +181,8 @@ header {
     background: linear-gradient(135deg, var(--accent), var(--accent-dark));
     color: var(--primary);
     box-shadow: 0 2px 12px var(--accent-glow);
+    /* Fix Firefox Android rendering artifacts */
+    transform: translateZ(0);
 }
 .view-toggle button.active svg {
     transform: scale(1.1);
