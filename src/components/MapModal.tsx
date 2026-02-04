@@ -25,28 +25,21 @@ export default function MapModal({ isOpen, lat, lng, location, onClose }: MapMod
 
       if (!mapContainerRef.current) return;
 
-      if (!mapRef.current) {
-        mapRef.current = L.map(mapContainerRef.current).setView([lat, lng], 14);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-          attribution: '© OpenStreetMap',
-          maxZoom: 18,
-        }).addTo(mapRef.current);
-      } else {
-        mapRef.current.setView([lat, lng], 14);
-      }
+      // Always create a fresh map instance since the DOM container is recreated each time
+      mapRef.current = L.map(mapContainerRef.current).setView([lat, lng], 14);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '© OpenStreetMap',
+        maxZoom: 18,
+      }).addTo(mapRef.current);
 
-      if (markerRef.current) {
-        markerRef.current.setLatLng([lat, lng]);
-      } else {
-        markerRef.current = L.circleMarker([lat, lng], {
-          radius: 12,
-          fillColor: '#3b82f6',
-          color: '#fff',
-          weight: 3,
-          opacity: 1,
-          fillOpacity: 0.9,
-        }).addTo(mapRef.current);
-      }
+      markerRef.current = L.circleMarker([lat, lng], {
+        radius: 12,
+        fillColor: '#3b82f6',
+        color: '#fff',
+        weight: 3,
+        opacity: 1,
+        fillOpacity: 0.9,
+      }).addTo(mapRef.current);
 
       setTimeout(() => {
         mapRef.current?.invalidateSize();
@@ -54,6 +47,15 @@ export default function MapModal({ isOpen, lat, lng, location, onClose }: MapMod
     };
 
     initMap();
+
+    // Cleanup: destroy map when modal closes
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+      markerRef.current = null;
+    };
   }, [isOpen, lat, lng]);
 
   const handleEscape = useCallback((e: KeyboardEvent) => {

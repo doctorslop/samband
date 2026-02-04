@@ -6,9 +6,11 @@ import { Statistics } from '@/types';
 interface StatsViewProps {
   stats: Statistics;
   isActive: boolean;
+  onTypeClick?: (type: string) => void;
+  onLocationClick?: (location: string) => void;
 }
 
-function StatsView({ stats, isActive }: StatsViewProps) {
+function StatsView({ stats, isActive, onTypeClick, onLocationClick }: StatsViewProps) {
   const maxDaily = Math.max(...stats.daily.map(d => d.count), 1);
   const maxWeekday = Math.max(...stats.weekdays, 1);
   const maxHourly = Math.max(...stats.hourly, 1);
@@ -142,7 +144,19 @@ function StatsView({ stats, isActive }: StatsViewProps) {
               {stats.topTypes.map((row, i) => {
                 const pct = stats.total > 0 ? Math.round((row.total / stats.total) * 100) : 0;
                 return (
-                  <li key={i} className="top-list__item">
+                  <li
+                    key={i}
+                    className={`top-list__item${onTypeClick ? ' top-list__item--clickable' : ''}`}
+                    onClick={() => onTypeClick?.(row.label)}
+                    role={onTypeClick ? 'button' : undefined}
+                    tabIndex={onTypeClick ? 0 : undefined}
+                    onKeyDown={(e) => {
+                      if (onTypeClick && (e.key === 'Enter' || e.key === ' ')) {
+                        e.preventDefault();
+                        onTypeClick(row.label);
+                      }
+                    }}
+                  >
                     <span className="top-list__rank">{i + 1}</span>
                     <span className="top-list__name">{row.label}</span>
                     <div className="top-list__bar-container">
@@ -162,7 +176,19 @@ function StatsView({ stats, isActive }: StatsViewProps) {
               {stats.topLocations.map((row, i) => {
                 const pct = stats.total > 0 ? Math.round((row.total / stats.total) * 100) : 0;
                 return (
-                  <li key={i} className="top-list__item">
+                  <li
+                    key={i}
+                    className={`top-list__item${onLocationClick ? ' top-list__item--clickable' : ''}`}
+                    onClick={() => onLocationClick?.(row.label)}
+                    role={onLocationClick ? 'button' : undefined}
+                    tabIndex={onLocationClick ? 0 : undefined}
+                    onKeyDown={(e) => {
+                      if (onLocationClick && (e.key === 'Enter' || e.key === ' ')) {
+                        e.preventDefault();
+                        onLocationClick(row.label);
+                      }
+                    }}
+                  >
                     <span className="top-list__rank">{i + 1}</span>
                     <span className="top-list__name">{row.label}</span>
                     <div className="top-list__bar-container">
