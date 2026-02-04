@@ -354,7 +354,8 @@ header {
 .filter-tag:hover {
     border-color: var(--border-accent);
 }
-.filter-tag a {
+.filter-tag a,
+.filter-tag-remove {
     color: var(--text-muted);
     text-decoration: none;
     font-size: 14px;
@@ -365,13 +366,38 @@ header {
     justify-content: center;
     border-radius: 50%;
     transition: all 0.2s;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
 }
-.filter-tag a:hover { color: var(--danger); background: rgba(239, 68, 68, 0.15); }
+.filter-tag a:hover,
+.filter-tag-remove:hover { color: var(--danger); background: rgba(239, 68, 68, 0.15); }
 
-.main-content { display: flex; gap: 20px; flex: 1; }
-.content-area { flex: 1; min-width: 0; }
+/* Clear all filters button */
+.clear-all-filters {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 14px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: var(--radius);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--danger);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.clear-all-filters:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.4);
+}
 
-.events-grid { display: grid; gap: 16px; }
+.main-content { display: flex; gap: 20px; flex: 1; min-height: 0; }
+.content-area { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+.events-grid { display: grid; gap: 16px; flex: 1; align-content: start; }
 .event-card {
     background: linear-gradient(145deg, var(--surface-solid), rgba(22, 42, 72, 0.7));
     border-radius: var(--radius);
@@ -770,7 +796,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     opacity: 0;
     pointer-events: none;
     width: 100%;
-    height: 600px;
+    height: 0;
     contain: strict;
     transition: opacity 0.2s ease;
 }
@@ -779,12 +805,16 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     visibility: visible;
     opacity: 1;
     pointer-events: auto;
+    height: auto;
+    flex: 1;
+    min-height: 500px;
 }
 
 /* Map container - stable sizing */
 .map-container {
     width: 100%;
     height: 100%;
+    min-height: 500px;
     border-radius: var(--radius);
     overflow: hidden;
     border: 1px solid var(--glass-border);
@@ -846,6 +876,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 .leaflet-control-attribution a {
     color: var(--text-muted) !important;
+}
+/* Hide attribution flags */
+.leaflet-attribution-flag {
+    display: none !important;
 }
 /* Zoom controls */
 .leaflet-control-zoom a {
@@ -1316,8 +1350,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .load-more-container {
     display: flex;
     justify-content: center;
-    padding: 24px 0;
-    margin-top: 8px;
+    padding: 16px 0;
+    margin-top: auto;
 }
 .load-more-btn {
     display: inline-flex;
@@ -1368,10 +1402,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 /* Footer with status */
 footer {
     margin-top: auto;
-    padding: 28px 0 36px;
+    padding: 20px 0 24px;
     text-align: center;
     border-top: 1px solid var(--glass-border);
     background: linear-gradient(180deg, transparent, rgba(10, 22, 40, 0.5));
+    flex-shrink: 0;
 }
 .footer-status {
     display: flex;
@@ -1532,7 +1567,7 @@ footer {
     .status-counts { flex-direction: column; gap: 6px; }
     .load-more-btn { width: 100%; max-width: 300px; min-height: 48px; }
 
-    .map-wrapper { height: calc(100vh - 180px); min-height: 400px; }
+    .map-wrapper.active { height: calc(100vh - 180px); min-height: 400px; flex: 1; }
     .view-toggle button span.label { display: none; }
     .live-indicator { display: none; }
 }
@@ -1558,12 +1593,15 @@ footer {
 
 .view-map .filters-section { display: none; }
 .view-map .load-more-container { display: none; }
+.view-map .content-area { flex: 1; display: flex; flex-direction: column; }
+.view-map .main-content { display: flex; flex-direction: column; flex: 1; }
 
 /* Stats view layout overrides */
 .view-stats .filters-section { display: none; }
 .view-stats .load-more-container { display: none; }
 .view-stats .content-area { display: none; }
-.view-stats .main-content { display: block; }
+.view-stats .main-content { display: flex; flex-direction: column; }
+.view-stats .stats-view.active { flex: 1; }
 
 /* Empty state for press/events */
 .press-empty { text-align: center; padding: 60px 20px; color: var(--text-muted); animation: fadeIn 0.5s ease; }

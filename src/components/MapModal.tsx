@@ -20,8 +20,7 @@ export default function MapModal({ isOpen, lat, lng, location, onClose }: MapMod
 
     const initMap = async () => {
       const L = await import('leaflet');
-      // @ts-ignore - CSS imports don't have type declarations
-      await import('leaflet/dist/leaflet.css');
+      // Note: Leaflet CSS is loaded via CDN in layout.tsx to avoid webpack issues
 
       if (!mapContainerRef.current) return;
 
