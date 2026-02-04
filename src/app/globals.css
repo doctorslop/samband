@@ -441,31 +441,6 @@ header {
 .event-card.expanded::before { opacity: 1; }
 .event-card.expanded::after { opacity: 1; }
 
-/* Chevron icon */
-.accordion-chevron {
-    flex-shrink: 0;
-    width: 20px;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-muted);
-    transition: transform 0.25s ease, color 0.2s ease;
-    margin-left: auto;
-    margin-top: 2px;
-}
-.accordion-chevron svg {
-    width: 16px;
-    height: 16px;
-}
-.event-card-header:hover .accordion-chevron {
-    color: var(--accent);
-}
-.event-card.expanded .accordion-chevron {
-    transform: rotate(180deg);
-    color: var(--accent);
-}
-
 /* Card body - contains expandable details and actions */
 .event-card-body {
     padding: 0 18px 16px;
@@ -528,9 +503,6 @@ header {
     align-items: center;
     gap: 3px;
 }
-
-/* Legacy event-card-inner for backwards compatibility */
-.event-card-inner { display: none; }
 
 /* Simplified date display in header */
 .event-date-compact {
@@ -673,12 +645,6 @@ header {
     outline-offset: 2px;
 }
 
-/* Hide the old chevron in header - using button instead */
-.accordion-chevron { display: none; }
-
-/* Legacy styles - hidden */
-.event-meta, .read-more-link, .show-map-btn, .event-actions { display: none; }
-
 .map-modal-overlay {
     display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(0, 0, 0, 0.8); z-index: 1000; backdrop-filter: blur(4px);
@@ -795,7 +761,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 /* Better active states */
 .btn:active { transform: translateY(0); }
-.show-details-btn:active, .show-map-btn:active { transform: scale(0.98); }
+.show-details-btn:active { transform: scale(0.98); }
 
 /* Map wrapper - handles visibility without layout shifts */
 .map-wrapper {
@@ -1289,9 +1255,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     }
 }
 
-/* Legacy support - keep old stats-sidebar hidden */
-.stats-sidebar { display: none !important; }
-
 /* New events notification banner */
 .new-events-banner {
     display: flex;
@@ -1551,8 +1514,6 @@ footer {
     .event-type { padding: 6px 10px; font-size: 10px; }
     .event-location-link { font-size: 14px; margin-top: 5px; font-weight: 600; }
     .event-summary { font-size: 13px; line-height: 1.5; margin-top: 8px; }
-    .accordion-chevron { width: 18px; height: 18px; }
-    .accordion-chevron svg { width: 14px; height: 14px; }
 
     /* Mobile card body */
     .event-card-body { padding: 0 16px 14px; }
@@ -1591,7 +1552,6 @@ footer {
     .event-location-link { font-size: 13px; }
     .event-summary { font-size: 12px; }
     .event-card-body { padding: 0 12px 12px; }
-    .accordion-chevron { width: 16px; height: 16px; }
     .expand-details-btn,
     .show-map-link { font-size: 13px; padding: 10px 14px; }
 }
@@ -1615,6 +1575,6 @@ footer {
 .press-loading .spinner { margin: 0 auto 16px; }
 .press-loading p { font-size: 14px; }
 
-@media print { body::before, .scroll-top, .refresh-btn, .search-bar, .stats-sidebar, .view-toggle, .theme-toggle, .install-prompt { display: none !important; } }
+@media print { body::before, .scroll-top, .refresh-btn, .search-bar, .view-toggle, .theme-toggle, .install-prompt { display: none !important; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }

@@ -151,7 +151,6 @@ export default function EventCard({ event, currentView, onShowMap }: EventCardPr
             )}
           </div>
         </div>
-        <span className="accordion-chevron" />
       </div>
       <div className="event-card-body">
         <div className={`event-details${expanded ? ' visible' : ''}${loading ? ' loading' : ''}${error ? ' error' : ''}`}>
