@@ -116,3 +116,45 @@ export function getTypeStyle(type: string): TypeStyle {
 export function getTypeClass(type: string): string {
   return getTypeStyle(type).class;
 }
+
+// Operational monitoring types
+export interface OperationalStats {
+  totalFetches: number;
+  successfulFetches: number;
+  failedFetches: number;
+  fetches24h: number;
+  fetches7d: number;
+  successRate: number;
+  avgFetchInterval: number;
+  lastSuccessfulFetch: string | null;
+  lastFailedFetch: string | null;
+  recentErrors: Array<{ fetched_at: string; error_type: string }>;
+  hourlyFetches: number[];
+  avgEventsPerFetch: number;
+  eventsAddedToday: number;
+  uptimeScore: number;
+}
+
+export interface FetchLogEntry {
+  id: number;
+  fetchedAt: string;
+  eventsFetched: number;
+  eventsNew: number;
+  success: boolean;
+  errorType: string | null;
+}
+
+export interface DatabaseHealth {
+  totalEvents: number;
+  totalFetchLogs: number;
+  eventsWithGps: number;
+  eventsWithGpsPercent: number;
+  uniqueLocations: number;
+  uniqueTypes: number;
+  oldestEvent: string | null;
+  newestEvent: string | null;
+  eventsByType: Array<{ type: string; count: number }>;
+  dataFreshnessMinutes: number;
+  updatedEvents: number;
+  updatedEventsPercent: number;
+}
