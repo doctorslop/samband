@@ -28,20 +28,6 @@ const EventMap = dynamic(() => import('./EventMap'), {
   ),
 });
 
-// Dynamic import for HeatmapView
-const HeatmapView = dynamic(() => import('./HeatmapView'), {
-  ssr: false,
-  loading: () => (
-    <div className="map-wrapper active">
-      <div className="map-container map-loading">
-        <div className="map-loading-content">
-          <div className="spinner" />
-          <span>Laddar heatmap...</span>
-        </div>
-      </div>
-    </div>
-  ),
-});
 
 interface ClientAppProps {
   initialEvents: FormattedEvent[];
@@ -145,7 +131,6 @@ function ClientAppContent({
     onEscape: handleCloseMapModal,
     onListView: () => handleViewChange('list'),
     onMapView: () => handleViewChange('map'),
-    onHeatmapView: () => handleViewChange('heatmap'),
     onStatsView: () => handleViewChange('stats'),
     onScrollTop: scrollToTop,
   }), [focusSearch, handleCloseMapModal, handleViewChange, scrollToTop]);
@@ -181,8 +166,6 @@ function ClientAppContent({
             )}
 
             <EventMap events={mapEvents} isActive={currentView === 'map'} />
-
-            <HeatmapView events={mapEvents} isActive={currentView === 'heatmap'} />
           </div>
 
           <StatsView

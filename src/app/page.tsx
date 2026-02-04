@@ -5,7 +5,7 @@ import { formatEventForUi, sanitizeLocation, sanitizeType, sanitizeSearch } from
 import ClientApp from '@/components/ClientApp';
 
 const EVENTS_PER_PAGE = 40;
-const ALLOWED_VIEWS = ['list', 'map', 'heatmap', 'stats'];
+const ALLOWED_VIEWS = ['list', 'map', 'stats'];
 
 // Revalidate every 30 minutes to match the polisen.se API fetch interval
 export const revalidate = 1800;
