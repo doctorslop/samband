@@ -676,9 +676,70 @@ header {
 }
 
 .expand-details-btn:focus-visible,
-.show-map-link:focus-visible {
+.show-map-link:focus-visible,
+.share-event-btn:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
+}
+
+/* Share button - green theme */
+.share-event-btn {
+    /* Reset browser defaults */
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background: none;
+    border: none;
+    margin: 0;
+    /* Shared base styling */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.4;
+    cursor: pointer;
+    padding: 8px 14px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    white-space: nowrap;
+    color: var(--success);
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(16, 185, 129, 0.06));
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+.share-event-btn:hover {
+    color: #34d399;
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.1));
+    border-color: rgba(16, 185, 129, 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+}
+.share-event-btn:active {
+    transform: translateY(0);
+}
+.share-event-btn.copied {
+    background: var(--success);
+    color: white;
+    border-color: var(--success);
+}
+
+/* Highlighted event card */
+.event-card.highlighted {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-glow), 0 8px 24px rgba(0, 0, 0, 0.25);
+    animation: highlightPulse 2s ease-out;
+}
+.event-card.highlighted::before {
+    opacity: 1;
+    background: linear-gradient(180deg, var(--accent), var(--accent-dark));
+}
+@keyframes highlightPulse {
+    0% { box-shadow: 0 0 0 4px var(--accent-glow), 0 8px 24px rgba(0, 0, 0, 0.25); }
+    50% { box-shadow: 0 0 0 8px rgba(251, 191, 36, 0.1), 0 8px 24px rgba(0, 0, 0, 0.25); }
+    100% { box-shadow: 0 0 0 2px var(--accent-glow), 0 8px 24px rgba(0, 0, 0, 0.25); }
 }
 
 .map-modal-overlay {
@@ -913,6 +974,23 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .map-info { background: var(--surface); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); box-shadow: 0 4px 12px var(--shadow); }
 .map-info-content { color: var(--text); font-size: 13px; font-weight: 600; text-align: center; }
 .map-info-content small { font-size: 10px; color: var(--text-muted); font-weight: 400; }
+
+/* Heatmap legend */
+.heatmap-info { min-width: 120px; }
+.heatmap-legend { display: flex; flex-direction: column; gap: 4px; }
+.heatmap-legend .legend-gradient {
+    display: block;
+    height: 12px;
+    border-radius: 3px;
+    background: linear-gradient(to right, #1e3a5f, #3b82f6, #f59e0b, #ef4444, #dc2626);
+}
+.heatmap-legend .legend-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--text-muted);
+    font-weight: 400;
+}
 
 /* ========================================
    Statistics View - Mobile First Design
@@ -1565,7 +1643,8 @@ footer {
     .event-details { padding: 12px 14px; font-size: 13px; line-height: 1.6; margin-top: 10px; }
     .event-header-actions { margin-top: 12px; flex-wrap: wrap; }
     .expand-details-btn,
-    .show-map-link {
+    .show-map-link,
+    .share-event-btn {
         font-size: 14px;
         min-height: 48px;
         padding: 12px 18px;
@@ -1598,13 +1677,20 @@ footer {
     .event-summary { font-size: 12px; }
     .event-card-body { padding: 0 12px 12px; }
     .expand-details-btn,
-    .show-map-link { font-size: 13px; padding: 10px 14px; }
+    .show-map-link,
+    .share-event-btn { font-size: 13px; padding: 10px 14px; }
 }
 
 .view-map .filters-section { display: none; }
 .view-map .load-more-container { display: none; }
 .view-map .content-area { flex: 1; display: flex; flex-direction: column; }
 .view-map .main-content { display: flex; flex-direction: column; flex: 1; }
+
+/* Heatmap view layout overrides */
+.view-heatmap .filters-section { display: none; }
+.view-heatmap .load-more-container { display: none; }
+.view-heatmap .content-area { flex: 1; display: flex; flex-direction: column; }
+.view-heatmap .main-content { display: flex; flex-direction: column; flex: 1; }
 
 /* Stats view layout overrides */
 .view-stats .filters-section { display: none; }

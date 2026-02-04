@@ -7,6 +7,7 @@ interface ShortcutHandlers {
   onEscape?: () => void;
   onListView?: () => void;
   onMapView?: () => void;
+  onHeatmapView?: () => void;
   onStatsView?: () => void;
   onScrollTop?: () => void;
 }
@@ -36,7 +37,7 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers) {
       return;
     }
 
-    // Number keys for view switching (1 = List, 2 = Map, 3 = Stats)
+    // Number keys for view switching (1 = List, 2 = Map, 3 = Heatmap, 4 = Stats)
     if (event.key === '1' && handlers.onListView) {
       event.preventDefault();
       handlers.onListView();
@@ -47,7 +48,12 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers) {
       handlers.onMapView();
       return;
     }
-    if (event.key === '3' && handlers.onStatsView) {
+    if (event.key === '3' && handlers.onHeatmapView) {
+      event.preventDefault();
+      handlers.onHeatmapView();
+      return;
+    }
+    if (event.key === '4' && handlers.onStatsView) {
       event.preventDefault();
       handlers.onStatsView();
       return;

@@ -5,7 +5,7 @@ import { formatEventForUi, sanitizeLocation, sanitizeType, sanitizeSearch } from
 import ClientApp from '@/components/ClientApp';
 
 const EVENTS_PER_PAGE = 40;
-const ALLOWED_VIEWS = ['list', 'map', 'stats'];
+const ALLOWED_VIEWS = ['list', 'map', 'heatmap', 'stats'];
 
 // Revalidate every 30 minutes to match the polisen.se API fetch interval
 export const revalidate = 1800;
@@ -17,6 +17,7 @@ interface PageProps {
     type?: string;
     search?: string;
     page?: string;
+    event?: string;
   }>;
 }
 
@@ -59,6 +60,9 @@ async function HomeContent({ searchParams }: PageProps) {
   const types = getFilterOptions('type');
   const stats = getStatsSummary();
 
+  // Parse highlighted event ID from URL
+  const highlightedEventId = params.event ? parseInt(params.event, 10) : null;
+
   return (
     <ClientApp
       initialEvents={formattedEvents}
@@ -69,6 +73,7 @@ async function HomeContent({ searchParams }: PageProps) {
       stats={stats}
       filters={filters}
       initialView={currentView}
+      highlightedEventId={isNaN(highlightedEventId as number) ? null : highlightedEventId}
     />
   );
 }

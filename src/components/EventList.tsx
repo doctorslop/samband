@@ -17,6 +17,7 @@ interface EventListProps {
   };
   currentView: string;
   onShowMap?: (lat: number, lng: number, location: string) => void;
+  highlightedEventId: number | null;
 }
 
 export default function EventList({
@@ -25,6 +26,7 @@ export default function EventList({
   filters,
   currentView,
   onShowMap,
+  highlightedEventId,
 }: EventListProps) {
   const [events, setEvents] = useState<FormattedEvent[]>(initialEvents);
   const [hasMore, setHasMore] = useState(initialHasMore);
@@ -105,6 +107,20 @@ export default function EventList({
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [currentView, filters, events]);
+
+  // Scroll to highlighted event on mount
+  useEffect(() => {
+    if (highlightedEventId !== null) {
+      // Small delay to ensure DOM is ready
+      const timeoutId = setTimeout(() => {
+        const eventCard = document.querySelector(`[data-event-id="${highlightedEventId}"]`);
+        if (eventCard) {
+          eventCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [highlightedEventId]);
 
   // Refresh events and merge new ones
   const refreshEvents = useCallback(async () => {
@@ -210,6 +226,7 @@ export default function EventList({
             event={event}
             currentView={currentView}
             onShowMap={onShowMap}
+            isHighlighted={event.id === highlightedEventId}
           />
         ))}
       </section>

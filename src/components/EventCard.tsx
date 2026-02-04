@@ -1,19 +1,42 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { FormattedEvent, getTypeClass } from '@/types';
 
 interface EventCardProps {
   event: FormattedEvent;
   currentView: string;
   onShowMap?: (lat: number, lng: number, location: string) => void;
+  isHighlighted?: boolean;
 }
 
-export default function EventCard({ event, currentView, onShowMap }: EventCardProps) {
-  const [expanded, setExpanded] = useState(false);
+export default function EventCard({ event, currentView, onShowMap, isHighlighted }: EventCardProps) {
+  const [expanded, setExpanded] = useState(isHighlighted || false);
   const [details, setDetails] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  // Auto-expand and fetch details if highlighted
+  useEffect(() => {
+    if (isHighlighted && !details && event.url) {
+      const fetchDetails = async () => {
+        setLoading(true);
+        try {
+          const res = await fetch(`/api/details?url=${encodeURIComponent(event.url)}`);
+          const data = await res.json();
+          if (data.success && data.details?.content) {
+            setDetails(data.details.content);
+          }
+        } catch {
+          // Silently fail - user can still expand manually
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchDetails();
+    }
+  }, [isHighlighted, details, event.url]);
 
   const typeClass = getTypeClass(event.type);
 
@@ -66,8 +89,43 @@ export default function EventCard({ event, currentView, onShowMap }: EventCardPr
     }
   }
 
+  const handleShare = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (event.id === null) return;
+
+    const url = `${window.location.origin}/?event=${event.id}`;
+
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = url;
+      textArea.style.position = 'fixed';
+      textArea.style.opacity = '0';
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }, [event.id]);
+
+  const cardClasses = [
+    'event-card',
+    expanded ? 'expanded' : '',
+    isHighlighted ? 'highlighted' : '',
+  ].filter(Boolean).join(' ');
+
   return (
-    <article className={`event-card${expanded ? ' expanded' : ''}`} data-url={event.url}>
+    <article
+      className={cardClasses}
+      data-url={event.url}
+      data-event-id={event.id ?? undefined}
+    >
       <div
         className="event-card-header"
         tabIndex={0}
@@ -147,6 +205,16 @@ export default function EventCard({ event, currentView, onShowMap }: EventCardPr
                 onClick={handleShowMap}
               >
                 Visa på karta
+              </button>
+            )}
+            {event.id !== null && (
+              <button
+                type="button"
+                className={`share-event-btn${copied ? ' copied' : ''}`}
+                onClick={handleShare}
+                title="Kopiera länk till händelse"
+              >
+                {copied ? 'Kopierad!' : 'Dela'}
               </button>
             )}
           </div>
