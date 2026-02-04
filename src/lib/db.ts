@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import path from 'path';
-import { EventFilters, EventWithMetadata, RawEvent, Statistics, DailyStats, TopItem } from '@/types';
+import { EventFilters, EventWithMetadata, RawEvent, Statistics, DailyStats, TopItem, OperationalStats, FetchLogEntry, DatabaseHealth } from '@/types';
 import { escapeLikeWildcards } from './utils';
 
 // Database configuration
@@ -461,5 +461,226 @@ export function getStatsSummary(): Statistics {
     hourly,
     weekdays,
     daily,
+  };
+}
+
+// Get operational statistics for monitoring
+export function getOperationalStats(): OperationalStats {
+  const pdo = getDatabase();
+  const now = new Date();
+  const since24h = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+  const since7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  // Total fetches
+  const totalFetches = (pdo.prepare('SELECT COUNT(*) as count FROM fetch_log').get() as { count: number }).count;
+
+  // Successful fetches
+  const successfulFetches = (pdo.prepare('SELECT COUNT(*) as count FROM fetch_log WHERE success = 1').get() as { count: number }).count;
+
+  // Failed fetches
+  const failedFetches = (pdo.prepare('SELECT COUNT(*) as count FROM fetch_log WHERE success = 0').get() as { count: number }).count;
+
+  // Fetches in last 24h
+  const fetches24h = (pdo.prepare('SELECT COUNT(*) as count FROM fetch_log WHERE fetched_at >= ?').get(since24h) as { count: number }).count;
+
+  // Fetches in last 7d
+  const fetches7d = (pdo.prepare('SELECT COUNT(*) as count FROM fetch_log WHERE fetched_at >= ?').get(since7d) as { count: number }).count;
+
+  // Success rate
+  const successRate = totalFetches > 0 ? Math.round((successfulFetches / totalFetches) * 1000) / 10 : 100;
+
+  // Average fetch interval (in minutes)
+  let avgFetchInterval = 30; // default
+  const fetchTimes = pdo.prepare('SELECT fetched_at FROM fetch_log ORDER BY fetched_at DESC LIMIT 50').all() as Array<{ fetched_at: string }>;
+  if (fetchTimes.length > 1) {
+    let totalInterval = 0;
+    for (let i = 0; i < fetchTimes.length - 1; i++) {
+      const diff = new Date(fetchTimes[i].fetched_at).getTime() - new Date(fetchTimes[i + 1].fetched_at).getTime();
+      totalInterval += diff;
+    }
+    avgFetchInterval = Math.round(totalInterval / (fetchTimes.length - 1) / 60000); // convert to minutes
+  }
+
+  // Last successful fetch
+  const lastSuccess = pdo.prepare('SELECT fetched_at FROM fetch_log WHERE success = 1 ORDER BY fetched_at DESC LIMIT 1').get() as { fetched_at: string } | undefined;
+
+  // Last failed fetch
+  const lastFailure = pdo.prepare('SELECT fetched_at FROM fetch_log WHERE success = 0 ORDER BY fetched_at DESC LIMIT 1').get() as { fetched_at: string } | undefined;
+
+  // Recent errors (last 10, without detailed messages for security)
+  const recentErrors = pdo.prepare(`
+    SELECT
+      fetched_at,
+      CASE
+        WHEN error_message LIKE '%timeout%' THEN 'Timeout'
+        WHEN error_message LIKE '%network%' THEN 'Network Error'
+        WHEN error_message LIKE '%ECONNREFUSED%' THEN 'Connection Refused'
+        WHEN error_message LIKE '%ENOTFOUND%' THEN 'DNS Error'
+        WHEN error_message LIKE '%500%' THEN 'Server Error (5xx)'
+        WHEN error_message LIKE '%404%' THEN 'Not Found (404)'
+        WHEN error_message LIKE '%403%' THEN 'Forbidden (403)'
+        WHEN error_message LIKE '%rate%' THEN 'Rate Limited'
+        WHEN error_message IS NOT NULL THEN 'Other Error'
+        ELSE 'Unknown'
+      END as error_type
+    FROM fetch_log
+    WHERE success = 0
+    ORDER BY fetched_at DESC
+    LIMIT 10
+  `).all() as Array<{ fetched_at: string; error_type: string }>;
+
+  // Fetch history by hour (last 24h)
+  const fetchesByHour = pdo.prepare(`
+    SELECT strftime('%H', fetched_at) AS hour, COUNT(*) AS count
+    FROM fetch_log
+    WHERE fetched_at >= ?
+    GROUP BY hour
+    ORDER BY hour
+  `).all(since24h) as Array<{ hour: string; count: number }>;
+  const hourlyFetches: number[] = Array(24).fill(0);
+  for (const row of fetchesByHour) {
+    hourlyFetches[parseInt(row.hour, 10)] = row.count;
+  }
+
+  // Events added per fetch (average)
+  const avgEventsPerFetch = pdo.prepare(`
+    SELECT AVG(events_new) as avg
+    FROM fetch_log
+    WHERE success = 1 AND events_new > 0
+  `).get() as { avg: number | null };
+
+  // Total events added today
+  const eventsAddedToday = (pdo.prepare(`
+    SELECT COUNT(*) as count
+    FROM events
+    WHERE date(fetched_at) = date('now')
+  `).get() as { count: number }).count;
+
+  // Uptime (based on successful fetches in expected intervals)
+  // If we expect a fetch every 30 min, check how many we got vs expected in last 24h
+  const expectedFetches24h = 48; // 24h / 30min
+  const uptimeScore = Math.min(100, Math.round((fetches24h / expectedFetches24h) * 100));
+
+  return {
+    totalFetches,
+    successfulFetches,
+    failedFetches,
+    fetches24h,
+    fetches7d,
+    successRate,
+    avgFetchInterval,
+    lastSuccessfulFetch: lastSuccess?.fetched_at || null,
+    lastFailedFetch: lastFailure?.fetched_at || null,
+    recentErrors,
+    hourlyFetches,
+    avgEventsPerFetch: avgEventsPerFetch.avg ? Math.round(avgEventsPerFetch.avg * 10) / 10 : 0,
+    eventsAddedToday,
+    uptimeScore,
+  };
+}
+
+// Get recent fetch log entries
+export function getRecentFetchLogs(limit = 20): FetchLogEntry[] {
+  const pdo = getDatabase();
+  const rows = pdo.prepare(`
+    SELECT
+      id,
+      fetched_at,
+      events_fetched,
+      events_new,
+      success,
+      CASE
+        WHEN error_message LIKE '%timeout%' THEN 'Timeout'
+        WHEN error_message LIKE '%network%' THEN 'Network Error'
+        WHEN error_message LIKE '%ECONNREFUSED%' THEN 'Connection Refused'
+        WHEN error_message LIKE '%ENOTFOUND%' THEN 'DNS Error'
+        WHEN error_message LIKE '%500%' THEN 'Server Error'
+        WHEN error_message LIKE '%404%' THEN 'Not Found'
+        WHEN error_message LIKE '%403%' THEN 'Forbidden'
+        WHEN error_message LIKE '%rate%' THEN 'Rate Limited'
+        WHEN error_message IS NOT NULL THEN 'Error'
+        ELSE NULL
+      END as error_type
+    FROM fetch_log
+    ORDER BY fetched_at DESC
+    LIMIT ?
+  `).all(limit) as Array<{
+    id: number;
+    fetched_at: string;
+    events_fetched: number;
+    events_new: number;
+    success: number;
+    error_type: string | null;
+  }>;
+
+  return rows.map(row => ({
+    id: row.id,
+    fetchedAt: row.fetched_at,
+    eventsFetched: row.events_fetched,
+    eventsNew: row.events_new,
+    success: row.success === 1,
+    errorType: row.error_type,
+  }));
+}
+
+// Get database health metrics
+export function getDatabaseHealth(): DatabaseHealth {
+  const pdo = getDatabase();
+
+  // Total events
+  const totalEvents = (pdo.prepare('SELECT COUNT(*) as count FROM events').get() as { count: number }).count;
+
+  // Total fetch logs
+  const totalFetchLogs = (pdo.prepare('SELECT COUNT(*) as count FROM fetch_log').get() as { count: number }).count;
+
+  // Events with GPS coordinates
+  const eventsWithGps = (pdo.prepare("SELECT COUNT(*) as count FROM events WHERE location_gps != ''").get() as { count: number }).count;
+
+  // Unique locations
+  const uniqueLocations = (pdo.prepare('SELECT COUNT(DISTINCT location_name) as count FROM events').get() as { count: number }).count;
+
+  // Unique event types
+  const uniqueTypes = (pdo.prepare('SELECT COUNT(DISTINCT type) as count FROM events').get() as { count: number }).count;
+
+  // Oldest event
+  const oldestEvent = pdo.prepare('SELECT MIN(event_time) as oldest FROM events').get() as { oldest: string | null };
+
+  // Newest event
+  const newestEvent = pdo.prepare('SELECT MAX(event_time) as newest FROM events').get() as { newest: string | null };
+
+  // Events by type breakdown
+  const eventsByType = pdo.prepare(`
+    SELECT type, COUNT(*) as count
+    FROM events
+    GROUP BY type
+    ORDER BY count DESC
+  `).all() as Array<{ type: string; count: number }>;
+
+  // Data freshness (time since last event)
+  let dataFreshnessMinutes = 0;
+  if (newestEvent?.newest) {
+    dataFreshnessMinutes = Math.round((Date.now() - new Date(newestEvent.newest).getTime()) / 60000);
+  }
+
+  // Updated events count (events that have been modified)
+  const updatedEvents = (pdo.prepare(`
+    SELECT COUNT(*) as count
+    FROM events
+    WHERE last_updated != publish_time
+  `).get() as { count: number }).count;
+
+  return {
+    totalEvents,
+    totalFetchLogs,
+    eventsWithGps,
+    eventsWithGpsPercent: totalEvents > 0 ? Math.round((eventsWithGps / totalEvents) * 100) : 0,
+    uniqueLocations,
+    uniqueTypes,
+    oldestEvent: oldestEvent?.oldest || null,
+    newestEvent: newestEvent?.newest || null,
+    eventsByType: eventsByType.slice(0, 15), // Top 15 types
+    dataFreshnessMinutes,
+    updatedEvents,
+    updatedEventsPercent: totalEvents > 0 ? Math.round((updatedEvents / totalEvents) * 100) : 0,
   };
 }
