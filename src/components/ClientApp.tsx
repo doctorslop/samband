@@ -14,10 +14,12 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { FormattedEvent, Statistics } from '@/types';
 
 // Dynamic import for EventMap to avoid SSR issues with Leaflet
+// Note: Loading fallback doesn't have access to isActive prop, so we hide it by default
+// The actual EventMap component will show correctly based on isActive
 const EventMap = dynamic(() => import('./EventMap'), {
   ssr: false,
   loading: () => (
-    <div className="map-wrapper active">
+    <div className="map-wrapper">
       <div className="map-container map-loading">
         <div className="map-loading-content">
           <div className="spinner" />
