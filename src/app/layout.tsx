@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
 
 export const metadata: Metadata = {
   title: 'Sambandscentralen - Polishändelser i realtid',
@@ -49,6 +50,7 @@ export default function RootLayout({
         />
       </head>
       <body>
+        <ServiceWorkerRegistration />
         <a href="#eventsGrid" className="skip-link">
           Hoppa till innehåll
         </a>
