@@ -25,10 +25,8 @@ export function formatEventForUi(event: EventWithMetadata): FormattedEvent {
   const now = new Date();
   const eventTime = event.event_time || event.datetime || now.toISOString();
 
-  let date: Date;
-  try {
-    date = new Date(eventTime);
-  } catch {
+  let date = new Date(eventTime);
+  if (isNaN(date.getTime())) {
     date = now;
   }
 

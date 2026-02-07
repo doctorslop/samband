@@ -333,7 +333,7 @@ export function getEventsFromDb(filters: EventFilters = {}, limit = 500, offset 
 // Count events in database with optional filters
 export function countEventsInDb(filters: EventFilters = {}): number {
   const pdo = getDatabase();
-  const params: string[] = [];
+  const params: (string | number)[] = [];
   let query = 'SELECT COUNT(*) as count FROM events WHERE 1=1';
 
   if (filters.location) {
@@ -344,6 +344,21 @@ export function countEventsInDb(filters: EventFilters = {}): number {
   if (filters.type) {
     query += ' AND type = ?';
     params.push(filters.type);
+  }
+
+  if (filters.date) {
+    query += " AND event_time LIKE ? ESCAPE '\\'";
+    params.push(escapeLikeWildcards(filters.date) + '%');
+  }
+
+  if (filters.from) {
+    query += ' AND event_time >= ?';
+    params.push(filters.from);
+  }
+
+  if (filters.to) {
+    query += ' AND event_time <= ?';
+    params.push(filters.to + 'T23:59:59');
   }
 
   if (filters.search) {

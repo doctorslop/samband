@@ -41,7 +41,7 @@ async function HomeContent({ searchParams }: PageProps) {
   }
 
   // Fetch data
-  const page = Math.max(1, parseInt(params.page || '1', 10));
+  const page = Math.max(1, parseInt(params.page || '1', 10) || 1);
   const offset = (page - 1) * EVENTS_PER_PAGE;
 
   const events = getEventsFromDb(filters, EVENTS_PER_PAGE, offset);
