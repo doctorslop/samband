@@ -20,6 +20,16 @@ function EventMap({ events, isActive }: EventMapProps) {
   // Update events ref when events change
   eventsRef.current = events;
 
+  // Escape HTML special characters to prevent XSS in Leaflet popups
+  const escapeHtml = useCallback((str: string): string => {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }, []);
+
   // Create markers from events
   const updateMarkers = useCallback(() => {
     const L = leafletRef.current;
@@ -82,16 +92,24 @@ function EventMap({ events, isActive }: EventMapProps) {
             fillOpacity: 0.85,
           });
 
+          const safeName = escapeHtml(e.name || '');
+          const safeType = escapeHtml(e.type || '');
+          const safeSummary = escapeHtml(summaryPreview);
+          const safeLocation = escapeHtml(e.location || '');
+          const safeIcon = escapeHtml(e.icon || '');
+          const safeColor = escapeHtml(e.color || '');
+          const safeUrl = e.url ? escapeHtml(e.url) : '';
+
           m.bindPopup(`
             <div class="map-popup">
-              <span class="badge" style="background:${e.color}20;color:${e.color}">${e.icon} ${e.type}</span>
+              <span class="badge" style="background:${safeColor}20;color:${safeColor}">${safeIcon} ${safeType}</span>
               <div class="popup-time">🕐 ${relTime}</div>
-              <h3>${e.name}</h3>
-              <p>${summaryPreview}</p>
-              <p><strong>📍 ${e.location}</strong></p>
+              <h3>${safeName}</h3>
+              <p>${safeSummary}</p>
+              <p><strong>📍 ${safeLocation}</strong></p>
               <div class="popup-links">
                 <a href="${googleMapsUrl}" target="_blank" rel="noopener noreferrer">🗺️ Google Maps</a>
-                ${e.url ? `<a href="https://polisen.se${e.url}" target="_blank" rel="noopener noreferrer nofollow">📄 Läs mer</a>` : ''}
+                ${safeUrl ? `<a href="https://polisen.se${safeUrl}" target="_blank" rel="noopener noreferrer nofollow">📄 Läs mer</a>` : ''}
               </div>
             </div>
           `);
@@ -117,7 +135,7 @@ function EventMap({ events, isActive }: EventMapProps) {
     if (markersLayerRef.current.getLayers().length > 0) {
       map.fitBounds(markersLayerRef.current.getBounds(), { padding: [40, 40] });
     }
-  }, []);
+  }, [escapeHtml]);
 
   // Initialize map only once
   useEffect(() => {
