@@ -1,14 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Revalidate data every 30 minutes (matches the polisen.se API fetch interval)
-  experimental: {
-    // Enable server actions
-    serverActions: {
-      allowedOrigins: ['localhost:3000'],
-    },
-  },
-  // Transpile leaflet to avoid webpack issues
+  // Transpile leaflet to avoid bundler issues
   transpilePackages: ['leaflet', 'react-leaflet'],
+  // Allow Turbopack (default in Next.js 16) with empty config
+  turbopack: {},
   // Security headers
   async headers() {
     return [
@@ -35,25 +30,17 @@ const nextConfig = {
       },
     ];
   },
-  // Webpack config for better-sqlite3 and leaflet
+  // Webpack fallback config (used with next build --webpack)
   webpack: (config, { isServer }) => {
     if (!isServer) {
-      // Don't bundle better-sqlite3 on client
       config.resolve.fallback = {
         ...config.resolve.fallback,
         fs: false,
         path: false,
         crypto: false,
       };
-
-      // Ensure leaflet is handled correctly on client
-      config.resolve.alias = {
-        ...config.resolve.alias,
-      };
     }
 
-    // Ignore CSS files from leaflet (we load via CDN)
-    // This prevents webpack from trying to process leaflet CSS imports
     config.module.rules.push({
       test: /leaflet[\\/]dist[\\/]leaflet\.css$/,
       type: 'asset/resource',
