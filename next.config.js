@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Transpile leaflet to avoid bundler issues
-  transpilePackages: ['leaflet', 'react-leaflet'],
+  transpilePackages: ['leaflet'],
   // Allow Turbopack (default in Next.js 16) with empty config
   turbopack: {},
   // Security headers
@@ -18,7 +18,7 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+              "script-src 'self' 'unsafe-inline'",
               "style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com",
               "img-src 'self' data: https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com blob:",
               "font-src 'self' https://fonts.gstatic.com",

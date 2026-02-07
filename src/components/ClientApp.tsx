@@ -61,6 +61,7 @@ function ClientAppContent({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [currentView, setCurrentView] = useState(initialView);
+  const [displayedCount, setDisplayedCount] = useState(initialEvents.length);
   const [mapModal, setMapModal] = useState<{
     isOpen: boolean;
     lat: number;
@@ -164,6 +165,7 @@ function ClientAppContent({
                 currentView={currentView}
                 onShowMap={handleShowMap}
                 highlightedEventId={highlightedEventId}
+                onEventCountChange={setDisplayedCount}
               />
             )}
 
@@ -178,7 +180,7 @@ function ClientAppContent({
             />
         </main>
 
-        <Footer total={stats.total} shown={initialEvents.length} />
+        <Footer total={stats.total} shown={displayedCount} />
       </div>
 
       <ScrollToTop />
