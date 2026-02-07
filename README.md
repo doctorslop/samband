@@ -4,11 +4,11 @@ A real-time Swedish police event notification service built with Next.js. Fetche
 
 ## Features
 
-- **Real-time Events** - Automatically fetches police events every 2 minutes
+- **Real-time Events** - Automatically fetches police events every 30 minutes
 - **Multiple Views** - List, Map, and Statistics views
 - **Interactive Map** - Leaflet-powered map showing events from the last 24 hours
 - **Statistics Dashboard** - Visual charts showing event trends, top locations, and hourly distribution
-- **Operational Dashboard** - Hidden system monitoring page with fetch logs and health metrics
+- **Operational Dashboard** - System monitoring page at `/stats` with fetch logs and health metrics
 - **Advanced Filtering** - Filter by location, event type, or search terms
 - **Event Details** - Lazy-loaded detailed information for each event
 - **Keyboard Shortcuts** - Quick navigation with keyboard shortcuts (1/2/3 for views, / for search)
@@ -19,11 +19,12 @@ A real-time Swedish police event notification service built with Next.js. Fetche
 
 ## Tech Stack
 
-- **Framework**: [Next.js 14](https://nextjs.org/) with App Router
-- **Language**: [TypeScript](https://www.typescriptlang.org/)
+- **Framework**: [Next.js 16](https://nextjs.org/) with App Router and Turbopack
+- **Language**: [TypeScript 5](https://www.typescriptlang.org/)
+- **React**: [React 19](https://react.dev/)
 - **Database**: [SQLite](https://www.sqlite.org/) via [better-sqlite3](https://github.com/WiseLibs/better-sqlite3)
-- **Maps**: [Leaflet](https://leafletjs.com/) with [react-leaflet](https://react-leaflet.js.org/)
-- **Testing**: [Jest](https://jestjs.io/) with [Testing Library](https://testing-library.com/)
+- **Maps**: [Leaflet](https://leafletjs.com/) (dynamic import, SSR-safe)
+- **Testing**: [Jest 30](https://jestjs.io/) with [Testing Library](https://testing-library.com/)
 - **Styling**: Custom CSS with CSS variables
 - **Data Source**: [Swedish Police API](https://polisen.se/api/events)
 
@@ -81,14 +82,14 @@ samband/
 │   │   ├── EventCard.tsx       # Individual event card
 │   │   ├── EventList.tsx       # Event grid with pagination
 │   │   ├── EventMap.tsx        # Full map view (Leaflet)
-│   │   ├── EventSkeleton.tsx   # Loading skeleton placeholder
 │   │   ├── MapModal.tsx        # Single location map modal
 │   │   ├── Filters.tsx         # Search and filter controls
 │   │   ├── Header.tsx          # Sticky header with navigation
 │   │   ├── StatsView.tsx       # Statistics dashboard
 │   │   ├── OperationalDashboard.tsx  # System monitoring dashboard
-│   │   ├── Footer.tsx          # Footer with links
-│   │   └── ScrollToTop.tsx     # Scroll to top button
+│   │   ├── Footer.tsx          # Footer with event counts
+│   │   ├── ScrollToTop.tsx     # Scroll to top button
+│   │   └── ServiceWorkerRegistration.tsx  # PWA service worker
 │   │
 │   ├── hooks/                  # Custom React hooks
 │   │   └── useKeyboardShortcuts.ts  # Keyboard shortcut handling
@@ -204,8 +205,8 @@ No environment variables are required for basic operation. The application uses 
 
 | Setting | Value | Description |
 |---------|-------|-------------|
-| Page revalidation | 120s | How often Server Components refetch data |
-| Police API cache | 120s | Minimum time between API calls |
+| Page revalidation | 1800s | How often Server Components refetch data |
+| Police API cache | 1800s | Minimum time between API calls |
 
 ### Rate Limiting
 
@@ -217,8 +218,10 @@ API endpoints are protected by in-memory rate limiting:
 ### Next.js Config
 
 Key settings in `next.config.js`:
+- Turbopack enabled (default in Next.js 16)
 - Security headers (X-Frame-Options, CSP, etc.)
-- Webpack configuration for better-sqlite3
+- Leaflet transpilation and CSS handling
+- Client-side webpack fallbacks for `fs`, `path`, `crypto`
 
 ## Views
 
@@ -338,8 +341,8 @@ npm run build
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                   Server Component (page.tsx)                │
-│  - Checks if data refresh needed (every 2 min)              │
-│  - Fetches from Police API if stale                         │
+│  - Checks if data refresh needed (every 30 min)              │
+│  - Fetches from Police API if stale                          │
 │  - Queries SQLite database                                   │
 │  - Formats events for UI                                     │
 └─────────────────────────────────────────────────────────────┘
