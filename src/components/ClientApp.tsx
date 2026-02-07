@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, Suspense, useRef, useMemo } from 'react';
+import { useState, useCallback, Suspense, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import Header from './Header';
