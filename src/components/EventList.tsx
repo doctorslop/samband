@@ -18,6 +18,7 @@ interface EventListProps {
   currentView: string;
   onShowMap?: (lat: number, lng: number, location: string) => void;
   highlightedEventId: number | null;
+  onEventCountChange?: (count: number) => void;
 }
 
 export default function EventList({
@@ -27,6 +28,7 @@ export default function EventList({
   currentView,
   onShowMap,
   highlightedEventId,
+  onEventCountChange,
 }: EventListProps) {
   const [events, setEvents] = useState<FormattedEvent[]>(initialEvents);
   const [hasMore, setHasMore] = useState(initialHasMore);
@@ -34,6 +36,13 @@ export default function EventList({
   const [loading, setLoading] = useState(false);
   const [newEventsCount, setNewEventsCount] = useState(0);
   const lastRefreshRef = useRef<number>(Date.now());
+  const eventsRef = useRef<FormattedEvent[]>(events);
+  eventsRef.current = events;
+
+  // Notify parent of displayed event count changes
+  useEffect(() => {
+    onEventCountChange?.(events.length);
+  }, [events.length, onEventCountChange]);
 
   // Create a stable filter key to detect when filters change
   const filterKey = useMemo(
@@ -74,12 +83,12 @@ export default function EventList({
         }
 
         // Check if there are new events by comparing first event IDs
-        const currentFirstId = events[0]?.id;
+        const currentFirstId = eventsRef.current[0]?.id;
         const newFirstId = data.events[0]?.id;
 
         if (currentFirstId !== newFirstId && data.events.length > 0) {
           // Count how many new events there are
-          const currentIds = new Set(events.map((e) => e.id));
+          const currentIds = new Set(eventsRef.current.map((e) => e.id));
           const newEvents = data.events.filter((e: FormattedEvent) => !currentIds.has(e.id));
 
           if (newEvents.length > 0) {
@@ -106,7 +115,7 @@ export default function EventList({
       clearInterval(intervalId);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [currentView, filters, events]);
+  }, [currentView, filters]);
 
   // Scroll to highlighted event on mount
   useEffect(() => {

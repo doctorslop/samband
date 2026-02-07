@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { OperationalStats, FetchLogEntry, DatabaseHealth, Statistics } from '@/types';
 
 interface OperationalDashboardProps {
@@ -71,6 +72,15 @@ export default function OperationalDashboard({
   const systemStatus = getSystemStatus();
   const freshnessStatus = getFreshnessStatus();
 
+  const [updatedAt, setUpdatedAt] = useState<string>('');
+  useEffect(() => {
+    setUpdatedAt(new Date().toLocaleString('sv-SE'));
+  }, []);
+
+  const maxHourlyFetches = Math.max(...operationalStats.hourlyFetches, 1);
+  const maxDailyEventCount = Math.max(...eventStats.daily.map(d => d.count), 1);
+  const maxHourlyEventCount = Math.max(...eventStats.hourly, 1);
+
   return (
     <div className="ops-container">
       <header className="ops-header">
@@ -86,7 +96,7 @@ export default function OperationalDashboard({
           </div>
           <div className="ops-header-meta">
             <span className="ops-timestamp">
-              Updated: {new Date().toLocaleString('sv-SE')}
+              {updatedAt && `Updated: ${updatedAt}`}
             </span>
           </div>
         </div>
@@ -139,8 +149,7 @@ export default function OperationalDashboard({
               <h3 className="ops-card-title">Fetches (24h)</h3>
               <div className="ops-bar-chart">
                 {operationalStats.hourlyFetches.map((count, hour) => {
-                  const maxCount = Math.max(...operationalStats.hourlyFetches, 1);
-                  const height = (count / maxCount) * 100;
+                  const height = (count / maxHourlyFetches) * 100;
                   return (
                     <div key={hour} className="ops-bar-col">
                       <div className="ops-bar-container">
@@ -290,8 +299,7 @@ export default function OperationalDashboard({
               <h3 className="ops-card-title">Daily Trend (7d)</h3>
               <div className="ops-trend-chart">
                 {eventStats.daily.map((day) => {
-                  const maxCount = Math.max(...eventStats.daily.map(d => d.count), 1);
-                  const height = (day.count / maxCount) * 100;
+                  const height = (day.count / maxDailyEventCount) * 100;
                   return (
                     <div key={day.date} className="ops-trend-col">
                       <div className="ops-trend-bar-container">
@@ -313,8 +321,7 @@ export default function OperationalDashboard({
               <h3 className="ops-card-title">Hourly Distribution (24h)</h3>
               <div className="ops-bar-chart ops-bar-chart--small">
                 {eventStats.hourly.map((count, hour) => {
-                  const maxCount = Math.max(...eventStats.hourly, 1);
-                  const height = (count / maxCount) * 100;
+                  const height = (count / maxHourlyEventCount) * 100;
                   return (
                     <div key={hour} className="ops-bar-col">
                       <div className="ops-bar-container">
