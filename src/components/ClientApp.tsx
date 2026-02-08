@@ -180,7 +180,7 @@ function ClientAppContent({
             />
         </main>
 
-        <Footer total={stats.total} shown={displayedCount} />
+        <Footer totalStored={stats.totalStored} total={stats.total} shown={displayedCount} />
       </div>
 
       <ScrollToTop />
