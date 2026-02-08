@@ -2,33 +2,16 @@
 
 import { useState, useCallback, Suspense, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import dynamic from 'next/dynamic';
 import Header from './Header';
 import Filters from './Filters';
 import EventList from './EventList';
+import EventMap from './EventMap';
 import StatsView from './StatsView';
 import Footer from './Footer';
 import ScrollToTop from './ScrollToTop';
 import MapModal from './MapModal';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { FormattedEvent, Statistics } from '@/types';
-
-// Dynamic import for EventMap to avoid SSR issues with Leaflet
-// Note: Loading fallback doesn't have access to isActive prop, so we hide it by default
-// The actual EventMap component will show correctly based on isActive
-const EventMap = dynamic(() => import('./EventMap'), {
-  ssr: false,
-  loading: () => (
-    <div className="map-wrapper">
-      <div className="map-container map-loading">
-        <div className="map-loading-content">
-          <div className="spinner" />
-          <span>Laddar karta...</span>
-        </div>
-      </div>
-    </div>
-  ),
-});
 
 
 interface ClientAppProps {
