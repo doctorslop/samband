@@ -1,14 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
 
 interface HeaderProps {
   currentView: string;
   onViewChange: (view: string) => void;
+  onLogoClick?: () => void;
 }
 
-export default function Header({ currentView, onViewChange }: HeaderProps) {
+export default function Header({ currentView, onViewChange, onLogoClick }: HeaderProps) {
   const headerRef = useRef<HTMLElement>(null);
   const [isCompact, setIsCompact] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -60,13 +60,22 @@ export default function Header({ currentView, onViewChange }: HeaderProps) {
   return (
     <header ref={headerRef} className={headerClasses}>
       <div className="header-content">
-        <Link className="logo" href="/">
+        <a
+          className="logo"
+          href="/"
+          onClick={(e) => {
+            if (onLogoClick) {
+              e.preventDefault();
+              onLogoClick();
+            }
+          }}
+        >
           <div className="logo-icon">👮</div>
           <div className="logo-text">
             <h1>Sambandscentralen</h1>
             <p>Polisens händelsenotiser i realtid</p>
           </div>
-        </Link>
+        </a>
         <div className="header-controls">
           <nav className="view-toggle" role="tablist" aria-label="Vy-navigering">
             <button

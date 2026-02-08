@@ -19,6 +19,7 @@ interface EventListProps {
   onShowMap?: (lat: number, lng: number, location: string) => void;
   highlightedEventId: number | null;
   onEventCountChange?: (count: number) => void;
+  onLastCheckedChange?: (date: Date) => void;
 }
 
 export default function EventList({
@@ -29,6 +30,7 @@ export default function EventList({
   onShowMap,
   highlightedEventId,
   onEventCountChange,
+  onLastCheckedChange,
 }: EventListProps) {
   const [events, setEvents] = useState<FormattedEvent[]>(initialEvents);
   const [hasMore, setHasMore] = useState(initialHasMore);
@@ -44,6 +46,11 @@ export default function EventList({
   useEffect(() => {
     onEventCountChange?.(events.length);
   }, [events.length, onEventCountChange]);
+
+  // Notify parent of lastChecked changes
+  useEffect(() => {
+    onLastCheckedChange?.(lastChecked);
+  }, [lastChecked, onLastCheckedChange]);
 
   // Create a stable filter key to detect when filters change
   const filterKey = useMemo(
@@ -233,11 +240,6 @@ export default function EventList({
           </button>
         </div>
       )}
-
-      <div className="last-checked-indicator">
-        <span className="last-checked-dot" />
-        Senast kontrollerat: {lastChecked.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' })}
-      </div>
 
       <section id="eventsGrid" className="events-grid">
         {events.map((event, index) => (
