@@ -4,8 +4,8 @@ import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import EventCard from './EventCard';
 import { FormattedEvent } from '@/types';
 
-// Auto-refresh interval: 30 minutes (matches server-side fetch interval)
-const AUTO_REFRESH_INTERVAL = 30 * 60 * 1000;
+// Auto-refresh interval: 10 minutes (matches server-side fetch interval)
+const AUTO_REFRESH_INTERVAL = 10 * 60 * 1000;
 
 interface EventListProps {
   initialEvents: FormattedEvent[];
@@ -35,6 +35,7 @@ export default function EventList({
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [newEventsCount, setNewEventsCount] = useState(0);
+  const [lastChecked, setLastChecked] = useState<Date>(new Date());
   const lastRefreshRef = useRef<number>(Date.now());
   const eventsRef = useRef<FormattedEvent[]>(events);
   eventsRef.current = events;
@@ -85,6 +86,8 @@ export default function EventList({
         // Check if there are new events by comparing first event IDs
         const currentFirstId = eventsRef.current[0]?.id;
         const newFirstId = data.events[0]?.id;
+
+        setLastChecked(new Date());
 
         if (currentFirstId !== newFirstId && data.events.length > 0) {
           // Count how many new events there are
@@ -222,11 +225,19 @@ export default function EventList({
                 Laddar...
               </>
             ) : (
-              `${newEventsCount} nya händelser - Klicka för att uppdatera`
+              <>
+                <span className="new-events-pulse" />
+                {newEventsCount} nya händelser - Klicka för att uppdatera
+              </>
             )}
           </button>
         </div>
       )}
+
+      <div className="last-checked-indicator">
+        <span className="last-checked-dot" />
+        Senast kontrollerat: {lastChecked.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' })}
+      </div>
 
       <section id="eventsGrid" className="events-grid">
         {events.map((event, index) => (
