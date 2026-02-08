@@ -45,6 +45,7 @@ function ClientAppContent({
   const searchParams = useSearchParams();
   const [currentView, setCurrentView] = useState(initialView);
   const [displayedCount, setDisplayedCount] = useState(initialEvents.length);
+  const [lastChecked, setLastChecked] = useState<Date>(new Date());
   const [mapModal, setMapModal] = useState<{
     isOpen: boolean;
     lat: number;
@@ -97,6 +98,13 @@ function ClientAppContent({
     [router]
   );
 
+  // Navigate to home: reset view to list and clear all filters
+  const handleLogoClick = useCallback(() => {
+    setCurrentView('list');
+    router.push('/', { scroll: false });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [router]);
+
   // Focus search input
   const focusSearch = useCallback(() => {
     const searchInput = document.querySelector('.search-input') as HTMLInputElement;
@@ -127,7 +135,7 @@ function ClientAppContent({
   return (
     <>
       <div className={`container view-${currentView}`}>
-        <Header currentView={currentView} onViewChange={handleViewChange} />
+        <Header currentView={currentView} onViewChange={handleViewChange} onLogoClick={handleLogoClick} />
 
         {currentView !== 'map' && currentView !== 'stats' && (
           <Filters
@@ -149,6 +157,7 @@ function ClientAppContent({
                 onShowMap={handleShowMap}
                 highlightedEventId={highlightedEventId}
                 onEventCountChange={setDisplayedCount}
+                onLastCheckedChange={setLastChecked}
               />
             )}
 
@@ -163,7 +172,7 @@ function ClientAppContent({
             />
         </main>
 
-        <Footer totalStored={stats.totalStored} total={stats.total} shown={displayedCount} />
+        <Footer totalStored={stats.totalStored} total={stats.total} shown={displayedCount} lastChecked={lastChecked} />
       </div>
 
       <ScrollToTop />

@@ -19,6 +19,43 @@ const TIME_RANGES: { key: TimeRange; label: string; ms: number }[] = [
 const REPLAY_STEP_MS = 5 * 60 * 1000;
 const REPLAY_INTERVAL_MS = 80;
 
+// Offset radius in degrees (~300m) to separate co-located markers
+const OFFSET_RADIUS = 0.003;
+
+/**
+ * Pre-compute display positions for events that share the same GPS coordinates.
+ * Co-located markers are fanned out in a circle so each one is visible.
+ */
+function computeMarkerPositions(events: FormattedEvent[]): Map<number, [number, number]> {
+  const positions = new Map<number, [number, number]>();
+  const groups = new Map<string, FormattedEvent[]>();
+
+  for (const e of events) {
+    if (!e.gps || e.id === null) continue;
+    const key = e.gps.trim();
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(e);
+  }
+
+  for (const [gpsKey, group] of groups) {
+    const [baseLat, baseLng] = gpsKey.split(',').map(Number);
+    if (isNaN(baseLat) || isNaN(baseLng)) continue;
+
+    if (group.length === 1) {
+      positions.set(group[0].id!, [baseLat, baseLng]);
+    } else {
+      for (let i = 0; i < group.length; i++) {
+        const angle = (2 * Math.PI * i) / group.length - Math.PI / 2;
+        const lat = baseLat + OFFSET_RADIUS * Math.cos(angle);
+        const lng = baseLng + OFFSET_RADIUS * Math.sin(angle);
+        positions.set(group[i].id!, [lat, lng]);
+      }
+    }
+  }
+
+  return positions;
+}
+
 // Escape HTML to prevent XSS in Leaflet popups
 function escapeHtml(str: string): string {
   return str
@@ -75,14 +112,17 @@ function EventMapInner({ events, isActive }: EventMapProps) {
     }
   }, []);
 
-  // --- Add a single marker to the map (for animated replay) ---
-  const addMarker = useCallback((e: FormattedEvent, now: number, rangeMs: number) => {
+  // --- Add a single marker to the map ---
+  const addMarker = useCallback((e: FormattedEvent, now: number, rangeMs: number, posOverride?: [number, number]) => {
     const L = leafletRef.current;
     if (!L || !markersLayerRef.current) return;
     if (!e.gps) return;
 
-    const [lat, lng] = e.gps.split(',').map(Number);
-    if (isNaN(lat) || isNaN(lng)) return;
+    const [rawLat, rawLng] = e.gps.split(',').map(Number);
+    if (isNaN(rawLat) || isNaN(rawLng)) return;
+
+    const lat = posOverride ? posOverride[0] : rawLat;
+    const lng = posOverride ? posOverride[1] : rawLng;
 
     const eventTs = new Date(e.date?.iso || e.datetime).getTime();
     const age = now - eventTs;
@@ -129,7 +169,7 @@ function EventMapInner({ events, isActive }: EventMapProps) {
     const safeIcon = escapeHtml(e.icon || '');
     const safeColor = escapeHtml(e.color || '');
     const safeUrl = e.url ? escapeHtml(e.url) : '';
-    const gMaps = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+    const gMaps = `https://www.google.com/maps/search/?api=1&query=${rawLat},${rawLng}`;
 
     marker.bindPopup(`
       <div class="map-popup">
@@ -195,8 +235,11 @@ function EventMapInner({ events, isActive }: EventMapProps) {
       return !isNaN(ts) && ts >= windowStart && ts <= now;
     });
 
+    const positions = computeMarkerPositions(visible);
+
     for (const e of visible) {
-      addMarker(e, now, rangeMs);
+      const pos = e.id !== null ? positions.get(e.id) : undefined;
+      addMarker(e, now, rangeMs, pos);
     }
 
     const count = markersLayerRef.current.getLayers().length;
@@ -317,6 +360,9 @@ function EventMapInner({ events, isActive }: EventMapProps) {
         return ta - tb;
       });
 
+    // Pre-compute offset positions so co-located markers fan out
+    const positions = computeMarkerPositions(sortedEvents);
+
     replayIntervalRef.current = setInterval(() => {
       // Stale run check
       if (replayRunRef.current !== runId) return;
@@ -341,8 +387,8 @@ function EventMapInner({ events, isActive }: EventMapProps) {
         const eventTs = new Date(e.date?.iso || e.datetime).getTime();
         if (eventTs > ts) break; // sorted, so no more to add
         if (e.id !== null && addedMarkerIdsRef.current.has(e.id)) continue;
-        // Add this marker
-        addMarker(e, ts, rangeMs);
+        const posOverride = e.id !== null ? positions.get(e.id) : undefined;
+        addMarker(e, ts, rangeMs, posOverride);
         if (e.id !== null) addedMarkerIdsRef.current.add(e.id);
       }
 
