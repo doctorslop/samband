@@ -38,12 +38,17 @@ function EventMapInner({ events, isActive }: EventMapProps) {
   const eventsRef = useRef<FormattedEvent[]>(events);
   const replayIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasFittedBoundsRef = useRef(false);
+  // Track which event IDs have been added during current replay run
+  const addedMarkerIdsRef = useRef<Set<number>>(new Set());
+  // Counter for replay runs to invalidate stale intervals
+  const replayRunRef = useRef(0);
 
   const [timeRange, setTimeRange] = useState<TimeRange>('24h');
   const [isPlaying, setIsPlaying] = useState(false);
   const [replayPosition, setReplayPosition] = useState(1);
   const [replayTimestamp, setReplayTimestamp] = useState<number | null>(null);
   const [mapReady, setMapReady] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(0);
 
   eventsRef.current = events;
 
@@ -52,8 +57,8 @@ function EventMapInner({ events, isActive }: EventMapProps) {
     [timeRange]
   );
 
-  // --- Render markers ---
-  const renderMarkers = useCallback((cutoffTs?: number | null, rangeOverride?: TimeRange) => {
+  // --- Clear all markers from the map ---
+  const clearMarkers = useCallback(() => {
     const L = leafletRef.current;
     const map = mapRef.current;
     if (!L || !map) return;
@@ -68,6 +73,118 @@ function EventMapInner({ events, isActive }: EventMapProps) {
       map.removeControl(infoControlRef.current);
       infoControlRef.current = null;
     }
+  }, []);
+
+  // --- Add a single marker to the map (for animated replay) ---
+  const addMarker = useCallback((e: FormattedEvent, now: number, rangeMs: number) => {
+    const L = leafletRef.current;
+    if (!L || !markersLayerRef.current) return;
+    if (!e.gps) return;
+
+    const [lat, lng] = e.gps.split(',').map(Number);
+    if (isNaN(lat) || isNaN(lng)) return;
+
+    const eventTs = new Date(e.date?.iso || e.datetime).getTime();
+    const age = now - eventTs;
+    const ageFrac = Math.min(1, age / rangeMs);
+
+    const opacity = 0.95 - ageFrac * 0.6;
+    const radius = 10 - ageFrac * 4;
+    const isRecent = age < 30 * 60 * 1000;
+
+    const mins = Math.floor(age / 60000);
+    const hours = Math.floor(age / 3600000);
+    const relTime = mins <= 1 ? 'Just nu' : mins < 60 ? `${mins} min sedan` : `${hours} tim sedan`;
+
+    // Pulse ring for recent events
+    if (isRecent) {
+      markersLayerRef.current.addLayer(
+        L.circleMarker([lat, lng], {
+          radius: radius + 6,
+          fillColor: e.color,
+          color: e.color,
+          weight: 1,
+          opacity: 0.3,
+          fillOpacity: 0.08,
+          className: 'pulse-marker',
+        })
+      );
+    }
+
+    const marker = L.circleMarker([lat, lng], {
+      radius,
+      fillColor: e.color,
+      color: '#fff',
+      weight: isRecent ? 2.5 : 1.5,
+      opacity: 1 - ageFrac * 0.5,
+      fillOpacity: opacity,
+    });
+
+    const safeName = escapeHtml(e.name || '');
+    const safeType = escapeHtml(e.type || '');
+    const safeSummary = escapeHtml(
+      (e.summary || '').length > 120 ? e.summary!.substring(0, 120) + '...' : e.summary || ''
+    );
+    const safeLocation = escapeHtml(e.location || '');
+    const safeIcon = escapeHtml(e.icon || '');
+    const safeColor = escapeHtml(e.color || '');
+    const safeUrl = e.url ? escapeHtml(e.url) : '';
+    const gMaps = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+
+    marker.bindPopup(`
+      <div class="map-popup">
+        <span class="badge" style="background:${safeColor}20;color:${safeColor}">${safeIcon} ${safeType}</span>
+        <div class="popup-time">${isRecent ? '🔴' : '🕐'} ${relTime}</div>
+        <h3>${safeName}</h3>
+        <p>${safeSummary}</p>
+        <p><strong>${safeLocation}</strong></p>
+        <div class="popup-links">
+          <a href="${gMaps}" target="_blank" rel="noopener noreferrer">Google Maps</a>
+          ${safeUrl ? `<a href="https://polisen.se${safeUrl}" target="_blank" rel="noopener noreferrer nofollow">Polisen.se</a>` : ''}
+        </div>
+      </div>
+    `);
+
+    markersLayerRef.current.addLayer(marker);
+  }, []);
+
+  // --- Update the info badge ---
+  const updateInfoBadge = useCallback((count: number, cutoffTs?: number | null, rangeOverride?: TimeRange) => {
+    const L = leafletRef.current;
+    const map = mapRef.current;
+    if (!L || !map) return;
+
+    if (infoControlRef.current) {
+      map.removeControl(infoControlRef.current);
+      infoControlRef.current = null;
+    }
+
+    const rangeLabel = TIME_RANGES.find(r => r.key === (rangeOverride ?? timeRange))?.label ?? '24 tim';
+    const timeLabel = cutoffTs
+      ? new Date(cutoffTs).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' })
+      : null;
+
+    const InfoCtrl = L.Control.extend({
+      onAdd() {
+        const div = L.DomUtil.create('div', 'map-info');
+        div.innerHTML = `<div class="map-info-content">${count} händelser<br><small>senaste ${rangeLabel}${timeLabel ? ` (${timeLabel})` : ''}</small></div>`;
+        return div;
+      },
+    });
+    infoControlRef.current = new InfoCtrl({ position: 'topright' });
+    infoControlRef.current.addTo(map);
+  }, [timeRange]);
+
+  // --- Full render of all markers (for non-playing states) ---
+  const renderMarkers = useCallback((cutoffTs?: number | null, rangeOverride?: TimeRange) => {
+    const L = leafletRef.current;
+    const map = mapRef.current;
+    if (!L || !map) return;
+
+    clearMarkers();
+    if (!markersLayerRef.current) {
+      markersLayerRef.current = L.featureGroup().addTo(map);
+    }
 
     const now = cutoffTs ?? Date.now();
     const rangeMs = getRangeMs(rangeOverride);
@@ -78,100 +195,20 @@ function EventMapInner({ events, isActive }: EventMapProps) {
       return !isNaN(ts) && ts >= windowStart && ts <= now;
     });
 
-    let count = 0;
-
     for (const e of visible) {
-      if (!e.gps) continue;
-      const [lat, lng] = e.gps.split(',').map(Number);
-      if (isNaN(lat) || isNaN(lng)) continue;
-      count++;
-
-      const eventTs = new Date(e.date?.iso || e.datetime).getTime();
-      const age = now - eventTs;
-      const ageFrac = Math.min(1, age / rangeMs);
-
-      const opacity = 0.95 - ageFrac * 0.6;
-      const radius = 10 - ageFrac * 4;
-      const isRecent = age < 30 * 60 * 1000;
-
-      const mins = Math.floor(age / 60000);
-      const hours = Math.floor(age / 3600000);
-      const relTime = mins <= 1 ? 'Just nu' : mins < 60 ? `${mins} min sedan` : `${hours} tim sedan`;
-
-      // Pulse ring for recent events
-      if (isRecent) {
-        markersLayerRef.current!.addLayer(
-          L.circleMarker([lat, lng], {
-            radius: radius + 6,
-            fillColor: e.color,
-            color: e.color,
-            weight: 1,
-            opacity: 0.3,
-            fillOpacity: 0.08,
-            className: 'pulse-marker',
-          })
-        );
-      }
-
-      const marker = L.circleMarker([lat, lng], {
-        radius,
-        fillColor: e.color,
-        color: '#fff',
-        weight: isRecent ? 2.5 : 1.5,
-        opacity: 1 - ageFrac * 0.5,
-        fillOpacity: opacity,
-      });
-
-      const safeName = escapeHtml(e.name || '');
-      const safeType = escapeHtml(e.type || '');
-      const safeSummary = escapeHtml(
-        (e.summary || '').length > 120 ? e.summary!.substring(0, 120) + '...' : e.summary || ''
-      );
-      const safeLocation = escapeHtml(e.location || '');
-      const safeIcon = escapeHtml(e.icon || '');
-      const safeColor = escapeHtml(e.color || '');
-      const safeUrl = e.url ? escapeHtml(e.url) : '';
-      const gMaps = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
-
-      marker.bindPopup(`
-        <div class="map-popup">
-          <span class="badge" style="background:${safeColor}20;color:${safeColor}">${safeIcon} ${safeType}</span>
-          <div class="popup-time">${isRecent ? '🔴' : '🕐'} ${relTime}</div>
-          <h3>${safeName}</h3>
-          <p>${safeSummary}</p>
-          <p><strong>📍 ${safeLocation}</strong></p>
-          <div class="popup-links">
-            <a href="${gMaps}" target="_blank" rel="noopener noreferrer">🗺️ Google Maps</a>
-            ${safeUrl ? `<a href="https://polisen.se${safeUrl}" target="_blank" rel="noopener noreferrer nofollow">📄 Läs mer</a>` : ''}
-          </div>
-        </div>
-      `);
-
-      markersLayerRef.current!.addLayer(marker);
+      addMarker(e, now, rangeMs);
     }
 
-    // Info badge
-    const rangeLabel = TIME_RANGES.find(r => r.key === (rangeOverride ?? timeRange))?.label ?? '24 tim';
-    const timeLabel = cutoffTs
-      ? new Date(cutoffTs).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' })
-      : null;
-
-    const InfoCtrl = L.Control.extend({
-      onAdd() {
-        const div = L.DomUtil.create('div', 'map-info');
-        div.innerHTML = `<div class="map-info-content">📍 ${count} händelser<br><small>senaste ${rangeLabel}${timeLabel ? ` (${timeLabel})` : ''}</small></div>`;
-        return div;
-      },
-    });
-    infoControlRef.current = new InfoCtrl({ position: 'topright' });
-    infoControlRef.current.addTo(map);
+    const count = markersLayerRef.current.getLayers().length;
+    setVisibleCount(visible.length);
+    updateInfoBadge(visible.length, cutoffTs, rangeOverride);
 
     // Fit bounds once on first meaningful render
-    if (!hasFittedBoundsRef.current && !cutoffTs && markersLayerRef.current.getLayers().length > 0) {
+    if (!hasFittedBoundsRef.current && !cutoffTs && count > 0) {
       map.fitBounds(markersLayerRef.current.getBounds(), { padding: [40, 40] });
       hasFittedBoundsRef.current = true;
     }
-  }, [getRangeMs, timeRange]);
+  }, [getRangeMs, clearMarkers, addMarker, updateInfoBadge]);
 
   // --- Initialize map once ---
   useEffect(() => {
@@ -225,7 +262,7 @@ function EventMapInner({ events, isActive }: EventMapProps) {
     };
   }, [isActive]); // Only depends on isActive — stable
 
-  // --- Render markers when data/range changes ---
+  // --- Render markers when data/range changes (non-playing) ---
   useEffect(() => {
     if (mapReady && !isPlaying) {
       renderMarkers(replayTimestamp);
@@ -239,7 +276,7 @@ function EventMapInner({ events, isActive }: EventMapProps) {
     }
   }, [isActive]);
 
-  // --- Replay engine ---
+  // --- Replay engine: animated dot-by-dot playback ---
   useEffect(() => {
     if (!isPlaying || !mapReady) {
       if (replayIntervalRef.current) {
@@ -249,25 +286,69 @@ function EventMapInner({ events, isActive }: EventMapProps) {
       return;
     }
 
+    // New run — bump counter, reset tracking
+    const runId = ++replayRunRef.current;
+    addedMarkerIdsRef.current = new Set();
+
+    // Immediately clear all existing markers for a clean slate
+    clearMarkers();
+    if (!markersLayerRef.current) {
+      const L = leafletRef.current;
+      if (L && mapRef.current) {
+        markersLayerRef.current = L.featureGroup().addTo(mapRef.current);
+      }
+    }
+    setVisibleCount(0);
+
     const rangeMs = getRangeMs();
     const now = Date.now();
     const start = now - rangeMs;
     let pos = 0;
 
+    // Pre-sort events by timestamp for efficient replay
+    const sortedEvents = eventsRef.current
+      .filter(e => {
+        const ts = new Date(e.date?.iso || e.datetime).getTime();
+        return !isNaN(ts) && ts >= start && ts <= now && e.gps;
+      })
+      .sort((a, b) => {
+        const ta = new Date(a.date?.iso || a.datetime).getTime();
+        const tb = new Date(b.date?.iso || b.datetime).getTime();
+        return ta - tb;
+      });
+
     replayIntervalRef.current = setInterval(() => {
+      // Stale run check
+      if (replayRunRef.current !== runId) return;
+
       pos += REPLAY_STEP_MS / rangeMs;
       if (pos >= 1) {
         pos = 1;
         setIsPlaying(false);
         setReplayPosition(1);
         setReplayTimestamp(null);
+        // Re-render all markers in final state
         renderMarkers(null);
         return;
       }
+
       setReplayPosition(pos);
       const ts = start + pos * rangeMs;
       setReplayTimestamp(ts);
-      renderMarkers(ts);
+
+      // Add only NEW markers that haven't been added yet
+      for (const e of sortedEvents) {
+        const eventTs = new Date(e.date?.iso || e.datetime).getTime();
+        if (eventTs > ts) break; // sorted, so no more to add
+        if (e.id !== null && addedMarkerIdsRef.current.has(e.id)) continue;
+        // Add this marker
+        addMarker(e, ts, rangeMs);
+        if (e.id !== null) addedMarkerIdsRef.current.add(e.id);
+      }
+
+      const totalAdded = addedMarkerIdsRef.current.size;
+      setVisibleCount(totalAdded);
+      updateInfoBadge(totalAdded, ts);
     }, REPLAY_INTERVAL_MS);
 
     return () => {
@@ -276,7 +357,7 @@ function EventMapInner({ events, isActive }: EventMapProps) {
         replayIntervalRef.current = null;
       }
     };
-  }, [isPlaying, mapReady, getRangeMs, renderMarkers]);
+  }, [isPlaying, mapReady, getRangeMs, renderMarkers, clearMarkers, addMarker, updateInfoBadge]);
 
   // --- Handlers ---
   const handleSlider = useCallback((val: number) => {
@@ -314,23 +395,12 @@ function EventMapInner({ events, isActive }: EventMapProps) {
 
   return (
     <div className={`map-wrapper${isActive ? ' active' : ''}`} aria-hidden={!isActive}>
-      {/* Timeline bar */}
+      {/* Map container first for immediate visibility */}
+      <div id="mapContainer" className="map-container" ref={mapContainerRef} />
+
+      {/* Timeline bar - compact overlay at bottom */}
       <div className="map-timeline">
         <div className="timeline-controls">
-          {/* Range buttons */}
-          <div className="timeline-range-selector">
-            {TIME_RANGES.map(r => (
-              <button
-                key={r.key}
-                className={`timeline-range-btn${timeRange === r.key ? ' active' : ''}`}
-                onClick={() => handleRangeChange(r.key)}
-                aria-pressed={timeRange === r.key}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
-
           {/* Play / pause */}
           <button
             className={`timeline-play-btn${isPlaying ? ' playing' : ''}`}
@@ -365,11 +435,25 @@ function EventMapInner({ events, isActive }: EventMapProps) {
             {!replayTimestamp && <span className="live-dot" />}
             {sliderLabel}
           </span>
+
+          {/* Event counter */}
+          <span className="timeline-counter">{visibleCount}</span>
+
+          {/* Range buttons */}
+          <div className="timeline-range-selector">
+            {TIME_RANGES.map(r => (
+              <button
+                key={r.key}
+                className={`timeline-range-btn${timeRange === r.key ? ' active' : ''}`}
+                onClick={() => handleRangeChange(r.key)}
+                aria-pressed={timeRange === r.key}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
-
-      {/* Map container */}
-      <div id="mapContainer" className="map-container" ref={mapContainerRef} />
     </div>
   );
 }
