@@ -886,6 +886,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     flex: 1;
     min-height: 500px;
     contain: none;
+    border-radius: var(--radius);
+    overflow: hidden;
 }
 
 /* Map container - stable sizing */
@@ -983,45 +985,50 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .map-info-content small { font-size: 10px; color: var(--text-muted); font-weight: 400; }
 
 /* ========================================
-   Map Timeline Controls (Flight-radar style)
+   Map Timeline Controls - Floating bottom bar
    ======================================== */
 
 .map-timeline {
-    background: var(--glass-bg);
-    backdrop-filter: blur(16px) saturate(180%);
-    -webkit-backdrop-filter: blur(16px) saturate(180%);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius) var(--radius) 0 0;
-    padding: 10px 16px;
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(10, 22, 40, 0.88);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    padding: 8px 14px;
     z-index: 10;
-    position: relative;
+    max-width: calc(100% - 32px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
 .timeline-controls {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
 }
 
-/* Time range buttons (1h / 6h / 24h) */
+/* Time range buttons */
 .timeline-range-selector {
     display: flex;
-    background: var(--surface-solid);
-    border-radius: var(--radius-xs);
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
     padding: 2px;
-    border: 1px solid var(--border);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     gap: 1px;
     flex-shrink: 0;
 }
 
 .timeline-range-btn {
-    padding: 5px 10px;
+    padding: 4px 8px;
     background: transparent;
     border: none;
     color: var(--text-muted);
     cursor: pointer;
-    border-radius: 4px;
-    font-size: 11px;
+    border-radius: 8px;
+    font-size: 10px;
     font-weight: 600;
     transition: all 0.2s ease;
     font-family: inherit;
@@ -1030,24 +1037,24 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 .timeline-range-btn:hover {
     color: var(--text);
-    background: var(--surface-light);
+    background: rgba(255, 255, 255, 0.08);
 }
 
 .timeline-range-btn.active {
-    background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+    background: var(--accent);
     color: var(--primary);
-    box-shadow: 0 2px 8px var(--accent-glow);
+    box-shadow: 0 1px 6px var(--accent-glow);
 }
 
 /* Play/Pause button */
 .timeline-play-btn {
-    width: 34px;
-    height: 34px;
+    width: 32px;
+    height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--surface-solid);
-    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 50%;
     color: var(--text);
     cursor: pointer;
@@ -1057,14 +1064,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 .timeline-play-btn:hover {
-    background: var(--surface-light);
+    background: rgba(255, 255, 255, 0.15);
     border-color: var(--accent);
     color: var(--accent);
     transform: scale(1.08);
 }
 
 .timeline-play-btn.playing {
-    background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+    background: var(--accent);
     color: var(--primary);
     border-color: var(--accent);
     box-shadow: 0 0 12px var(--accent-glow);
@@ -1088,44 +1095,44 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 .timeline-slider {
     width: 100%;
-    height: 4px;
+    height: 3px;
     -webkit-appearance: none;
     appearance: none;
-    background: var(--surface-solid);
+    background: rgba(255, 255, 255, 0.1);
     border-radius: 2px;
     outline: none;
     cursor: pointer;
     position: relative;
     z-index: 2;
-    border: 1px solid var(--border);
+    border: none;
 }
 
 .timeline-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+    background: var(--accent);
     cursor: pointer;
-    box-shadow: 0 2px 8px var(--accent-glow);
+    box-shadow: 0 1px 6px var(--accent-glow);
     transition: transform 0.15s ease, box-shadow 0.15s ease;
-    border: 2px solid var(--primary);
+    border: 2px solid rgba(10, 22, 40, 0.6);
 }
 
 .timeline-slider::-webkit-slider-thumb:hover {
-    transform: scale(1.25);
+    transform: scale(1.3);
     box-shadow: 0 2px 12px var(--accent-glow);
 }
 
 .timeline-slider::-moz-range-thumb {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+    background: var(--accent);
     cursor: pointer;
-    box-shadow: 0 2px 8px var(--accent-glow);
-    border: 2px solid var(--primary);
+    box-shadow: 0 1px 6px var(--accent-glow);
+    border: 2px solid rgba(10, 22, 40, 0.6);
 }
 
 .timeline-slider-fill {
@@ -1133,7 +1140,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     left: 0;
     top: 50%;
     transform: translateY(-50%);
-    height: 4px;
+    height: 3px;
     background: linear-gradient(90deg, var(--accent-dark), var(--accent));
     border-radius: 2px;
     pointer-events: none;
@@ -1143,25 +1150,40 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 /* Time label */
 .timeline-label {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
     color: var(--text-muted);
-    min-width: 48px;
-    text-align: right;
+    min-width: 36px;
+    text-align: center;
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
 }
 
 .timeline-label.live {
     color: var(--success);
 }
 
+/* Event counter pill */
+.timeline-counter {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent);
+    background: rgba(251, 191, 36, 0.12);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+    min-width: 28px;
+    text-align: center;
+    border: 1px solid rgba(251, 191, 36, 0.15);
+}
+
 .live-dot {
-    width: 7px;
-    height: 7px;
+    width: 6px;
+    height: 6px;
     background: var(--success);
     border-radius: 50%;
     animation: livePulse 2s ease-in-out infinite;
@@ -1181,27 +1203,33 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 /* Mobile timeline adjustments */
 @media (max-width: 768px) {
     .map-timeline {
-        padding: 8px 12px;
-        border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+        bottom: 12px;
+        padding: 6px 10px;
+        border-radius: 16px;
+        max-width: calc(100% - 20px);
     }
     .timeline-controls {
-        gap: 6px;
+        gap: 5px;
     }
     .timeline-range-btn {
-        padding: 4px 7px;
-        font-size: 10px;
+        padding: 3px 6px;
+        font-size: 9px;
     }
     .timeline-play-btn {
-        width: 30px;
-        height: 30px;
+        width: 28px;
+        height: 28px;
     }
     .timeline-play-btn svg {
-        width: 13px;
-        height: 13px;
+        width: 12px;
+        height: 12px;
     }
     .timeline-label {
-        font-size: 11px;
-        min-width: 40px;
+        font-size: 10px;
+        min-width: 32px;
+    }
+    .timeline-counter {
+        font-size: 9px;
+        padding: 2px 6px;
     }
 }
 
