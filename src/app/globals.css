@@ -1077,7 +1077,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 /* Slider container */
-.timeline-slider-container {
+.timeline-slider-wrap {
     flex: 1;
     position: relative;
     height: 24px;
@@ -1142,7 +1142,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 /* Time label */
-.timeline-time-label {
+.timeline-label {
     font-size: 12px;
     font-weight: 600;
     color: var(--text-muted);
@@ -1155,11 +1155,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     gap: 6px;
 }
 
-.timeline-time-label.live {
+.timeline-label.live {
     color: var(--success);
 }
 
-.timeline-live-dot {
+.live-dot {
     width: 7px;
     height: 7px;
     background: var(--success);
@@ -1199,7 +1199,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
         width: 13px;
         height: 13px;
     }
-    .timeline-time-label {
+    .timeline-label {
         font-size: 11px;
         min-width: 40px;
     }
