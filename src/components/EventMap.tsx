@@ -22,33 +22,81 @@ const REPLAY_INTERVAL_MS = 80;
 // Offset radius in degrees (~300m) to separate co-located markers
 const OFFSET_RADIUS = 0.003;
 
+// Proximity threshold in degrees (~5km) – markers closer than this are grouped
+const PROXIMITY_THRESHOLD = 0.05;
+
 /**
- * Pre-compute display positions for events that share the same GPS coordinates.
- * Co-located markers are fanned out in a circle so each one is visible.
+ * Pre-compute display positions for events that are near each other.
+ * Nearby markers are fanned out in a circle so each one stays visible.
+ * Uses proximity-based grouping (not just exact GPS match) to handle
+ * events at slightly different coordinates that still visually overlap.
  */
 function computeMarkerPositions(events: FormattedEvent[]): Map<number, [number, number]> {
   const positions = new Map<number, [number, number]>();
-  const groups = new Map<string, FormattedEvent[]>();
 
+  // Parse coordinates once
+  const parsed: { event: FormattedEvent; lat: number; lng: number }[] = [];
   for (const e of events) {
     if (!e.gps || e.id === null) continue;
-    const key = e.gps.trim();
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(e);
+    const [lat, lng] = e.gps.split(',').map(Number);
+    if (!isNaN(lat) && !isNaN(lng)) parsed.push({ event: e, lat, lng });
   }
 
-  for (const [gpsKey, group] of groups) {
-    const [baseLat, baseLng] = gpsKey.split(',').map(Number);
-    if (isNaN(baseLat) || isNaN(baseLng)) continue;
+  // Greedy proximity clustering
+  const used = new Set<number>();
+  const clusters: { members: typeof parsed; centroidLat: number; centroidLng: number }[] = [];
 
-    if (group.length === 1) {
-      positions.set(group[0].id!, [baseLat, baseLng]);
+  for (let i = 0; i < parsed.length; i++) {
+    if (used.has(i)) continue;
+    used.add(i);
+    const cluster = [parsed[i]];
+
+    // Find all neighbours within threshold (iterate until no new members)
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (let j = 0; j < parsed.length; j++) {
+        if (used.has(j)) continue;
+        // Check distance to any existing cluster member
+        for (const m of cluster) {
+          const dLat = parsed[j].lat - m.lat;
+          const dLng = parsed[j].lng - m.lng;
+          if (Math.abs(dLat) < PROXIMITY_THRESHOLD && Math.abs(dLng) < PROXIMITY_THRESHOLD) {
+            cluster.push(parsed[j]);
+            used.add(j);
+            changed = true;
+            break;
+          }
+        }
+      }
+    }
+
+    // Compute centroid
+    let cLat = 0, cLng = 0;
+    for (const m of cluster) { cLat += m.lat; cLng += m.lng; }
+    cLat /= cluster.length;
+    cLng /= cluster.length;
+    clusters.push({ members: cluster, centroidLat: cLat, centroidLng: cLng });
+  }
+
+  // Assign positions: single-member clusters keep original coords,
+  // multi-member clusters fan out around centroid
+  for (const { members, centroidLat, centroidLng } of clusters) {
+    if (members.length === 1) {
+      positions.set(members[0].event.id!, [members[0].lat, members[0].lng]);
     } else {
-      for (let i = 0; i < group.length; i++) {
-        const angle = (2 * Math.PI * i) / group.length - Math.PI / 2;
-        const lat = baseLat + OFFSET_RADIUS * Math.cos(angle);
-        const lng = baseLng + OFFSET_RADIUS * Math.sin(angle);
-        positions.set(group[i].id!, [lat, lng]);
+      // Scale offset by cluster spread so tight clusters stay compact
+      const maxDist = Math.max(
+        OFFSET_RADIUS,
+        ...members.map(m => Math.sqrt((m.lat - centroidLat) ** 2 + (m.lng - centroidLng) ** 2))
+      );
+      const fanRadius = Math.max(OFFSET_RADIUS, maxDist * 0.6 + OFFSET_RADIUS * members.length * 0.3);
+
+      for (let i = 0; i < members.length; i++) {
+        const angle = (2 * Math.PI * i) / members.length - Math.PI / 2;
+        const lat = centroidLat + fanRadius * Math.cos(angle);
+        const lng = centroidLng + fanRadius * Math.sin(angle);
+        positions.set(members[i].event.id!, [lat, lng]);
       }
     }
   }
