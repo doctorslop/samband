@@ -378,6 +378,14 @@ export function getLastFetchTime(): Date | null {
   return result ? new Date(result.fetched_at) : null;
 }
 
+// Count fetches in the last 24 hours for daily limit enforcement
+export function getDailyFetchCount(): number {
+  const pdo = getDatabase();
+  const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const result = pdo.prepare('SELECT COUNT(*) as count FROM fetch_log WHERE fetched_at >= ?').get(since24h) as { count: number };
+  return result.count;
+}
+
 // Get filter options
 export function getFilterOptions(column: 'location_name' | 'type'): string[] {
   const pdo = getDatabase();
@@ -572,8 +580,8 @@ export function getOperationalStats(): OperationalStats {
   `).get() as { count: number }).count;
 
   // Uptime (based on successful fetches in expected intervals)
-  // If we expect a fetch every 30 min, check how many we got vs expected in last 24h
-  const expectedFetches24h = 48; // 24h / 30min
+  // If we expect a fetch every 10 min, check how many we got vs expected in last 24h
+  const expectedFetches24h = 144; // 24h / 10min
   const uptimeScore = Math.min(100, Math.round((fetches24h / expectedFetches24h) * 100));
 
   return {

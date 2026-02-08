@@ -1,17 +1,27 @@
 import { RawEvent } from '@/types';
-import { insertEvent, logFetch, getLastFetchTime, countEventsInDb } from './db';
+import { insertEvent, logFetch, getLastFetchTime, countEventsInDb, getDailyFetchCount } from './db';
 
 const POLICE_API_URL = 'https://polisen.se/api/events';
 const POLICE_API_TIMEOUT = 30000;
-const USER_AGENT = 'FreshRSS/1.28.0 (Linux; https://freshrss.org)';
-const CACHE_TIME = 1800; // 30 minutes in seconds
+const USER_AGENT = 'Tiny Tiny RSS/25.05-6abd7fdc (https://tt-rss.org/)';
+const CACHE_TIME = 600; // 10 minutes in seconds (minimum interval between fetches)
+const MAX_DAILY_FETCHES = 1440; // Maximum API calls per 24-hour period
 const MAX_FETCH_RETRIES = 3;
 const BACKFILL_THRESHOLD = 200; // If DB has fewer events than this, do initial backfill
 const BACKFILL_TARGET = 500; // Target number of events for backfill
 const BACKFILL_DAYS = 7; // How many days back to fetch during backfill
 const BACKFILL_DELAY_MS = 300; // Delay between API calls during backfill to respect rate limits
 
+// Enforce HTTPS: upgrade any http:// URL to https://
+function enforceHttps(url: string): string {
+  if (url.startsWith('http://')) {
+    return url.replace('http://', 'https://');
+  }
+  return url;
+}
+
 async function fetchWithRetry(url: string, retries = MAX_FETCH_RETRIES): Promise<RawEvent[]> {
+  const secureUrl = enforceHttps(url);
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt < retries; attempt++) {
@@ -19,7 +29,7 @@ async function fetchWithRetry(url: string, retries = MAX_FETCH_RETRIES): Promise
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), POLICE_API_TIMEOUT);
 
-      const response = await fetch(url, {
+      const response = await fetch(secureUrl, {
         headers: {
           'User-Agent': USER_AGENT,
         },
@@ -102,6 +112,13 @@ export async function refreshEventsIfNeeded(): Promise<RefreshResult> {
   const shouldFetch = !lastFetch || (Date.now() - lastFetch.getTime()) > CACHE_TIME * 1000;
 
   if (!shouldFetch) {
+    return { fetched: 0, new: 0, updated: 0, success: true, error: null };
+  }
+
+  // Check daily fetch limit (max 1440 calls per 24h)
+  const dailyFetchCount = getDailyFetchCount();
+  if (dailyFetchCount >= MAX_DAILY_FETCHES) {
+    console.warn(`Daily fetch limit reached (${dailyFetchCount}/${MAX_DAILY_FETCHES}). Skipping fetch.`);
     return { fetched: 0, new: 0, updated: 0, success: true, error: null };
   }
 
@@ -209,7 +226,7 @@ export async function fetchDetailsText(url: string): Promise<string | null> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), POLICE_API_TIMEOUT);
 
-    const response = await fetch(absoluteUrl, {
+    const response = await fetch(enforceHttps(absoluteUrl), {
       headers: {
         'User-Agent': USER_AGENT,
       },
