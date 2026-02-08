@@ -885,6 +885,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     height: auto;
     flex: 1;
     min-height: 500px;
+    contain: none;
 }
 
 /* Map container - stable sizing */
@@ -980,6 +981,229 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .map-info { background: var(--surface); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); box-shadow: 0 4px 12px var(--shadow); }
 .map-info-content { color: var(--text); font-size: 13px; font-weight: 600; text-align: center; }
 .map-info-content small { font-size: 10px; color: var(--text-muted); font-weight: 400; }
+
+/* ========================================
+   Map Timeline Controls (Flight-radar style)
+   ======================================== */
+
+.map-timeline {
+    background: var(--glass-bg);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius) var(--radius) 0 0;
+    padding: 10px 16px;
+    z-index: 10;
+    position: relative;
+}
+
+.timeline-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Time range buttons (1h / 6h / 24h) */
+.timeline-range-selector {
+    display: flex;
+    background: var(--surface-solid);
+    border-radius: var(--radius-xs);
+    padding: 2px;
+    border: 1px solid var(--border);
+    gap: 1px;
+    flex-shrink: 0;
+}
+
+.timeline-range-btn {
+    padding: 5px 10px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    font-family: inherit;
+    letter-spacing: 0.3px;
+}
+
+.timeline-range-btn:hover {
+    color: var(--text);
+    background: var(--surface-light);
+}
+
+.timeline-range-btn.active {
+    background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+    color: var(--primary);
+    box-shadow: 0 2px 8px var(--accent-glow);
+}
+
+/* Play/Pause button */
+.timeline-play-btn {
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface-solid);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    flex-shrink: 0;
+    padding: 0;
+}
+
+.timeline-play-btn:hover {
+    background: var(--surface-light);
+    border-color: var(--accent);
+    color: var(--accent);
+    transform: scale(1.08);
+}
+
+.timeline-play-btn.playing {
+    background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+    color: var(--primary);
+    border-color: var(--accent);
+    box-shadow: 0 0 12px var(--accent-glow);
+    animation: playingPulse 2s ease-in-out infinite;
+}
+
+@keyframes playingPulse {
+    0%, 100% { box-shadow: 0 0 12px var(--accent-glow); }
+    50% { box-shadow: 0 0 20px var(--accent-glow), 0 0 30px rgba(251, 191, 36, 0.15); }
+}
+
+/* Slider container */
+.timeline-slider-container {
+    flex: 1;
+    position: relative;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    min-width: 80px;
+}
+
+.timeline-slider {
+    width: 100%;
+    height: 4px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--surface-solid);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+    position: relative;
+    z-index: 2;
+    border: 1px solid var(--border);
+}
+
+.timeline-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+    cursor: pointer;
+    box-shadow: 0 2px 8px var(--accent-glow);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    border: 2px solid var(--primary);
+}
+
+.timeline-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.25);
+    box-shadow: 0 2px 12px var(--accent-glow);
+}
+
+.timeline-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+    cursor: pointer;
+    box-shadow: 0 2px 8px var(--accent-glow);
+    border: 2px solid var(--primary);
+}
+
+.timeline-slider-fill {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    height: 4px;
+    background: linear-gradient(90deg, var(--accent-dark), var(--accent));
+    border-radius: 2px;
+    pointer-events: none;
+    z-index: 1;
+    transition: width 0.05s linear;
+}
+
+/* Time label */
+.timeline-time-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    min-width: 48px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.timeline-time-label.live {
+    color: var(--success);
+}
+
+.timeline-live-dot {
+    width: 7px;
+    height: 7px;
+    background: var(--success);
+    border-radius: 50%;
+    animation: livePulse 2s ease-in-out infinite;
+    flex-shrink: 0;
+}
+
+/* Pulse marker animation for recent events */
+.pulse-marker {
+    animation: markerPulse 2s ease-in-out infinite;
+}
+
+@keyframes markerPulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.05; }
+}
+
+/* Mobile timeline adjustments */
+@media (max-width: 768px) {
+    .map-timeline {
+        padding: 8px 12px;
+        border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    }
+    .timeline-controls {
+        gap: 6px;
+    }
+    .timeline-range-btn {
+        padding: 4px 7px;
+        font-size: 10px;
+    }
+    .timeline-play-btn {
+        width: 30px;
+        height: 30px;
+    }
+    .timeline-play-btn svg {
+        width: 13px;
+        height: 13px;
+    }
+    .timeline-time-label {
+        font-size: 11px;
+        min-width: 40px;
+    }
+}
 
 /* ========================================
    Statistics View - Mobile First Design

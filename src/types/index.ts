@@ -64,6 +64,7 @@ export interface TopItem {
 
 export interface Statistics {
   total: number;
+  totalStored: number;
   last24h: number;
   last7d: number;
   last30d: number;
