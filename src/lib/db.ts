@@ -412,11 +412,11 @@ export function getStatsSummary(): Statistics {
   // Last 30 days
   const last30d = (pdo.prepare('SELECT COUNT(*) as count FROM events WHERE event_time >= ? AND type NOT LIKE ?').get(since30d, excludePattern) as { count: number }).count;
 
-  // Total (excluding summaries, for stats display)
-  const total = (pdo.prepare('SELECT COUNT(*) as count FROM events WHERE type NOT LIKE ?').get(excludePattern) as { count: number }).count;
-
   // Total stored (all events in database)
   const totalStored = (pdo.prepare('SELECT COUNT(*) as count FROM events').get() as { count: number }).count;
+
+  // Total should match totalStored so the footer shows consistent counts
+  const total = totalStored;
 
   // Oldest event for average calculation
   const oldest = pdo.prepare('SELECT MIN(event_time) as oldest FROM events WHERE type NOT LIKE ?').get(excludePattern) as { oldest: string | null };
