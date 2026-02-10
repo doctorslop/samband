@@ -26,10 +26,23 @@ export default function MapModal({ isOpen, lat, lng, location, onClose }: MapMod
 
       // Always create a fresh map instance since the DOM container is recreated each time
       mapRef.current = L.map(mapContainerRef.current).setView([lat, lng], 14);
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '© OpenStreetMap',
+      const tileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap',
         maxZoom: 18,
       }).addTo(mapRef.current);
+
+      // Fallback: if primary tiles fail, switch to OSM
+      let hasFallback = false;
+      const mapInstance = mapRef.current;
+      tileLayer.on('tileerror', () => {
+        if (hasFallback) return;
+        hasFallback = true;
+        mapInstance.removeLayer(tileLayer);
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; OpenStreetMap',
+          maxZoom: 19,
+        }).addTo(mapInstance);
+      });
 
       markerRef.current = L.circleMarker([lat, lng], {
         radius: 12,
@@ -43,6 +56,9 @@ export default function MapModal({ isOpen, lat, lng, location, onClose }: MapMod
       setTimeout(() => {
         mapRef.current?.invalidateSize();
       }, 100);
+      setTimeout(() => {
+        mapRef.current?.invalidateSize();
+      }, 400);
     };
 
     initMap();

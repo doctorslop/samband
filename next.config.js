@@ -22,7 +22,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com",
               "img-src 'self' data: https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com blob:",
               "font-src 'self' https://fonts.gstatic.com",
-              "connect-src 'self' https://polisen.se",
+              "connect-src 'self' https://polisen.se https://*.basemaps.cartocdn.com https://tile.openstreetmap.org",
               "frame-ancestors 'self'",
             ].join('; '),
           },

@@ -1210,18 +1210,22 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     }
     .timeline-controls {
         gap: 5px;
+        flex-wrap: wrap;
+        justify-content: center;
     }
     .timeline-range-btn {
-        padding: 3px 6px;
-        font-size: 9px;
+        padding: 6px 10px;
+        font-size: 10px;
+        min-height: 32px;
     }
     .timeline-play-btn {
-        width: 28px;
-        height: 28px;
+        width: 36px;
+        height: 36px;
+        min-width: 36px;
     }
     .timeline-play-btn svg {
-        width: 12px;
-        height: 12px;
+        width: 14px;
+        height: 14px;
     }
     .timeline-label {
         font-size: 10px;
@@ -1230,6 +1234,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     .timeline-counter {
         font-size: 9px;
         padding: 2px 6px;
+    }
+    .timeline-slider-wrap {
+        min-width: 60px;
+    }
+    .timeline-slider::-webkit-slider-thumb {
+        width: 20px;
+        height: 20px;
+    }
+    .timeline-slider::-moz-range-thumb {
+        width: 20px;
+        height: 20px;
     }
 }
 
@@ -1946,8 +1961,15 @@ footer {
     footer { padding: var(--space-card) 0 20px; }
 
     .map-wrapper.active { height: calc(100vh - 160px); min-height: 400px; flex: 1; }
+    .map-container { min-height: 400px; }
     .view-toggle button span.label { display: none; }
     .live-indicator { display: none; }
+}
+
+/* Landscape mobile: shorter map, ensure timeline stays visible */
+@media (max-width: 768px) and (orientation: landscape) {
+    .map-wrapper.active { height: calc(100vh - 80px); min-height: 250px; }
+    .map-container { min-height: 250px; }
 }
 
 /* Extra small screens (< 360px width) */
