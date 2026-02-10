@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, Suspense, useMemo } from 'react';
+import { useState, useCallback, Suspense, useMemo, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Header from './Header';
 import Filters from './Filters';
@@ -12,6 +12,8 @@ import ScrollToTop from './ScrollToTop';
 import MapModal from './MapModal';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { FormattedEvent, Statistics } from '@/types';
+
+export type Density = 'comfortable' | 'compact';
 
 
 interface ClientAppProps {
@@ -44,6 +46,7 @@ function ClientAppContent({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [currentView, setCurrentView] = useState(initialView);
+  const [density, setDensity] = useState<Density>('comfortable');
   const [displayedCount, setDisplayedCount] = useState(initialEvents.length);
   const [lastChecked, setLastChecked] = useState<Date>(new Date());
   const [mapModal, setMapModal] = useState<{
@@ -57,6 +60,27 @@ function ClientAppContent({
     lng: 0,
     location: '',
   });
+
+  // Load density preference from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('density');
+      if (saved === 'comfortable' || saved === 'compact') {
+        setDensity(saved);
+      }
+    } catch {
+      // localStorage unavailable
+    }
+  }, []);
+
+  const handleDensityChange = useCallback((d: Density) => {
+    setDensity(d);
+    try {
+      localStorage.setItem('density', d);
+    } catch {
+      // localStorage unavailable
+    }
+  }, []);
 
   const handleViewChange = useCallback(
     (view: string) => {
@@ -134,8 +158,8 @@ function ClientAppContent({
 
   return (
     <>
-      <div className={`container view-${currentView}`}>
-        <Header currentView={currentView} onViewChange={handleViewChange} onLogoClick={handleLogoClick} />
+      <div className={`container view-${currentView} density-${density}`}>
+        <Header currentView={currentView} onViewChange={handleViewChange} onLogoClick={handleLogoClick} density={density} onDensityChange={handleDensityChange} />
 
         {currentView !== 'map' && currentView !== 'stats' && (
           <Filters
