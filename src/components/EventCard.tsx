@@ -142,11 +142,11 @@ export default function EventCard({ event, currentView, onShowMap, isHighlighted
       >
         <div className="event-header-content">
           <div className="event-meta-row">
-            <span className="event-datetime">
-              {event.date.day} {event.date.month} {event.date.time}
-            </span>
+            <span className="event-relative">{event.date.time}</span>
             <span className="meta-separator">•</span>
-            <span className="event-relative">{event.date.relative}</span>
+            <span className="event-datetime">
+              {event.date.day} {event.date.month}
+            </span>
             {event.url && (
               <>
                 <span className="meta-separator">•</span>
