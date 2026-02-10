@@ -19,17 +19,16 @@ const TIME_RANGES: { key: TimeRange; label: string; ms: number }[] = [
 const REPLAY_STEP_MS = 5 * 60 * 1000;
 const REPLAY_INTERVAL_MS = 80;
 
-// Only group events at the same location (within ~5 km).
-// This prevents chaining distant cities into one mega-cluster.
-const PROXIMITY_THRESHOLD = 0.05;
+// Only group events at effectively the same spot (within ~2 km).
+const PROXIMITY_THRESHOLD = 0.02;
 
-// Small nudge between co-located markers (~5 px at zoom 5).
-// Markers stay close to their real GPS position; overlaps at
-// country zoom are expected and resolve when the user zooms in.
-const MIN_GAP_DEG = 0.12;
+// Tiny nudge between co-located markers (~1-2 px at zoom 5).
+// At city zoom they separate clearly; at country zoom they pile up,
+// which is the expected behaviour for a dense metro area.
+const MIN_GAP_DEG = 0.035;
 
-// Never displace a marker more than this from the cluster centroid.
-const MAX_FAN_RADIUS = 0.25;
+// Hard cap — never displace more than ~8 km from the real position.
+const MAX_FAN_RADIUS = 0.07;
 
 /**
  * Pre-compute display positions so co-located markers (same city block)
