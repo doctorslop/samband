@@ -355,16 +355,29 @@ function EventMapInner({ events, isActive }: EventMapProps) {
         attributionControl: true,
       });
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      const tileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         attribution: '&copy; OpenStreetMap',
         maxZoom: 18,
       }).addTo(map);
 
+      // Fallback: if primary tiles fail, switch to OSM
+      let hasFallback = false;
+      tileLayer.on('tileerror', () => {
+        if (hasFallback) return;
+        hasFallback = true;
+        map.removeLayer(tileLayer);
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; OpenStreetMap',
+          maxZoom: 19,
+        }).addTo(map);
+      });
+
       mapRef.current = map;
       setMapReady(true);
 
-      // Make sure tiles render properly
+      // Make sure tiles render properly — double-nudge for mobile browsers
       setTimeout(() => map.invalidateSize(), 200);
+      setTimeout(() => map.invalidateSize(), 600);
     })();
 
     return () => {
@@ -392,12 +405,29 @@ function EventMapInner({ events, isActive }: EventMapProps) {
     }
   }, [mapReady, events, timeRange, renderMarkers, isPlaying, replayTimestamp]);
 
-  // --- Fix tile sizing on tab switch ---
+  // --- Fix tile sizing on tab switch and orientation changes ---
   useEffect(() => {
     if (isActive && mapRef.current) {
       requestAnimationFrame(() => mapRef.current?.invalidateSize());
+      // Delayed nudge for slower mobile layout reflows
+      const t = setTimeout(() => mapRef.current?.invalidateSize(), 300);
+      return () => clearTimeout(t);
     }
   }, [isActive]);
+
+  // Re-layout on window resize / orientation change (mobile)
+  useEffect(() => {
+    if (!mapReady) return;
+    const onResize = () => {
+      requestAnimationFrame(() => mapRef.current?.invalidateSize());
+    };
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('orientationchange', onResize);
+    };
+  }, [mapReady]);
 
   // --- Replay engine: animated dot-by-dot playback ---
   useEffect(() => {

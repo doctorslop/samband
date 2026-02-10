@@ -1,5 +1,5 @@
 // Service Worker for Sambandscentralen PWA
-const CACHE_NAME = 'samband-v1';
+const CACHE_NAME = 'samband-v2';
 
 // Assets to cache on install
 const STATIC_ASSETS = [
@@ -46,6 +46,13 @@ self.addEventListener('fetch', (event) => {
 
   // Skip Chrome extension requests and other non-http(s) requests
   if (!url.protocol.startsWith('http')) {
+    return;
+  }
+
+  // Skip cross-origin requests (map tiles, fonts, CDN assets).
+  // Letting the browser handle these natively avoids CSP connect-src
+  // conflicts and allows <img>-based tile loading governed by img-src.
+  if (url.origin !== self.location.origin) {
     return;
   }
 
