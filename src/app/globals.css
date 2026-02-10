@@ -2615,6 +2615,347 @@ footer {
     }
 }
 
+/* ========================================
+   Density Toggle Button
+   ======================================== */
+
+.density-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: var(--surface-solid);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 0;
+    flex-shrink: 0;
+}
+.density-toggle:hover {
+    color: var(--text);
+    border-color: var(--border-accent);
+    background: var(--surface-light);
+}
+.density-toggle.density-compact {
+    color: var(--accent);
+    border-color: var(--border-accent);
+    background: rgba(251, 191, 36, 0.08);
+}
+.density-toggle:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+.density-toggle svg {
+    flex-shrink: 0;
+}
+
+/* ========================================
+   Density System: Compact Mode
+   Overrides spacing variables and specific
+   component styles for higher information
+   density without harming readability.
+   ======================================== */
+
+.density-compact {
+    --space-section: 16px;
+    --space-card: 10px;
+    --space-element: 8px;
+}
+
+/* Header: tighter in compact */
+.density-compact header {
+    padding-top: 12px;
+    padding-bottom: 10px;
+}
+
+/* Filters: reduced padding */
+.density-compact .search-bar {
+    padding: 8px;
+    margin-bottom: 8px;
+}
+.density-compact .search-form {
+    gap: 6px;
+}
+.density-compact .search-input {
+    padding-top: 8px;
+    padding-bottom: 8px;
+}
+.density-compact .filter-select {
+    padding-top: 8px;
+    padding-bottom: 8px;
+}
+.density-compact .btn {
+    padding: 8px 18px;
+}
+.density-compact .active-filters {
+    margin-top: 6px;
+    gap: 6px;
+}
+.density-compact .filter-tag {
+    padding: 5px 10px;
+    font-size: 11px;
+}
+
+/* Events grid: tighter gaps */
+.density-compact .events-grid {
+    gap: var(--space-card);
+}
+
+/* Event cards: reduced padding and spacing */
+.density-compact .event-card {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+.density-compact .event-card-header {
+    padding: 10px 14px;
+    gap: 8px;
+}
+.density-compact .event-header-content {
+    gap: 3px;
+}
+.density-compact .event-meta-row {
+    font-size: 11px;
+    gap: 6px;
+}
+.density-compact .event-type {
+    padding: 4px 8px;
+    font-size: 10px;
+}
+.density-compact .event-location-link {
+    font-size: 14px;
+    margin-top: 3px;
+}
+.density-compact .event-summary {
+    font-size: 12px;
+    line-height: 1.5;
+    margin-top: 5px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.density-compact .event-card.expanded .event-summary {
+    -webkit-line-clamp: unset;
+    overflow: visible;
+}
+.density-compact .event-header-actions {
+    margin-top: 6px;
+    gap: 8px;
+}
+.density-compact .expand-details-btn,
+.density-compact .show-map-link,
+.density-compact .share-event-btn {
+    padding: 5px 10px;
+    font-size: 12px;
+}
+
+/* Card body: tighter when expanded */
+.density-compact .event-card-body {
+    padding: 0 14px 10px;
+}
+.density-compact .event-details {
+    margin-top: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+/* Load more */
+.density-compact .load-more-container {
+    padding: 16px 0;
+}
+.density-compact .load-more-btn {
+    padding: 10px 28px;
+    font-size: 13px;
+}
+
+/* Footer: tighter */
+.density-compact footer {
+    padding: 16px 0;
+}
+.density-compact .status-counts {
+    gap: 12px;
+    font-size: 11px;
+}
+
+/* Stats view: tighter in compact */
+.density-compact .stats-section {
+    margin-bottom: 16px;
+}
+.density-compact .stats-hero {
+    margin-bottom: 20px;
+}
+.density-compact .stats-hero-grid {
+    gap: 8px;
+}
+.density-compact .stats-metric {
+    padding: 14px 12px;
+}
+.density-compact .stats-metric__value {
+    font-size: 24px;
+}
+.density-compact .stats-metric--primary .stats-metric__value {
+    font-size: 30px;
+}
+.density-compact .stats-metric__label {
+    margin-top: 4px;
+    font-size: 10px;
+}
+.density-compact .stats-card {
+    padding: 14px;
+}
+.density-compact .stats-card__title {
+    margin-bottom: 10px;
+}
+.density-compact .stats-grid {
+    gap: 10px;
+}
+
+/* New events banner: tighter */
+.density-compact .new-events-banner {
+    padding-bottom: 10px;
+}
+.density-compact .new-events-btn {
+    padding: 8px 18px;
+    font-size: 13px;
+}
+
+/* Scroll to top: smaller in compact */
+.density-compact ~ .scroll-top {
+    width: 40px;
+    height: 40px;
+}
+
+/* ========================================
+   Compact Density: Mobile Overrides
+   ======================================== */
+
+@media (max-width: 768px) {
+    .density-compact {
+        --space-section: 10px;
+        --space-card: 8px;
+        --space-element: 6px;
+    }
+
+    .density-compact header {
+        padding-top: 6px;
+        padding-bottom: 6px;
+    }
+
+    .density-compact .event-card-header {
+        padding: 8px var(--space-card);
+    }
+
+    .density-compact .event-meta-row {
+        font-size: 10px;
+        gap: 4px;
+    }
+
+    .density-compact .event-type {
+        padding: 3px 7px;
+        font-size: 9px;
+    }
+
+    .density-compact .event-location-link {
+        font-size: 13px;
+        margin-top: 2px;
+    }
+
+    .density-compact .event-summary {
+        font-size: 12px;
+        margin-top: 4px;
+    }
+
+    .density-compact .event-header-actions {
+        margin-top: 6px;
+        gap: 6px;
+    }
+
+    .density-compact .expand-details-btn,
+    .density-compact .show-map-link,
+    .density-compact .share-event-btn {
+        font-size: 13px;
+        min-height: 40px;
+        padding: 6px 12px;
+    }
+
+    .density-compact .event-card-body {
+        padding: 0 var(--space-card) 8px;
+    }
+
+    .density-compact .search-bar {
+        padding: 6px;
+    }
+    .density-compact .search-form {
+        gap: 6px;
+    }
+
+    .density-compact .load-more-btn {
+        min-height: 40px;
+    }
+
+    .density-compact .new-events-banner {
+        padding: 0 8px 8px;
+    }
+    .density-compact .new-events-btn {
+        padding: 10px 16px;
+    }
+
+    .density-compact footer {
+        padding: 10px 0 14px;
+    }
+    .density-compact .status-counts {
+        gap: 6px;
+    }
+}
+
+/* Compact density for extra small screens */
+@media (max-width: 360px) {
+    .density-compact {
+        --space-section: 8px;
+        --space-card: 6px;
+        --space-element: 5px;
+    }
+
+    .density-compact .event-card-header {
+        padding: 6px var(--space-card);
+    }
+
+    .density-compact .event-summary {
+        font-size: 11px;
+    }
+
+    .density-compact .expand-details-btn,
+    .density-compact .show-map-link,
+    .density-compact .share-event-btn {
+        font-size: 12px;
+        padding: 5px 8px;
+        min-height: 36px;
+    }
+}
+
+/* Compact density: desktop refinements */
+@media (min-width: 769px) {
+    .density-compact header {
+        padding-top: 10px;
+        padding-bottom: 8px;
+    }
+    .density-compact header.header-compact {
+        padding-top: 6px;
+        padding-bottom: 5px;
+    }
+}
+
+/* Density toggle: hide label text on mobile */
+@media (max-width: 768px) {
+    .density-toggle {
+        width: 32px;
+        height: 32px;
+    }
+}
+
 /* Keyboard shortcut hints */
 .keyboard-hint {
     position: absolute;
