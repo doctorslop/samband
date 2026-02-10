@@ -13,7 +13,7 @@ import MapModal from './MapModal';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { FormattedEvent, Statistics } from '@/types';
 
-export type Density = 'comfortable' | 'compact';
+export type Density = 'comfortable' | 'compact' | 'stream';
 
 
 interface ClientAppProps {
@@ -47,6 +47,7 @@ function ClientAppContent({
   const searchParams = useSearchParams();
   const [currentView, setCurrentView] = useState(initialView);
   const [density, setDensity] = useState<Density>('comfortable');
+  const [expandSummaries, setExpandSummaries] = useState(false);
   const [displayedCount, setDisplayedCount] = useState(initialEvents.length);
   const [lastChecked, setLastChecked] = useState<Date>(new Date());
   const [mapModal, setMapModal] = useState<{
@@ -61,12 +62,16 @@ function ClientAppContent({
     location: '',
   });
 
-  // Load density preference from localStorage on mount
+  // Load preferences from localStorage on mount
   useEffect(() => {
     try {
       const saved = localStorage.getItem('density');
-      if (saved === 'comfortable' || saved === 'compact') {
+      if (saved === 'comfortable' || saved === 'compact' || saved === 'stream') {
         setDensity(saved);
+      }
+      const savedExpand = localStorage.getItem('expandSummaries');
+      if (savedExpand === 'true') {
+        setExpandSummaries(true);
       }
     } catch {
       // localStorage unavailable
@@ -77,6 +82,15 @@ function ClientAppContent({
     setDensity(d);
     try {
       localStorage.setItem('density', d);
+    } catch {
+      // localStorage unavailable
+    }
+  }, []);
+
+  const handleExpandSummariesChange = useCallback((expand: boolean) => {
+    setExpandSummaries(expand);
+    try {
+      localStorage.setItem('expandSummaries', String(expand));
     } catch {
       // localStorage unavailable
     }
@@ -158,8 +172,8 @@ function ClientAppContent({
 
   return (
     <>
-      <div className={`container view-${currentView} density-${density}`}>
-        <Header currentView={currentView} onViewChange={handleViewChange} onLogoClick={handleLogoClick} density={density} onDensityChange={handleDensityChange} />
+      <div className={`container view-${currentView} density-${density}${expandSummaries ? ' summaries-expanded' : ''}`}>
+        <Header currentView={currentView} onViewChange={handleViewChange} onLogoClick={handleLogoClick} density={density} onDensityChange={handleDensityChange} expandSummaries={expandSummaries} onExpandSummariesChange={handleExpandSummariesChange} />
 
         {currentView !== 'map' && currentView !== 'stats' && (
           <Filters

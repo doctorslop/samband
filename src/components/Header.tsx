@@ -9,12 +9,16 @@ interface HeaderProps {
   onLogoClick?: () => void;
   density: Density;
   onDensityChange: (density: Density) => void;
+  expandSummaries: boolean;
+  onExpandSummariesChange: (expand: boolean) => void;
 }
 
-export default function Header({ currentView, onViewChange, onLogoClick, density, onDensityChange }: HeaderProps) {
+export default function Header({ currentView, onViewChange, onLogoClick, density, onDensityChange, expandSummaries, onExpandSummariesChange }: HeaderProps) {
   const headerRef = useRef<HTMLElement>(null);
+  const settingsRef = useRef<HTMLDivElement>(null);
   const [isCompact, setIsCompact] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const lastScrollY = useRef(0);
 
   useEffect(() => {
@@ -53,6 +57,18 @@ export default function Header({ currentView, onViewChange, onLogoClick, density
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  // Close settings on click outside
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
+        setSettingsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [settingsOpen]);
 
   const headerClasses = [
     isCompact ? 'header-compact' : '',
@@ -129,29 +145,66 @@ export default function Header({ currentView, onViewChange, onLogoClick, density
               <span className="label">Statistik</span>
             </button>
           </nav>
-          <button
-            type="button"
-            className={`density-toggle${density === 'compact' ? ' density-compact' : ''}`}
-            onClick={() => onDensityChange(density === 'comfortable' ? 'compact' : 'comfortable')}
-            aria-label={density === 'comfortable' ? 'Byt till kompakt vy' : 'Byt till bekväm vy'}
-            aria-pressed={density === 'compact'}
-            title={density === 'comfortable' ? 'Kompakt vy' : 'Bekväm vy'}
-          >
-            {density === 'comfortable' ? (
+          <div className="settings-wrapper" ref={settingsRef}>
+            <button
+              type="button"
+              className={`settings-toggle${settingsOpen ? ' active' : ''}`}
+              onClick={() => setSettingsOpen(!settingsOpen)}
+              aria-label="Inställningar"
+              aria-expanded={settingsOpen}
+              title="Inställningar"
+            >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="3" y="3" width="18" height="4" rx="1"></rect>
-                <rect x="3" y="10" width="18" height="4" rx="1"></rect>
-                <rect x="3" y="17" width="18" height="4" rx="1"></rect>
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
               </svg>
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="3" y="3" width="18" height="3" rx="1"></rect>
-                <rect x="3" y="8.5" width="18" height="3" rx="1"></rect>
-                <rect x="3" y="14" width="18" height="3" rx="1"></rect>
-                <rect x="3" y="19.5" width="18" height="3" rx="1"></rect>
-              </svg>
+            </button>
+            {settingsOpen && (
+              <div className="settings-panel">
+                <div className="settings-section">
+                  <div className="settings-label">Vy</div>
+                  <div className="settings-options">
+                    <button
+                      type="button"
+                      className={`settings-option${density === 'comfortable' ? ' active' : ''}`}
+                      onClick={() => onDensityChange('comfortable')}
+                    >
+                      Bekväm
+                    </button>
+                    <button
+                      type="button"
+                      className={`settings-option${density === 'compact' ? ' active' : ''}`}
+                      onClick={() => onDensityChange('compact')}
+                    >
+                      Kompakt
+                    </button>
+                    <button
+                      type="button"
+                      className={`settings-option${density === 'stream' ? ' active' : ''}`}
+                      onClick={() => onDensityChange('stream')}
+                    >
+                      Flöde
+                    </button>
+                  </div>
+                </div>
+                <div className="settings-divider"></div>
+                <div className="settings-section">
+                  <div className="settings-row">
+                    <span className="settings-label">Läs mer</span>
+                    <button
+                      type="button"
+                      className={`settings-switch${expandSummaries ? ' active' : ''}`}
+                      onClick={() => onExpandSummariesChange(!expandSummaries)}
+                      role="switch"
+                      aria-checked={expandSummaries}
+                    >
+                      <span className="settings-switch-thumb"></span>
+                    </button>
+                  </div>
+                </div>
+              </div>
             )}
-          </button>
+          </div>
           <div className="live-indicator">
             <span className="live-dot" />
             <span className="live-text">Live</span>
