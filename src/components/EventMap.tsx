@@ -19,23 +19,22 @@ const TIME_RANGES: { key: TimeRange; label: string; ms: number }[] = [
 const REPLAY_STEP_MS = 5 * 60 * 1000;
 const REPLAY_INTERVAL_MS = 80;
 
-// Minimum gap between any two markers in degrees.
-// At zoom 5 Sweden spans ~15° over ~600px → 1° ≈ 40px.
-// Marker radius is ~10px, so we need ≥0.5° between centres.
-const MIN_GAP_DEG = 0.45;
+// Only group events at the same location (within ~5 km).
+// This prevents chaining distant cities into one mega-cluster.
+const PROXIMITY_THRESHOLD = 0.05;
 
-// Proximity threshold for clustering – events within a metro area (~50km)
-// should be grouped together so they can be fanned out properly.
-const PROXIMITY_THRESHOLD = 0.5;
+// Small nudge between co-located markers (~5 px at zoom 5).
+// Markers stay close to their real GPS position; overlaps at
+// country zoom are expected and resolve when the user zooms in.
+const MIN_GAP_DEG = 0.12;
+
+// Never displace a marker more than this from the cluster centroid.
+const MAX_FAN_RADIUS = 0.25;
 
 /**
- * Pre-compute display positions so no two markers overlap at the default
- * country-wide zoom level. Steps:
- *   1. Cluster nearby events (within PROXIMITY_THRESHOLD degrees).
- *   2. Place cluster members in a circle around their centroid, sized so
- *      adjacent dots are at least MIN_GAP_DEG apart.
- *   3. Run a global collision pass – any remaining pair closer than
- *      MIN_GAP_DEG gets nudged apart.
+ * Pre-compute display positions so co-located markers (same city block)
+ * get fanned out slightly.  Markers at distinct locations keep their
+ * real GPS coordinates—overlaps at the country-wide zoom are acceptable.
  */
 function computeMarkerPositions(events: FormattedEvent[]): Map<number, [number, number]> {
   const positions = new Map<number, [number, number]>();
@@ -50,87 +49,52 @@ function computeMarkerPositions(events: FormattedEvent[]): Map<number, [number, 
 
   if (parsed.length === 0) return positions;
 
-  // --- Step 1: greedy proximity clustering (centroid-based) ---
+  // --- Step 1: cluster only near-identical locations ---
   const used = new Set<number>();
-  const clusters: { ids: number[]; centroidLat: number; centroidLng: number }[] = [];
+  const clusters: { indices: number[]; cLat: number; cLng: number }[] = [];
 
   for (let i = 0; i < parsed.length; i++) {
     if (used.has(i)) continue;
     used.add(i);
     const members = [i];
+    let cLat = parsed[i].lat;
+    let cLng = parsed[i].lng;
 
-    // Expand cluster with any point close to the centroid
-    let cLat = parsed[i].lat, cLng = parsed[i].lng;
-    let changed = true;
-    while (changed) {
-      changed = false;
-      for (let j = 0; j < parsed.length; j++) {
-        if (used.has(j)) continue;
-        const dLat = parsed[j].lat - cLat;
-        const dLng = parsed[j].lng - cLng;
-        if (dLat * dLat + dLng * dLng < PROXIMITY_THRESHOLD * PROXIMITY_THRESHOLD) {
-          members.push(j);
-          used.add(j);
-          // Recompute centroid
-          cLat = 0; cLng = 0;
-          for (const idx of members) { cLat += parsed[idx].lat; cLng += parsed[idx].lng; }
-          cLat /= members.length; cLng /= members.length;
-          changed = true;
-        }
+    for (let j = i + 1; j < parsed.length; j++) {
+      if (used.has(j)) continue;
+      const dLat = parsed[j].lat - cLat;
+      const dLng = parsed[j].lng - cLng;
+      if (dLat * dLat + dLng * dLng < PROXIMITY_THRESHOLD * PROXIMITY_THRESHOLD) {
+        members.push(j);
+        used.add(j);
+        // Update running centroid
+        cLat = 0; cLng = 0;
+        for (const idx of members) { cLat += parsed[idx].lat; cLng += parsed[idx].lng; }
+        cLat /= members.length; cLng /= members.length;
       }
     }
 
-    clusters.push({
-      ids: members.map(idx => parsed[idx].id),
-      centroidLat: cLat,
-      centroidLng: cLng,
-    });
+    clusters.push({ indices: members, cLat, cLng });
   }
 
-  // --- Step 2: fan out cluster members ---
-  for (const { ids, centroidLat, centroidLng } of clusters) {
-    if (ids.length === 1) {
-      const p = parsed.find(pp => pp.id === ids[0])!;
+  // --- Step 2: place markers ---
+  for (const { indices, cLat, cLng } of clusters) {
+    if (indices.length === 1) {
+      const p = parsed[indices[0]];
       positions.set(p.id, [p.lat, p.lng]);
     } else {
-      // Circle radius so adjacent dots are MIN_GAP_DEG apart
-      // circumference = n * MIN_GAP_DEG, radius = circumference / (2π)
-      const fanRadius = Math.max(MIN_GAP_DEG, (ids.length * MIN_GAP_DEG) / (2 * Math.PI));
+      // Fan out in a small circle, capped so dots stay near the real spot
+      const idealRadius = (indices.length * MIN_GAP_DEG) / (2 * Math.PI);
+      const fanRadius = Math.min(Math.max(MIN_GAP_DEG, idealRadius), MAX_FAN_RADIUS);
 
-      for (let i = 0; i < ids.length; i++) {
-        const angle = (2 * Math.PI * i) / ids.length - Math.PI / 2;
-        positions.set(ids[i], [
-          centroidLat + fanRadius * Math.cos(angle),
-          centroidLng + fanRadius * Math.sin(angle),
+      for (let i = 0; i < indices.length; i++) {
+        const angle = (2 * Math.PI * i) / indices.length - Math.PI / 2;
+        positions.set(parsed[indices[i]].id, [
+          cLat + fanRadius * Math.cos(angle),
+          cLng + fanRadius * Math.sin(angle),
         ]);
       }
     }
-  }
-
-  // --- Step 3: global collision resolution ---
-  // Iteratively push overlapping pairs apart (up to a few passes)
-  const allIds = Array.from(positions.keys());
-  for (let pass = 0; pass < 4; pass++) {
-    let anyMoved = false;
-    for (let i = 0; i < allIds.length; i++) {
-      for (let j = i + 1; j < allIds.length; j++) {
-        const [aLat, aLng] = positions.get(allIds[i])!;
-        const [bLat, bLng] = positions.get(allIds[j])!;
-        const dLat = bLat - aLat;
-        const dLng = bLng - aLng;
-        const dist = Math.sqrt(dLat * dLat + dLng * dLng);
-        if (dist < MIN_GAP_DEG) {
-          anyMoved = true;
-          // Push apart along their connecting line (or arbitrary if coincident)
-          const nx = dist > 0.0001 ? dLat / dist : 1;
-          const ny = dist > 0.0001 ? dLng / dist : 0;
-          const push = (MIN_GAP_DEG - dist) / 2 + 0.01;
-          positions.set(allIds[i], [aLat - nx * push, aLng - ny * push]);
-          positions.set(allIds[j], [bLat + nx * push, bLng + ny * push]);
-        }
-      }
-    }
-    if (!anyMoved) break;
   }
 
   return positions;
