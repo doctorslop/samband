@@ -26,8 +26,8 @@ export default function MapModal({ isOpen, lat, lng, location, onClose }: MapMod
 
       // Always create a fresh map instance since the DOM container is recreated each time
       mapRef.current = L.map(mapContainerRef.current).setView([lat, lng], 14);
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '© OpenStreetMap',
         maxZoom: 18,
       }).addTo(mapRef.current);
 

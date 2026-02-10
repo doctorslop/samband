@@ -355,8 +355,8 @@ function EventMapInner({ events, isActive }: EventMapProps) {
         attributionControl: true,
       });
 
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors',
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap',
         maxZoom: 18,
       }).addTo(map);
 
