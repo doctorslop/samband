@@ -465,7 +465,7 @@ export function getStatsSummary(): Statistics {
   }
 
   const daily: DailyStats[] = [];
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const dayNames = ['Sön', 'Mån', 'Tis', 'Ons', 'Tor', 'Fre', 'Lör'];
   for (let i = 6; i >= 0; i--) {
     const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
     const dateStr = date.toISOString().split('T')[0];
@@ -475,6 +475,18 @@ export function getStatsSummary(): Statistics {
       count: dailyMap[dateStr] || 0,
     });
   }
+
+  // GPS coverage
+  const eventsWithGps = (pdo.prepare("SELECT COUNT(*) as count FROM events WHERE location_gps != ''").get() as { count: number }).count;
+  const gpsPercent = totalStored > 0 ? Math.round((eventsWithGps / totalStored) * 100) : 0;
+
+  // Updated events
+  const updatedEvents = (pdo.prepare("SELECT COUNT(*) as count FROM events WHERE last_updated != publish_time").get() as { count: number }).count;
+  const updatedPercent = totalStored > 0 ? Math.round((updatedEvents / totalStored) * 100) : 0;
+
+  // Unique counts
+  const uniqueLocations = (pdo.prepare('SELECT COUNT(DISTINCT location_name) as count FROM events').get() as { count: number }).count;
+  const uniqueTypes = (pdo.prepare('SELECT COUNT(DISTINCT type) as count FROM events').get() as { count: number }).count;
 
   return {
     total,
@@ -488,6 +500,10 @@ export function getStatsSummary(): Statistics {
     hourly,
     weekdays,
     daily,
+    gpsPercent,
+    updatedPercent,
+    uniqueLocations,
+    uniqueTypes,
   };
 }
 

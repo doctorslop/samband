@@ -74,6 +74,10 @@ export interface Statistics {
   hourly: number[];
   weekdays: number[];
   daily: DailyStats[];
+  gpsPercent: number;
+  updatedPercent: number;
+  uniqueLocations: number;
+  uniqueTypes: number;
 }
 
 // Type style mapping

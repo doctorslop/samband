@@ -46,6 +46,22 @@ function StatsView({ stats, isActive, onTypeClick, onLocationClick }: StatsViewP
             <span className="stats-metric__value">~{stats.avgPerDay}</span>
             <span className="stats-metric__label">Genomsnitt/dag</span>
           </div>
+          <div className="stats-metric">
+            <span className="stats-metric__value">{stats.uniqueLocations}</span>
+            <span className="stats-metric__label">Unika platser</span>
+          </div>
+          <div className="stats-metric">
+            <span className="stats-metric__value">{stats.uniqueTypes}</span>
+            <span className="stats-metric__label">Händelsetyper</span>
+          </div>
+          <div className="stats-metric">
+            <span className="stats-metric__value">{stats.gpsPercent}%</span>
+            <span className="stats-metric__label">Med GPS-position</span>
+          </div>
+          <div className="stats-metric">
+            <span className="stats-metric__value">{stats.updatedPercent}%</span>
+            <span className="stats-metric__label">Uppdaterade</span>
+          </div>
         </div>
       </div>
 

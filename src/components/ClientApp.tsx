@@ -48,7 +48,6 @@ function ClientAppContent({
   const [currentView, setCurrentView] = useState(initialView);
   const [density, setDensity] = useState<Density>('comfortable');
   const [expandSummaries, setExpandSummaries] = useState(false);
-  const [displayedCount, setDisplayedCount] = useState(initialEvents.length);
   const [lastChecked, setLastChecked] = useState<Date>(new Date());
   const [mapModal, setMapModal] = useState<{
     isOpen: boolean;
@@ -194,7 +193,6 @@ function ClientAppContent({
                 currentView={currentView}
                 onShowMap={handleShowMap}
                 highlightedEventId={highlightedEventId}
-                onEventCountChange={setDisplayedCount}
                 onLastCheckedChange={setLastChecked}
                 expandSummaries={expandSummaries}
                 density={density}
@@ -212,7 +210,7 @@ function ClientAppContent({
             />
         </main>
 
-        <Footer totalStored={stats.totalStored} total={stats.total} shown={displayedCount} lastChecked={lastChecked} />
+        <Footer lastChecked={lastChecked} />
       </div>
 
       <ScrollToTop />

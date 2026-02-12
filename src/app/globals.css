@@ -1736,10 +1736,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     justify-content: center;
     gap: 10px;
     padding: 14px 36px;
-    background: linear-gradient(135deg, var(--surface-light), var(--surface-solid));
-    border: 1px solid var(--border);
+    background: transparent;
+    border: 1px solid var(--border-accent);
     border-radius: var(--radius);
-    color: var(--text);
+    color: var(--accent);
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
@@ -1747,11 +1747,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     min-width: 180px;
 }
 .load-more-btn:hover:not(:disabled) {
-    background: linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(251, 191, 36, 0.08));
-    border-color: var(--border-accent);
-    color: var(--accent);
+    background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+    border-color: var(--accent);
+    color: var(--primary);
     transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 8px 24px rgba(251, 191, 36, 0.25);
 }
 .load-more-btn:focus-visible {
     outline: 2px solid var(--accent);
@@ -2659,15 +2659,14 @@ footer {
 
 /* Settings dropdown panel */
 .settings-panel {
-    position: absolute;
-    top: calc(100% + 8px);
-    right: 0;
+    position: fixed;
+    right: var(--space-page);
     width: 200px;
     background: var(--surface-solid);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-sm);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-    z-index: 1100;
+    z-index: 10000;
     padding: 12px;
     animation: settingsIn 0.15s ease-out;
 }
@@ -3032,9 +3031,6 @@ footer {
         height: 32px;
     }
     .settings-panel {
-        position: fixed;
-        top: auto;
-        right: var(--space-page);
         width: 180px;
         padding: 10px;
     }

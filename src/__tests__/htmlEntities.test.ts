@@ -1,39 +1,19 @@
-// Test HTML entity decoding logic directly without importing the full module
-// This avoids issues with better-sqlite3 native module in test environment
+// Test HTML entity decoding by importing the real function from policeApi.
+// We mock better-sqlite3 (and the db module) to avoid native module issues in tests.
 
-// Copy of the HTML_ENTITIES map and decodeHtmlEntities function for testing
-const HTML_ENTITIES: Record<string, string> = {
-  aring: "å", Aring: "Å",
-  auml: "ä", Auml: "Ä",
-  ouml: "ö", Ouml: "Ö",
-  nbsp: " ", amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'",
-  copy: "©", reg: "®", trade: "™", euro: "€", pound: "£", yen: "¥",
-  cent: "¢", deg: "°", plusmn: "±", times: "×", divide: "÷",
-  frac12: "½", frac14: "¼", frac34: "¾",
-  hellip: "…", mdash: "—", ndash: "–", lsquo: "\u2018", rsquo: "\u2019",
-  ldquo: "\u201C", rdquo: "\u201D", bull: "•", middot: "·",
-  eacute: "é", Eacute: "É", egrave: "è", Egrave: "È",
-  aacute: "á", Aacute: "Á", agrave: "à", Agrave: "À",
-  oacute: "ó", Oacute: "Ó", ograve: "ò", Ograve: "Ò",
-  uacute: "ú", Uacute: "Ú", ugrave: "ù", Ugrave: "Ù",
-  iacute: "í", Iacute: "Í", igrave: "ì", Igrave: "Ì",
-  ntilde: "ñ", Ntilde: "Ñ", ccedil: "ç", Ccedil: "Ç",
-  uuml: "ü", Uuml: "Ü", oslash: "ø", Oslash: "Ø",
-  aelig: "æ", AElig: "Æ", szlig: "ß",
-};
+jest.mock('better-sqlite3', () => {
+  return jest.fn(() => ({
+    pragma: jest.fn(),
+    exec: jest.fn(),
+    prepare: jest.fn(() => ({
+      run: jest.fn(),
+      get: jest.fn(),
+      all: jest.fn(() => []),
+    })),
+  }));
+});
 
-function decodeHtmlEntities(text: string): string {
-  let decoded = text.replace(/&([a-zA-Z]+);/g, (match, entity) => {
-    return HTML_ENTITIES[entity] || match;
-  });
-  decoded = decoded.replace(/&#x([0-9A-Fa-f]+);/g, (_, hex) =>
-    String.fromCharCode(parseInt(hex, 16))
-  );
-  decoded = decoded.replace(/&#(\d+);/g, (_, dec) =>
-    String.fromCharCode(parseInt(dec, 10))
-  );
-  return decoded;
-}
+import { decodeHtmlEntities } from '@/lib/policeApi';
 
 describe('decodeHtmlEntities', () => {
   describe('Swedish character entities', () => {
