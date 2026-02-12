@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import type { Density } from './ClientApp';
 
 interface HeaderProps {
@@ -16,10 +16,19 @@ interface HeaderProps {
 export default function Header({ currentView, onViewChange, onLogoClick, density, onDensityChange, expandSummaries, onExpandSummariesChange }: HeaderProps) {
   const headerRef = useRef<HTMLElement>(null);
   const settingsRef = useRef<HTMLDivElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
   const [isCompact, setIsCompact] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [panelTop, setPanelTop] = useState<number | undefined>(undefined);
   const lastScrollY = useRef(0);
+
+  const updatePanelPosition = useCallback(() => {
+    if (toggleRef.current && window.innerWidth <= 768) {
+      const rect = toggleRef.current.getBoundingClientRect();
+      setPanelTop(rect.bottom + 8);
+    }
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -147,9 +156,13 @@ export default function Header({ currentView, onViewChange, onLogoClick, density
           </nav>
           <div className="settings-wrapper" ref={settingsRef}>
             <button
+              ref={toggleRef}
               type="button"
               className={`settings-toggle${settingsOpen ? ' active' : ''}`}
-              onClick={() => setSettingsOpen(!settingsOpen)}
+              onClick={() => {
+                if (!settingsOpen) updatePanelPosition();
+                setSettingsOpen(!settingsOpen);
+              }}
               aria-label="Inställningar"
               aria-expanded={settingsOpen}
               title="Inställningar"
@@ -160,7 +173,7 @@ export default function Header({ currentView, onViewChange, onLogoClick, density
               </svg>
             </button>
             {settingsOpen && (
-              <div className="settings-panel">
+              <div className="settings-panel" style={panelTop !== undefined ? { top: panelTop } : undefined}>
                 <div className="settings-section">
                   <div className="settings-label">Vy</div>
                   <div className="settings-options">

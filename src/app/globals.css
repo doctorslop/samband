@@ -882,8 +882,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     visibility: visible;
     opacity: 1;
     pointer-events: auto;
-    height: auto;
     flex: 1;
+    display: flex;
+    flex-direction: column;
     min-height: 500px;
     contain: none;
     border-radius: var(--radius);
@@ -893,8 +894,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 /* Map container - stable sizing */
 .map-container {
     width: 100%;
-    height: 100%;
-    min-height: 500px;
+    flex: 1;
+    min-height: 0;
     border-radius: var(--radius);
     overflow: hidden;
     border: 1px solid var(--glass-border);
@@ -993,15 +994,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     bottom: 16px;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(10, 22, 40, 0.88);
+    background: rgba(10, 22, 40, 0.92);
     backdrop-filter: blur(20px) saturate(180%);
     -webkit-backdrop-filter: blur(20px) saturate(180%);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 20px;
-    padding: 8px 14px;
+    border-radius: 14px;
+    padding: 8px 16px;
     z-index: 10;
     max-width: calc(100% - 32px);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 }
 
 .timeline-controls {
@@ -1960,16 +1961,15 @@ footer {
     /* Mobile footer */
     footer { padding: var(--space-card) 0 20px; }
 
-    .map-wrapper.active { height: calc(100vh - 160px); min-height: 400px; flex: 1; }
-    .map-container { min-height: 400px; }
+    .map-wrapper.active { min-height: 400px; max-height: calc(100vh - 120px); }
+    .map-container { min-height: 0; }
     .view-toggle button span.label { display: none; }
     .live-indicator { display: none; }
 }
 
 /* Landscape mobile: shorter map, ensure timeline stays visible */
 @media (max-width: 768px) and (orientation: landscape) {
-    .map-wrapper.active { height: calc(100vh - 80px); min-height: 250px; }
-    .map-container { min-height: 250px; }
+    .map-wrapper.active { min-height: 250px; max-height: calc(100vh - 60px); }
 }
 
 /* Extra small screens (< 360px width) */
@@ -2667,7 +2667,7 @@ footer {
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-sm);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-    z-index: 200;
+    z-index: 1100;
     padding: 12px;
     animation: settingsIn 0.15s ease-out;
 }
@@ -2888,38 +2888,7 @@ footer {
     font-size: 11px;
 }
 
-/* Stats view: tighter in compact */
-.density-compact .stats-section {
-    margin-bottom: 16px;
-}
-.density-compact .stats-hero {
-    margin-bottom: 20px;
-}
-.density-compact .stats-hero-grid {
-    gap: 8px;
-}
-.density-compact .stats-metric {
-    padding: 14px 12px;
-}
-.density-compact .stats-metric__value {
-    font-size: 24px;
-}
-.density-compact .stats-metric--primary .stats-metric__value {
-    font-size: 30px;
-}
-.density-compact .stats-metric__label {
-    margin-top: 4px;
-    font-size: 10px;
-}
-.density-compact .stats-card {
-    padding: 14px;
-}
-.density-compact .stats-card__title {
-    margin-bottom: 10px;
-}
-.density-compact .stats-grid {
-    gap: 10px;
-}
+/* Stats and map views are unaffected by density settings */
 
 /* New events banner: tighter */
 .density-compact .new-events-banner {
@@ -3063,6 +3032,9 @@ footer {
         height: 32px;
     }
     .settings-panel {
+        position: fixed;
+        top: auto;
+        right: var(--space-page);
         width: 180px;
         padding: 10px;
     }
@@ -3070,8 +3042,8 @@ footer {
 
 /* ========================================
    Density System: Stream Mode
-   Continuous feed with minimal grouping.
-   Cards merge into a single flowing list.
+   Live ticker / dispatch feed view.
+   Completely different layout from card views.
    ======================================== */
 
 .density-stream {
@@ -3084,85 +3056,185 @@ footer {
     gap: 0;
     border-radius: var(--radius);
     overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: var(--surface-solid);
 }
 
+/* Hide the default card layout in stream mode */
 .density-stream .event-card {
-    border-radius: 0;
-    border: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    box-shadow: none;
-    animation: none;
-}
-.density-stream .event-card:last-child {
-    border-bottom: none;
-}
-.density-stream .event-card::before,
-.density-stream .event-card::after {
     display: none;
 }
-.density-stream .event-card:has(.event-card-header:hover) {
-    transform: none;
-    box-shadow: none;
-    border-color: rgba(255, 255, 255, 0.06);
-    background: var(--surface-light);
+
+/* Stream item: the ticker row */
+.stream-item {
+    display: grid;
+    grid-template-columns: 20px 80px 1fr auto;
+    align-items: start;
+    gap: 0 12px;
+    padding: 14px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    cursor: pointer;
+    transition: background 0.15s ease;
+    position: relative;
+    -webkit-tap-highlight-color: transparent;
 }
-.density-stream .event-card.expanded {
-    border-color: rgba(255, 255, 255, 0.06);
-    box-shadow: none;
+.stream-item:last-child {
+    border-bottom: none;
+}
+.stream-item:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+.stream-item:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
 }
 
-.density-stream .event-card-header {
-    padding: 10px 16px;
-    gap: 8px;
+/* Left dot indicator */
+.stream-item__indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-top: 4px;
 }
-.density-stream .event-header-content {
-    gap: 2px;
+.stream-item__dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
 }
-.density-stream .event-meta-row {
-    font-size: 11px;
-    gap: 6px;
+.stream-item__dot--recent {
+    opacity: 1;
+    box-shadow: 0 0 8px currentColor;
+    animation: streamDotPulse 2s ease-in-out infinite;
 }
-.density-stream .event-type {
-    padding: 3px 8px;
-    font-size: 10px;
+@keyframes streamDotPulse {
+    0%, 100% { box-shadow: 0 0 4px currentColor; }
+    50% { box-shadow: 0 0 12px currentColor, 0 0 20px currentColor; }
 }
-.density-stream .event-location-link {
+
+/* Time column */
+.stream-item__time {
+    padding-top: 2px;
+    flex-shrink: 0;
+}
+.stream-item__relative {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+.stream-item__relative--recent {
+    color: var(--accent);
+}
+
+/* Main content */
+.stream-item__content {
+    min-width: 0;
+}
+.stream-item__headline {
     font-size: 14px;
-    margin-top: 2px;
-}
-.density-stream .event-summary {
-    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
     line-height: 1.4;
-    margin-top: 3px;
-    display: -webkit-box;
-    -webkit-line-clamp: 1;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
 }
-.density-stream .event-card.expanded .event-summary {
-    -webkit-line-clamp: unset;
-    overflow: visible;
+.stream-item__date {
+    color: var(--text);
 }
-.density-stream .event-header-actions {
-    margin-top: 6px;
-    gap: 8px;
+.stream-item__sep {
+    color: var(--text-muted);
+    margin: 0 1px;
 }
-.density-stream .expand-details-btn,
-.density-stream .show-map-link,
-.density-stream .share-event-btn {
-    padding: 4px 10px;
+.stream-item__type {
+    color: var(--text);
+}
+.stream-item__location {
+    color: var(--text);
+    text-decoration: none;
+    transition: color 0.15s ease;
+}
+.stream-item__location:hover {
+    color: var(--accent);
+}
+.stream-item__summary {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-top: 4px;
+    font-style: italic;
+}
+
+/* Region tag on the right */
+.stream-item__region {
     font-size: 12px;
+    color: var(--text-muted);
+    text-align: right;
+    white-space: nowrap;
+    padding-top: 3px;
+    flex-shrink: 0;
 }
-.density-stream .event-card-body {
-    padding: 0 16px 10px;
+
+/* Expanded state */
+.stream-item--expanded {
+    background: rgba(251, 191, 36, 0.03);
+    border-left: 3px solid var(--accent);
+    padding-left: 17px;
 }
-.density-stream .event-details {
-    margin-top: 6px;
-    padding: 10px 14px;
+.stream-item--highlighted {
+    background: rgba(251, 191, 36, 0.06);
+    border-left: 3px solid var(--accent);
+    padding-left: 17px;
+}
+
+/* Details section within stream item */
+.stream-item__details {
+    margin-top: 10px;
+    padding: 12px 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    animation: detailsSlideIn 0.25s ease-out;
+}
+.stream-item__loading {
     font-size: 12px;
-    line-height: 1.6;
+    color: var(--text-muted);
+    font-style: italic;
 }
+.stream-item__error {
+    font-size: 12px;
+    color: var(--danger);
+    font-style: italic;
+}
+.stream-item__detail-text {
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+.stream-item__actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 10px;
+}
+.stream-item__link {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--accent);
+    text-decoration: none;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    font-family: inherit;
+    transition: opacity 0.15s ease;
+}
+.stream-item__link:hover {
+    opacity: 0.8;
+    text-decoration: underline;
+}
+
+/* Stream mode load more */
 .density-stream .load-more-container {
     padding: 12px 0;
 }
@@ -3178,20 +3250,48 @@ footer {
     font-size: 13px;
 }
 
-/* Stream mode: mobile */
+/* Stream mode: mobile - stack layout vertically */
 @media (max-width: 768px) {
-    .density-stream .event-card-header {
-        padding: 8px 12px;
+    .stream-item {
+        grid-template-columns: 16px 1fr;
+        grid-template-rows: auto auto;
+        gap: 2px 10px;
+        padding: 12px 14px;
     }
-    .density-stream .event-card-body {
-        padding: 0 12px 8px;
+    .stream-item__time {
+        grid-column: 2;
+        grid-row: 1;
     }
-    .density-stream .expand-details-btn,
-    .density-stream .show-map-link,
-    .density-stream .share-event-btn {
+    .stream-item__relative {
+        font-size: 12px;
+    }
+    .stream-item__indicator {
+        grid-row: 1 / 3;
+        grid-column: 1;
+        padding-top: 3px;
+    }
+    .stream-item__dot {
+        width: 8px;
+        height: 8px;
+    }
+    .stream-item__content {
+        grid-column: 2;
+        grid-row: 2;
+    }
+    .stream-item__headline {
         font-size: 13px;
-        min-height: 38px;
-        padding: 6px 10px;
+    }
+    .stream-item__summary {
+        font-size: 12px;
+    }
+    .stream-item__region {
+        display: none;
+    }
+    .stream-item--expanded {
+        padding-left: 11px;
+    }
+    .stream-item--highlighted {
+        padding-left: 11px;
     }
 }
 

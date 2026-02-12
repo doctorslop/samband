@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import EventCard from './EventCard';
 import { FormattedEvent } from '@/types';
+import type { Density } from './ClientApp';
 
 // Auto-refresh interval: 10 minutes (matches server-side fetch interval)
 const AUTO_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -20,6 +21,8 @@ interface EventListProps {
   highlightedEventId: number | null;
   onEventCountChange?: (count: number) => void;
   onLastCheckedChange?: (date: Date) => void;
+  expandSummaries?: boolean;
+  density?: Density;
 }
 
 export default function EventList({
@@ -31,6 +34,8 @@ export default function EventList({
   highlightedEventId,
   onEventCountChange,
   onLastCheckedChange,
+  expandSummaries,
+  density,
 }: EventListProps) {
   const [events, setEvents] = useState<FormattedEvent[]>(initialEvents);
   const [hasMore, setHasMore] = useState(initialHasMore);
@@ -249,6 +254,8 @@ export default function EventList({
             currentView={currentView}
             onShowMap={onShowMap}
             isHighlighted={event.id === highlightedEventId}
+            autoExpand={expandSummaries}
+            density={density}
           />
         ))}
       </section>

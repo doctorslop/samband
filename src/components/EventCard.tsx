@@ -2,15 +2,18 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { FormattedEvent, getTypeClass } from '@/types';
+import type { Density } from './ClientApp';
 
 interface EventCardProps {
   event: FormattedEvent;
   currentView: string;
   onShowMap?: (lat: number, lng: number, location: string) => void;
   isHighlighted?: boolean;
+  autoExpand?: boolean;
+  density?: Density;
 }
 
-export default function EventCard({ event, currentView, onShowMap, isHighlighted }: EventCardProps) {
+export default function EventCard({ event, currentView, onShowMap, isHighlighted, autoExpand, density }: EventCardProps) {
   const [expanded, setExpanded] = useState(isHighlighted || false);
   const [details, setDetails] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -37,6 +40,30 @@ export default function EventCard({ event, currentView, onShowMap, isHighlighted
       fetchDetails();
     }
   }, [isHighlighted, details, event.url]);
+
+  // Auto-expand when "Read More" setting is enabled
+  useEffect(() => {
+    if (autoExpand) {
+      setExpanded(true);
+      if (!details && event.url && !loading) {
+        setLoading(true);
+        setError(false);
+        fetch(`/api/details?url=${encodeURIComponent(event.url)}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.success && data.details?.content) {
+              setDetails(data.details.content);
+            }
+          })
+          .catch(() => {
+            // Silently fail
+          })
+          .finally(() => setLoading(false));
+      }
+    } else if (!isHighlighted) {
+      setExpanded(false);
+    }
+  }, [autoExpand]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const typeClass = getTypeClass(event.type);
 
@@ -119,6 +146,83 @@ export default function EventCard({ event, currentView, onShowMap, isHighlighted
     expanded ? 'expanded' : '',
     isHighlighted ? 'highlighted' : '',
   ].filter(Boolean).join(' ');
+
+  // Stream mode: completely different ticker/feed layout
+  if (density === 'stream') {
+    const isRecent = event.date.relative?.includes('min') || event.date.relative?.includes('Just');
+    return (
+      <article
+        className={`stream-item${expanded ? ' stream-item--expanded' : ''}${isHighlighted ? ' stream-item--highlighted' : ''}`}
+        data-url={event.url}
+        data-event-id={event.id ?? undefined}
+        onClick={toggleAccordion}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleAccordion();
+          }
+        }}
+      >
+        <div className="stream-item__indicator">
+          <span className={`stream-item__dot${isRecent ? ' stream-item__dot--recent' : ''}`} style={{ background: event.color }} />
+        </div>
+        <div className="stream-item__time">
+          <span className={`stream-item__relative${isRecent ? ' stream-item__relative--recent' : ''}`}>{event.date.relative}</span>
+        </div>
+        <div className="stream-item__content">
+          <div className="stream-item__headline">
+            <span className="stream-item__date">{event.date.day} {event.date.month} {event.date.time?.replace(/\D*\d+\s*(min|tim|sek).*/, '') || ''}</span>
+            <span className="stream-item__sep">,</span>
+            <span className="stream-item__type">{event.type}</span>
+            <span className="stream-item__sep">,</span>
+            <a
+              href={`/?location=${encodeURIComponent(event.location)}&view=${currentView}`}
+              className="stream-item__location"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {event.location}
+            </a>
+          </div>
+          <p className="stream-item__summary">{event.summary}</p>
+          {expanded && (
+            <div className="stream-item__details">
+              {loading && <span className="stream-item__loading">Laddar detaljer...</span>}
+              {error && <span className="stream-item__error">Kunde inte hämta detaljer.</span>}
+              {details && <p className="stream-item__detail-text">{details}</p>}
+              <div className="stream-item__actions">
+                {event.url && (
+                  <a
+                    className="stream-item__link"
+                    href={`https://polisen.se${event.url}`}
+                    target="_blank"
+                    rel="noopener noreferrer nofollow"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    polisen.se
+                  </a>
+                )}
+                {gpsCoords && (
+                  <button type="button" className="stream-item__link" onClick={handleShowMap}>
+                    Visa på karta
+                  </button>
+                )}
+                {event.id !== null && (
+                  <button type="button" className="stream-item__link" onClick={handleShare}>
+                    {copied ? 'Kopierad!' : 'Dela'}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="stream-item__region">
+          {event.location}
+        </div>
+      </article>
+    );
+  }
 
   return (
     <article
