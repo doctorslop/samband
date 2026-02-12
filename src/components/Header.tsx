@@ -11,9 +11,10 @@ interface HeaderProps {
   onDensityChange: (density: Density) => void;
   expandSummaries: boolean;
   onExpandSummariesChange: (expand: boolean) => void;
+  showDensitySettings?: boolean;
 }
 
-export default function Header({ currentView, onViewChange, onLogoClick, density, onDensityChange, expandSummaries, onExpandSummariesChange }: HeaderProps) {
+export default function Header({ currentView, onViewChange, onLogoClick, density, onDensityChange, expandSummaries, onExpandSummariesChange, showDensitySettings = true }: HeaderProps) {
   const headerRef = useRef<HTMLElement>(null);
   const settingsRef = useRef<HTMLDivElement>(null);
   const toggleRef = useRef<HTMLButtonElement>(null);
@@ -67,16 +68,21 @@ export default function Header({ currentView, onViewChange, onLogoClick, density
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Close settings on click outside
+  // Close settings on click outside - handle both mouse and touch for mobile
   useEffect(() => {
     if (!settingsOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node;
+      if (settingsRef.current && !settingsRef.current.contains(target)) {
         setSettingsOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
   }, [settingsOpen]);
 
   const headerClasses = [
@@ -159,9 +165,13 @@ export default function Header({ currentView, onViewChange, onLogoClick, density
               ref={toggleRef}
               type="button"
               className={`settings-toggle${settingsOpen ? ' active' : ''}`}
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation();
                 if (!settingsOpen) updatePanelPosition();
                 setSettingsOpen(!settingsOpen);
+              }}
+              onTouchEnd={(e) => {
+                e.stopPropagation();
               }}
               aria-label="Inställningar"
               aria-expanded={settingsOpen}
@@ -173,34 +183,43 @@ export default function Header({ currentView, onViewChange, onLogoClick, density
               </svg>
             </button>
             {settingsOpen && (
-              <div className="settings-panel" style={panelTop !== undefined ? { top: panelTop } : undefined}>
-                <div className="settings-section">
-                  <div className="settings-label">Vy</div>
-                  <div className="settings-options">
-                    <button
-                      type="button"
-                      className={`settings-option${density === 'comfortable' ? ' active' : ''}`}
-                      onClick={() => onDensityChange('comfortable')}
-                    >
-                      Bekväm
-                    </button>
-                    <button
-                      type="button"
-                      className={`settings-option${density === 'compact' ? ' active' : ''}`}
-                      onClick={() => onDensityChange('compact')}
-                    >
-                      Kompakt
-                    </button>
-                    <button
-                      type="button"
-                      className={`settings-option${density === 'stream' ? ' active' : ''}`}
-                      onClick={() => onDensityChange('stream')}
-                    >
-                      Flöde
-                    </button>
-                  </div>
-                </div>
-                <div className="settings-divider"></div>
+              <div
+                className="settings-panel"
+                style={panelTop !== undefined ? { top: panelTop } : undefined}
+                onClick={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+              >
+                {showDensitySettings && (
+                  <>
+                    <div className="settings-section">
+                      <div className="settings-label">Vy</div>
+                      <div className="settings-options">
+                        <button
+                          type="button"
+                          className={`settings-option${density === 'comfortable' ? ' active' : ''}`}
+                          onClick={() => onDensityChange('comfortable')}
+                        >
+                          Bekväm
+                        </button>
+                        <button
+                          type="button"
+                          className={`settings-option${density === 'compact' ? ' active' : ''}`}
+                          onClick={() => onDensityChange('compact')}
+                        >
+                          Kompakt
+                        </button>
+                        <button
+                          type="button"
+                          className={`settings-option${density === 'stream' ? ' active' : ''}`}
+                          onClick={() => onDensityChange('stream')}
+                        >
+                          Flöde
+                        </button>
+                      </div>
+                    </div>
+                    <div className="settings-divider"></div>
+                  </>
+                )}
                 <div className="settings-section">
                   <div className="settings-row">
                     <span className="settings-label">Läs mer</span>

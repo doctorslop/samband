@@ -39,7 +39,7 @@ html { scroll-behavior: smooth; }
 
 body {
     font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-    background: var(--primary); color: var(--text); min-height: 100vh; line-height: 1.6;
+    background: var(--primary); color: var(--text); min-height: 100vh; min-height: 100dvh; line-height: 1.6;
     -webkit-font-smoothing: antialiased; overflow-x: hidden;
 }
 
@@ -58,6 +58,7 @@ body::before {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
+    min-height: 100dvh;
 }
 
 header {
@@ -1958,10 +1959,10 @@ footer {
     .load-more-btn { width: 100%; max-width: 300px; min-height: 44px; }
     .load-more-container { padding: var(--space-section) 0; }
 
-    /* Mobile footer */
-    footer { padding: var(--space-card) 0 20px; }
+    /* Mobile footer - extra bottom padding for mobile browser dynamic toolbars (Firefox) */
+    footer { padding: var(--space-card) 0 20px; padding-bottom: max(20px, env(safe-area-inset-bottom, 0px)); }
 
-    .map-wrapper.active { min-height: 400px; max-height: calc(100vh - 120px); }
+    .map-wrapper.active { min-height: 400px; max-height: calc(100vh - 120px); max-height: calc(100dvh - 120px); }
     .map-container { min-height: 0; }
     .view-toggle button span.label { display: none; }
     .live-indicator { display: none; }
@@ -1969,7 +1970,7 @@ footer {
 
 /* Landscape mobile: shorter map, ensure timeline stays visible */
 @media (max-width: 768px) and (orientation: landscape) {
-    .map-wrapper.active { min-height: 250px; max-height: calc(100vh - 60px); }
+    .map-wrapper.active { min-height: 250px; max-height: calc(100vh - 60px); max-height: calc(100dvh - 60px); }
 }
 
 /* Extra small screens (< 360px width) */
@@ -2669,6 +2670,10 @@ footer {
     z-index: 10000;
     padding: 12px;
     animation: settingsIn 0.15s ease-out;
+    /* Ensure panel receives pointer events above map/leaflet */
+    pointer-events: auto;
+    touch-action: auto;
+    isolation: isolate;
 }
 @keyframes settingsIn {
     from { opacity: 0; transform: translateY(-4px); }
@@ -3053,7 +3058,7 @@ footer {
     border-radius: var(--radius);
     overflow: hidden;
     border: 1px solid rgba(255, 255, 255, 0.06);
-    background: var(--surface-solid);
+    background: linear-gradient(180deg, var(--surface-solid), rgba(15, 31, 56, 0.95));
 }
 
 /* Hide the default card layout in stream mode */
@@ -3064,13 +3069,13 @@ footer {
 /* Stream item: the ticker row */
 .stream-item {
     display: grid;
-    grid-template-columns: 20px 80px 1fr auto;
+    grid-template-columns: 20px 72px 1fr auto;
     align-items: start;
-    gap: 0 12px;
-    padding: 14px 20px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    gap: 0 10px;
+    padding: 12px 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
     cursor: pointer;
-    transition: background 0.15s ease;
+    transition: background 0.15s ease, border-color 0.15s ease;
     position: relative;
     -webkit-tap-highlight-color: transparent;
 }
@@ -3090,18 +3095,20 @@ footer {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding-top: 4px;
+    padding-top: 5px;
 }
 .stream-item__dot {
-    width: 10px;
-    height: 10px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     flex-shrink: 0;
-    opacity: 0.7;
+    opacity: 0.6;
     transition: opacity 0.2s ease;
 }
 .stream-item__dot--recent {
     opacity: 1;
+    width: 10px;
+    height: 10px;
     box-shadow: 0 0 8px currentColor;
     animation: streamDotPulse 2s ease-in-out infinite;
 }
@@ -3116,7 +3123,7 @@ footer {
     flex-shrink: 0;
 }
 .stream-item__relative {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
     color: var(--text-muted);
     white-space: nowrap;
@@ -3124,6 +3131,7 @@ footer {
 }
 .stream-item__relative--recent {
     color: var(--accent);
+    font-weight: 700;
 }
 
 /* Main content */
@@ -3132,22 +3140,24 @@ footer {
 }
 .stream-item__headline {
     font-size: 14px;
-    font-weight: 600;
+    font-weight: 500;
     color: var(--text);
     line-height: 1.4;
 }
 .stream-item__date {
-    color: var(--text);
+    color: var(--text-muted);
+    font-size: 12px;
 }
 .stream-item__sep {
-    color: var(--text-muted);
-    margin: 0 1px;
+    color: rgba(148, 163, 184, 0.4);
+    margin: 0 3px;
 }
 .stream-item__type {
     color: var(--text);
+    font-weight: 600;
 }
 .stream-item__location {
-    color: var(--text);
+    color: var(--text-muted);
     text-decoration: none;
     transition: color 0.15s ease;
 }
@@ -3156,19 +3166,22 @@ footer {
 }
 .stream-item__summary {
     font-size: 13px;
-    color: var(--text-muted);
+    color: rgba(148, 163, 184, 0.7);
     line-height: 1.5;
-    margin-top: 4px;
-    font-style: italic;
+    margin-top: 3px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 
 /* Region tag on the right */
 .stream-item__region {
-    font-size: 12px;
-    color: var(--text-muted);
+    font-size: 11px;
+    color: rgba(148, 163, 184, 0.5);
     text-align: right;
     white-space: nowrap;
-    padding-top: 3px;
+    padding-top: 4px;
     flex-shrink: 0;
 }
 
@@ -3176,12 +3189,19 @@ footer {
 .stream-item--expanded {
     background: rgba(251, 191, 36, 0.03);
     border-left: 3px solid var(--accent);
-    padding-left: 17px;
+    padding-left: 15px;
+}
+.stream-item--expanded .stream-item__summary {
+    -webkit-line-clamp: unset;
+    display: block;
+    overflow: visible;
+    color: var(--text-muted);
+    font-style: italic;
 }
 .stream-item--highlighted {
     background: rgba(251, 191, 36, 0.06);
     border-left: 3px solid var(--accent);
-    padding-left: 17px;
+    padding-left: 15px;
 }
 
 /* Details section within stream item */
@@ -3210,7 +3230,7 @@ footer {
 }
 .stream-item__actions {
     display: flex;
-    gap: 12px;
+    gap: 16px;
     margin-top: 10px;
 }
 .stream-item__link {
@@ -3221,9 +3241,12 @@ footer {
     background: none;
     border: none;
     cursor: pointer;
-    padding: 0;
+    padding: 4px 0;
     font-family: inherit;
     transition: opacity 0.15s ease;
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
 }
 .stream-item__link:hover {
     opacity: 0.8;
@@ -3249,17 +3272,17 @@ footer {
 /* Stream mode: mobile - stack layout vertically */
 @media (max-width: 768px) {
     .stream-item {
-        grid-template-columns: 16px 1fr;
+        grid-template-columns: 14px 1fr;
         grid-template-rows: auto auto;
         gap: 2px 10px;
-        padding: 12px 14px;
+        padding: 11px 14px;
     }
     .stream-item__time {
         grid-column: 2;
         grid-row: 1;
     }
     .stream-item__relative {
-        font-size: 12px;
+        font-size: 11px;
     }
     .stream-item__indicator {
         grid-row: 1 / 3;
@@ -3267,8 +3290,12 @@ footer {
         padding-top: 3px;
     }
     .stream-item__dot {
-        width: 8px;
-        height: 8px;
+        width: 7px;
+        height: 7px;
+    }
+    .stream-item__dot--recent {
+        width: 9px;
+        height: 9px;
     }
     .stream-item__content {
         grid-column: 2;
@@ -3277,8 +3304,12 @@ footer {
     .stream-item__headline {
         font-size: 13px;
     }
+    .stream-item__date {
+        font-size: 11px;
+    }
     .stream-item__summary {
         font-size: 12px;
+        -webkit-line-clamp: 1;
     }
     .stream-item__region {
         display: none;
@@ -3286,8 +3317,19 @@ footer {
     .stream-item--expanded {
         padding-left: 11px;
     }
+    .stream-item--expanded .stream-item__summary {
+        -webkit-line-clamp: unset;
+    }
     .stream-item--highlighted {
         padding-left: 11px;
+    }
+    .stream-item__actions {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .stream-item__link {
+        min-height: 36px;
+        padding: 6px 0;
     }
 }
 
@@ -3298,6 +3340,11 @@ footer {
    ======================================== */
 
 .summaries-expanded .event-summary {
+    -webkit-line-clamp: unset !important;
+    display: block !important;
+    overflow: visible !important;
+}
+.summaries-expanded .stream-item__summary {
     -webkit-line-clamp: unset !important;
     display: block !important;
     overflow: visible !important;
