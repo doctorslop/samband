@@ -196,6 +196,8 @@ function ClientAppContent({
                 highlightedEventId={highlightedEventId}
                 onEventCountChange={setDisplayedCount}
                 onLastCheckedChange={setLastChecked}
+                expandSummaries={expandSummaries}
+                density={density}
               />
             )}
 
