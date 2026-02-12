@@ -95,9 +95,6 @@ header {
     header.header-compact .logo-text p { font-size: 10px; }
     header.header-compact .header-content { gap: 12px; }
     header.header-compact .view-toggle button { padding: 5px 10px; font-size: 12px; }
-    header.header-compact .live-indicator { padding: 3px 8px; font-size: 10px; }
-    header.header-compact .live-dot { width: 6px; height: 6px; }
-
     header.header-collapsed {
         transform: translateY(-100%);
     }
@@ -203,38 +200,104 @@ header {
     .view-toggle button.active span.label { display: inline; }
 }
 
-.live-indicator {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 14px;
-    background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.08));
-    border: 1px solid rgba(16, 185, 129, 0.25);
-    border-radius: var(--radius);
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--success);
-    transition: all 0.3s ease;
-    letter-spacing: 0.3px;
-}
-.live-dot {
-    width: 8px;
-    height: 8px;
-    background: var(--success);
-    border-radius: 50%;
-    animation: livePulse 2s ease-in-out infinite;
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
-}
-.live-text {
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
 @keyframes livePulse {
     0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6); }
     50% { opacity: 0.9; box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
 }
 
 .filters-section { margin-bottom: var(--space-section); }
+
+/* Compact filter control bar */
+.filter-control-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: var(--radius);
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+    min-height: 40px;
+}
+.filter-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: var(--surface-light);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.filter-toggle-btn:hover {
+    background: var(--primary-light);
+    border-color: var(--border-accent);
+}
+.filter-toggle-btn.active {
+    background: var(--primary-light);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+.filter-toggle-chevron {
+    transition: transform 0.2s ease;
+}
+.filter-toggle-btn.active .filter-toggle-chevron {
+    transform: rotate(180deg);
+}
+.filter-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    background: var(--accent);
+    color: var(--primary);
+    border-radius: 9px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+}
+.filter-bar-tags {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+.filter-tag-compact {
+    padding: 4px 8px;
+    font-size: 11px;
+    gap: 4px;
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.filter-bar-tags .clear-all-filters {
+    padding: 4px 8px;
+    font-size: 11px;
+}
+.filter-panel {
+    margin-top: 8px;
+    animation: filterPanelSlide 0.2s ease;
+}
+@keyframes filterPanelSlide {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
 .search-bar {
     background: var(--glass-bg);
     backdrop-filter: blur(12px);
@@ -1891,7 +1954,6 @@ footer {
     .logo-icon { width: 36px; height: 36px; min-width: 36px; min-height: 36px; font-size: 17px; }
     .header-controls { gap: 6px; }
     .view-toggle button { padding: 6px 8px; }
-    .live-indicator { padding: 4px 8px; font-size: 10px; }
 }
 @media (max-width: 768px) {
     :root {
@@ -1914,6 +1976,10 @@ footer {
     .header-controls { flex-wrap: nowrap; gap: 4px; flex-shrink: 0; }
     .view-toggle { padding: 2px; flex-shrink: 0; }
     .view-toggle button { padding: 6px 7px; font-size: 13px; min-width: 0; }
+    .filter-control-bar { padding: 6px 10px; gap: 6px; }
+    .filter-toggle-btn { padding: 5px 10px; font-size: 12px; }
+    .filter-bar-tags { gap: 4px; }
+    .filter-tag-compact { max-width: 120px; font-size: 10px; padding: 3px 6px; }
     .search-form { flex-direction: column; gap: 8px; }
     .search-bar { padding: 10px; }
     .filter-select { width: 100%; }
@@ -1965,7 +2031,6 @@ footer {
     .map-wrapper.active { min-height: 400px; max-height: calc(100vh - 120px); max-height: calc(100dvh - 120px); }
     .map-container { min-height: 0; }
     .view-toggle button span.label { display: none; }
-    .live-indicator { display: none; }
 }
 
 /* Landscape mobile: shorter map, ensure timeline stays visible */
@@ -2784,6 +2849,17 @@ footer {
 }
 
 /* Filters: reduced padding */
+.density-compact .filter-control-bar {
+    padding: 6px 10px;
+    min-height: 36px;
+}
+.density-compact .filter-toggle-btn {
+    padding: 4px 10px;
+    font-size: 12px;
+}
+.density-compact .filter-panel {
+    margin-top: 6px;
+}
 .density-compact .search-bar {
     padding: 8px;
     margin-bottom: 8px;

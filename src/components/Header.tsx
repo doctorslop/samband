@@ -237,10 +237,6 @@ export default function Header({ currentView, onViewChange, onLogoClick, density
               </div>
             )}
           </div>
-          <div className="live-indicator">
-            <span className="live-dot" />
-            <span className="live-text">Live</span>
-          </div>
         </div>
       </div>
     </header>
