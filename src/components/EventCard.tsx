@@ -180,10 +180,8 @@ export default function EventCard({ event, currentView, onShowMap, isHighlighted
         </div>
         <div className="stream-item__content">
           <div className="stream-item__headline">
-            <span className="stream-item__date">{event.date.day} {event.date.month} {event.date.time?.replace(/\D*\d+\s*(min|tim|sek).*/, '') || ''}</span>
-            <span className="stream-item__sep">,</span>
-            <span className="stream-item__type">{event.type}</span>
-            <span className="stream-item__sep">,</span>
+            <span className="stream-item__type">{event.icon} {event.type}</span>
+            <span className="stream-item__sep">&mdash;</span>
             <a
               href={`/?location=${encodeURIComponent(event.location)}&view=${currentView}`}
               className="stream-item__location"

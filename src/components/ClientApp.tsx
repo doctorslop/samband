@@ -172,7 +172,7 @@ function ClientAppContent({
   return (
     <>
       <div className={`container view-${currentView} density-${density}${expandSummaries ? ' summaries-expanded' : ''}`}>
-        <Header currentView={currentView} onViewChange={handleViewChange} onLogoClick={handleLogoClick} density={density} onDensityChange={handleDensityChange} expandSummaries={expandSummaries} onExpandSummariesChange={handleExpandSummariesChange} />
+        <Header currentView={currentView} onViewChange={handleViewChange} onLogoClick={handleLogoClick} density={density} onDensityChange={handleDensityChange} expandSummaries={expandSummaries} onExpandSummariesChange={handleExpandSummariesChange} showDensitySettings={currentView === 'list'} />
 
         {currentView !== 'map' && currentView !== 'stats' && (
           <Filters
