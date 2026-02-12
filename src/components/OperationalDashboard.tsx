@@ -11,7 +11,7 @@ interface OperationalDashboardProps {
 }
 
 function formatTimeAgo(dateString: string | null): string {
-  if (!dateString) return 'Never';
+  if (!dateString) return 'Aldrig';
   const date = new Date(dateString);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
@@ -19,10 +19,10 @@ function formatTimeAgo(dateString: string | null): string {
   const diffHours = Math.floor(diffMins / 60);
   const diffDays = Math.floor(diffHours / 24);
 
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
+  if (diffMins < 1) return 'Just nu';
+  if (diffMins < 60) return `${diffMins} min sedan`;
+  if (diffHours < 24) return `${diffHours} tim sedan`;
+  if (diffDays < 7) return `${diffDays} dagar sedan`;
   return date.toLocaleDateString('sv-SE');
 }
 
@@ -90,63 +90,63 @@ export default function OperationalDashboard({
               <StatusIndicator status={systemStatus} />
             </span>
             <div className="ops-logo-text">
-              <h1>System Status</h1>
-              <p>Operational Dashboard</p>
+              <h1>Systemstatus</h1>
+              <p>Driftöversikt</p>
             </div>
           </div>
           <div className="ops-header-meta">
             <span className="ops-timestamp">
-              {updatedAt && `Updated: ${updatedAt}`}
+              {updatedAt && `Uppdaterad: ${updatedAt}`}
             </span>
           </div>
         </div>
       </header>
 
       <main className="ops-main">
-        {/* System Health Overview */}
+        {/* Systemhälsa */}
         <section className="ops-section">
-          <h2 className="ops-section-title">System Health</h2>
+          <h2 className="ops-section-title">Systemhälsa</h2>
           <div className="ops-metrics-grid">
             <div className={`ops-metric ops-metric--large ops-metric--${systemStatus}`}>
               <span className="ops-metric-value">{operationalStats.uptimeScore}%</span>
-              <span className="ops-metric-label">Uptime (24h)</span>
+              <span className="ops-metric-label">Drifttid (24h)</span>
             </div>
             <div className={`ops-metric ops-metric--large ops-metric--${operationalStats.successRate >= 95 ? 'healthy' : operationalStats.successRate >= 80 ? 'warning' : 'error'}`}>
               <span className="ops-metric-value">{operationalStats.successRate}%</span>
-              <span className="ops-metric-label">Success Rate</span>
+              <span className="ops-metric-label">Lyckade hämtningar</span>
             </div>
             <div className={`ops-metric ops-metric--large ops-metric--${freshnessStatus}`}>
               <span className="ops-metric-value">{databaseHealth.dataFreshnessMinutes}m</span>
-              <span className="ops-metric-label">Data Freshness</span>
+              <span className="ops-metric-label">Datafärskhet</span>
             </div>
           </div>
         </section>
 
-        {/* Fetch Statistics */}
+        {/* Hämtningsstatistik */}
         <section className="ops-section">
-          <h2 className="ops-section-title">Fetch Operations</h2>
+          <h2 className="ops-section-title">Hämtningar</h2>
           <div className="ops-metrics-grid ops-metrics-grid--4">
             <div className="ops-metric">
               <span className="ops-metric-value">{operationalStats.totalFetches.toLocaleString()}</span>
-              <span className="ops-metric-label">Total Fetches</span>
+              <span className="ops-metric-label">Totalt</span>
             </div>
             <div className="ops-metric">
               <span className="ops-metric-value ops-metric-value--success">{operationalStats.successfulFetches.toLocaleString()}</span>
-              <span className="ops-metric-label">Successful</span>
+              <span className="ops-metric-label">Lyckade</span>
             </div>
             <div className="ops-metric">
               <span className="ops-metric-value ops-metric-value--danger">{operationalStats.failedFetches}</span>
-              <span className="ops-metric-label">Failed</span>
+              <span className="ops-metric-label">Misslyckade</span>
             </div>
             <div className="ops-metric">
               <span className="ops-metric-value">{operationalStats.avgFetchInterval}m</span>
-              <span className="ops-metric-label">Avg Interval</span>
+              <span className="ops-metric-label">Snittintervall</span>
             </div>
           </div>
 
           <div className="ops-grid ops-grid--2">
             <div className="ops-card">
-              <h3 className="ops-card-title">Fetches (24h)</h3>
+              <h3 className="ops-card-title">Hämtningar (24h)</h3>
               <div className="ops-bar-chart">
                 {operationalStats.hourlyFetches.map((count, hour) => {
                   const height = (count / maxHourlyFetches) * 100;
@@ -156,7 +156,7 @@ export default function OperationalDashboard({
                         <div
                           className="ops-bar"
                           style={{ height: `${height}%` }}
-                          title={`${hour}:00 - ${count} fetches`}
+                          title={`${hour}:00 - ${count} hämtningar`}
                         />
                       </div>
                       {hour % 6 === 0 && <span className="ops-bar-label">{hour}</span>}
@@ -167,34 +167,34 @@ export default function OperationalDashboard({
             </div>
 
             <div className="ops-card">
-              <h3 className="ops-card-title">Recent Activity</h3>
+              <h3 className="ops-card-title">Senaste aktivitet</h3>
               <div className="ops-info-grid">
                 <div className="ops-info-row">
-                  <span className="ops-info-label">Last Success</span>
+                  <span className="ops-info-label">Senast lyckad</span>
                   <span className="ops-info-value ops-info-value--success">
                     {formatTimeAgo(operationalStats.lastSuccessfulFetch)}
                   </span>
                 </div>
                 <div className="ops-info-row">
-                  <span className="ops-info-label">Last Failure</span>
+                  <span className="ops-info-label">Senast misslyckad</span>
                   <span className="ops-info-value ops-info-value--muted">
                     {formatTimeAgo(operationalStats.lastFailedFetch)}
                   </span>
                 </div>
                 <div className="ops-info-row">
-                  <span className="ops-info-label">Fetches Today</span>
+                  <span className="ops-info-label">Hämtningar idag</span>
                   <span className="ops-info-value">{operationalStats.fetches24h}</span>
                 </div>
                 <div className="ops-info-row">
-                  <span className="ops-info-label">Fetches (7d)</span>
+                  <span className="ops-info-label">Hämtningar (7d)</span>
                   <span className="ops-info-value">{operationalStats.fetches7d}</span>
                 </div>
                 <div className="ops-info-row">
-                  <span className="ops-info-label">Avg Events/Fetch</span>
+                  <span className="ops-info-label">Snitt händelser/hämtning</span>
                   <span className="ops-info-value">{operationalStats.avgEventsPerFetch}</span>
                 </div>
                 <div className="ops-info-row">
-                  <span className="ops-info-label">Events Added Today</span>
+                  <span className="ops-info-label">Nya händelser idag</span>
                   <span className="ops-info-value">{operationalStats.eventsAddedToday}</span>
                 </div>
               </div>
@@ -202,34 +202,34 @@ export default function OperationalDashboard({
           </div>
         </section>
 
-        {/* Database Health */}
+        {/* Databashälsa */}
         <section className="ops-section">
-          <h2 className="ops-section-title">Database</h2>
+          <h2 className="ops-section-title">Databas</h2>
           <div className="ops-metrics-grid ops-metrics-grid--4">
             <div className="ops-metric">
               <span className="ops-metric-value">{databaseHealth.totalEvents.toLocaleString()}</span>
-              <span className="ops-metric-label">Total Events</span>
+              <span className="ops-metric-label">Totalt antal händelser</span>
             </div>
             <div className="ops-metric">
               <span className="ops-metric-value">{databaseHealth.uniqueLocations}</span>
-              <span className="ops-metric-label">Locations</span>
+              <span className="ops-metric-label">Platser</span>
             </div>
             <div className="ops-metric">
               <span className="ops-metric-value">{databaseHealth.uniqueTypes}</span>
-              <span className="ops-metric-label">Event Types</span>
+              <span className="ops-metric-label">Händelsetyper</span>
             </div>
             <div className="ops-metric">
               <span className="ops-metric-value">{databaseHealth.eventsWithGpsPercent}%</span>
-              <span className="ops-metric-label">With GPS</span>
+              <span className="ops-metric-label">Med GPS</span>
             </div>
           </div>
 
           <div className="ops-grid ops-grid--2">
             <div className="ops-card">
-              <h3 className="ops-card-title">Data Coverage</h3>
+              <h3 className="ops-card-title">Datatäckning</h3>
               <div className="ops-info-grid">
                 <div className="ops-info-row">
-                  <span className="ops-info-label">Oldest Event</span>
+                  <span className="ops-info-label">Äldsta händelse</span>
                   <span className="ops-info-value">
                     {databaseHealth.oldestEvent
                       ? new Date(databaseHealth.oldestEvent).toLocaleDateString('sv-SE')
@@ -237,7 +237,7 @@ export default function OperationalDashboard({
                   </span>
                 </div>
                 <div className="ops-info-row">
-                  <span className="ops-info-label">Newest Event</span>
+                  <span className="ops-info-label">Nyaste händelse</span>
                   <span className="ops-info-value">
                     {databaseHealth.newestEvent
                       ? new Date(databaseHealth.newestEvent).toLocaleDateString('sv-SE')
@@ -245,20 +245,20 @@ export default function OperationalDashboard({
                   </span>
                 </div>
                 <div className="ops-info-row">
-                  <span className="ops-info-label">Updated Events</span>
+                  <span className="ops-info-label">Uppdaterade händelser</span>
                   <span className="ops-info-value">
                     {databaseHealth.updatedEvents.toLocaleString()} ({databaseHealth.updatedEventsPercent}%)
                   </span>
                 </div>
                 <div className="ops-info-row">
-                  <span className="ops-info-label">Fetch Logs</span>
+                  <span className="ops-info-label">Hämtningsloggar</span>
                   <span className="ops-info-value">{databaseHealth.totalFetchLogs.toLocaleString()}</span>
                 </div>
               </div>
             </div>
 
             <div className="ops-card">
-              <h3 className="ops-card-title">Events by Type</h3>
+              <h3 className="ops-card-title">Händelser per typ</h3>
               <div className="ops-type-list">
                 {databaseHealth.eventsByType.slice(0, 8).map((item, index) => (
                   <div key={item.type} className="ops-type-item">
@@ -272,31 +272,31 @@ export default function OperationalDashboard({
           </div>
         </section>
 
-        {/* Event Statistics */}
+        {/* Händelsestatistik */}
         <section className="ops-section">
-          <h2 className="ops-section-title">Event Statistics</h2>
+          <h2 className="ops-section-title">Händelsestatistik</h2>
           <div className="ops-metrics-grid ops-metrics-grid--4">
             <div className="ops-metric">
               <span className="ops-metric-value">{eventStats.last24h}</span>
-              <span className="ops-metric-label">Last 24h</span>
+              <span className="ops-metric-label">Senaste 24h</span>
             </div>
             <div className="ops-metric">
               <span className="ops-metric-value">{eventStats.last7d}</span>
-              <span className="ops-metric-label">Last 7d</span>
+              <span className="ops-metric-label">Senaste 7d</span>
             </div>
             <div className="ops-metric">
               <span className="ops-metric-value">{eventStats.last30d}</span>
-              <span className="ops-metric-label">Last 30d</span>
+              <span className="ops-metric-label">Senaste 30d</span>
             </div>
             <div className="ops-metric">
               <span className="ops-metric-value">{eventStats.avgPerDay}</span>
-              <span className="ops-metric-label">Avg/Day</span>
+              <span className="ops-metric-label">Snitt/dag</span>
             </div>
           </div>
 
           <div className="ops-grid ops-grid--2">
             <div className="ops-card">
-              <h3 className="ops-card-title">Daily Trend (7d)</h3>
+              <h3 className="ops-card-title">Daglig trend (7d)</h3>
               <div className="ops-trend-chart">
                 {eventStats.daily.map((day) => {
                   const height = (day.count / maxDailyEventCount) * 100;
@@ -306,7 +306,7 @@ export default function OperationalDashboard({
                         <div
                           className="ops-trend-bar"
                           style={{ height: `${height}%` }}
-                          title={`${day.date}: ${day.count} events`}
+                          title={`${day.date}: ${day.count} händelser`}
                         />
                       </div>
                       <span className="ops-trend-value">{day.count}</span>
@@ -318,7 +318,7 @@ export default function OperationalDashboard({
             </div>
 
             <div className="ops-card">
-              <h3 className="ops-card-title">Hourly Distribution (24h)</h3>
+              <h3 className="ops-card-title">Fördelning per timme (24h)</h3>
               <div className="ops-bar-chart ops-bar-chart--small">
                 {eventStats.hourly.map((count, hour) => {
                   const height = (count / maxHourlyEventCount) * 100;
@@ -328,7 +328,7 @@ export default function OperationalDashboard({
                         <div
                           className="ops-bar ops-bar--accent"
                           style={{ height: `${height}%` }}
-                          title={`${hour}:00 - ${count} events`}
+                          title={`${hour}:00 - ${count} händelser`}
                         />
                       </div>
                     </div>
@@ -344,10 +344,10 @@ export default function OperationalDashboard({
           </div>
         </section>
 
-        {/* Recent Errors */}
+        {/* Senaste fel */}
         {operationalStats.recentErrors.length > 0 && (
           <section className="ops-section">
-            <h2 className="ops-section-title">Recent Errors</h2>
+            <h2 className="ops-section-title">Senaste fel</h2>
             <div className="ops-card">
               <div className="ops-error-list">
                 {operationalStats.recentErrors.map((error, index) => (
@@ -361,19 +361,19 @@ export default function OperationalDashboard({
           </section>
         )}
 
-        {/* Fetch Log */}
+        {/* Hämtningslogg */}
         <section className="ops-section">
-          <h2 className="ops-section-title">Recent Fetch Log</h2>
+          <h2 className="ops-section-title">Senaste hämtningslogg</h2>
           <div className="ops-card ops-card--table">
             <div className="ops-table-container">
               <table className="ops-table">
                 <thead>
                   <tr>
-                    <th>Time</th>
+                    <th>Tid</th>
                     <th>Status</th>
-                    <th>Fetched</th>
-                    <th>New</th>
-                    <th>Notes</th>
+                    <th>Hämtade</th>
+                    <th>Nya</th>
+                    <th>Anteckningar</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -382,7 +382,7 @@ export default function OperationalDashboard({
                       <td className="ops-table-time">{formatDateTime(log.fetchedAt)}</td>
                       <td>
                         <span className={`ops-status-badge ops-status-badge--${log.success ? 'success' : 'error'}`}>
-                          {log.success ? 'OK' : 'FAIL'}
+                          {log.success ? 'OK' : 'FEL'}
                         </span>
                       </td>
                       <td>{log.eventsFetched}</td>
@@ -400,7 +400,7 @@ export default function OperationalDashboard({
       </main>
 
       <footer className="ops-footer">
-        <p>Sambandscentralen Operational Dashboard</p>
+        <p>Sambandscentralen Driftöversikt</p>
       </footer>
     </div>
   );

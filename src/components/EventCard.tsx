@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { FormattedEvent, getTypeClass } from '@/types';
+import { formatRelativeTime } from '@/lib/utils';
 import type { Density } from './ClientApp';
 
 interface EventCardProps {
@@ -147,9 +148,15 @@ export default function EventCard({ event, currentView, onShowMap, isHighlighted
     isHighlighted ? 'highlighted' : '',
   ].filter(Boolean).join(' ');
 
+  // Compute relative time client-side so it stays fresh
+  const relativeTime = useMemo(() => {
+    const eventDate = new Date(event.date.iso || event.datetime);
+    return formatRelativeTime(eventDate, new Date());
+  }, [event.date.iso, event.datetime]);
+
   // Stream mode: completely different ticker/feed layout
   if (density === 'stream') {
-    const isRecent = event.date.relative?.includes('min') || event.date.relative?.includes('Just');
+    const isRecent = relativeTime.includes('min') || relativeTime.includes('Just');
     return (
       <article
         className={`stream-item${expanded ? ' stream-item--expanded' : ''}${isHighlighted ? ' stream-item--highlighted' : ''}`}
@@ -169,7 +176,7 @@ export default function EventCard({ event, currentView, onShowMap, isHighlighted
           <span className={`stream-item__dot${isRecent ? ' stream-item__dot--recent' : ''}`} style={{ background: event.color }} />
         </div>
         <div className="stream-item__time">
-          <span className={`stream-item__relative${isRecent ? ' stream-item__relative--recent' : ''}`}>{event.date.relative}</span>
+          <span className={`stream-item__relative${isRecent ? ' stream-item__relative--recent' : ''}`}>{relativeTime}</span>
         </div>
         <div className="stream-item__content">
           <div className="stream-item__headline">

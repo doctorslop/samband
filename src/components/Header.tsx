@@ -24,7 +24,7 @@ export default function Header({ currentView, onViewChange, onLogoClick, density
   const lastScrollY = useRef(0);
 
   const updatePanelPosition = useCallback(() => {
-    if (toggleRef.current && window.innerWidth <= 768) {
+    if (toggleRef.current) {
       const rect = toggleRef.current.getBoundingClientRect();
       setPanelTop(rect.bottom + 8);
     }
