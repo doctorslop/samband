@@ -14,11 +14,11 @@ export function formatRelativeTime(date: Date, now: Date): string {
 
   const diffHours = Math.floor(diffMinutes / 60);
   if (diffHours < 24) {
-    return `${diffHours} timmar sedan`;
+    return `${diffHours} ${diffHours === 1 ? 'timme' : 'timmar'} sedan`;
   }
 
   const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays} dagar sedan`;
+  return `${diffDays} ${diffDays === 1 ? 'dag' : 'dagar'} sedan`;
 }
 
 export function formatEventForUi(event: EventWithMetadata): FormattedEvent {

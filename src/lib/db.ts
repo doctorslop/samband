@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import path from 'path';
+import fs from 'fs';
 import { EventFilters, EventWithMetadata, RawEvent, Statistics, DailyStats, TopItem, OperationalStats, FetchLogEntry, DatabaseHealth } from '@/types';
 import { escapeLikeWildcards } from './utils';
 
@@ -58,6 +59,11 @@ function initializeDatabase(database: Database.Database): void {
 
 export function getDatabase(): Database.Database {
   if (!db) {
+    // Ensure the data directory exists before opening the database
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+
     db = new Database(DB_PATH, { readonly: false });
 
     // Enable WAL mode for better performance
@@ -205,10 +211,12 @@ export function insertEvent(event: RawEvent): 'new' | 'updated' | 'unchanged' {
       return 'unchanged';
     }
 
-    // Content changed - update the event
+    // Content changed - update the event, including recalculating event_time
+    const updatedEventTime = extractEventTime(event) || normalizedDatetime;
     pdo.prepare(`
       UPDATE events SET
         datetime = ?,
+        event_time = ?,
         name = ?,
         summary = ?,
         url = ?,
@@ -221,6 +229,7 @@ export function insertEvent(event: RawEvent): 'new' | 'updated' | 'unchanged' {
       WHERE id = ?
     `).run(
       normalizedDatetime,
+      updatedEventTime,
       event.name,
       event.summary || '',
       event.url || '',

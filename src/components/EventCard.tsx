@@ -57,7 +57,7 @@ export default function EventCard({ event, currentView, onShowMap, isHighlighted
             }
           })
           .catch(() => {
-            // Silently fail
+            setError(true);
           })
           .finally(() => setLoading(false));
       }
