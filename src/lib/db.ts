@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import path from 'path';
-import { EventFilters, EventWithMetadata, RawEvent, Statistics, DailyStats, TopItem, OperationalStats, FetchLogEntry, DatabaseHealth } from '@/types';
+import { EventFilters, EventWithMetadata, RawEvent, Statistics, DailyStats, OperationalStats, FetchLogEntry, DatabaseHealth } from '@/types';
 import { escapeLikeWildcards } from './utils';
 
 // Database configuration
@@ -394,101 +394,173 @@ export function getFilterOptions(column: 'location_name' | 'type'): string[] {
 }
 
 // Get statistics summary
-export function getStatsSummary(): Statistics {
+export type StatsPeriod = 'live' | '24h' | '48h' | '72h' | '7d' | '30d' | 'custom' | 'all';
+
+interface StatsSummaryOptions {
+  period?: StatsPeriod;
+  from?: string;
+  to?: string;
+}
+
+function getRangeFromPeriod(period: StatsPeriod, from?: string, to?: string): { start: Date | null; end: Date; compareStart: Date | null; compareEnd: Date } {
+  const end = new Date();
+
+  if (period === 'custom' && from && to) {
+    const start = new Date(`${from}T00:00:00`);
+    const customEnd = new Date(`${to}T23:59:59`);
+    const span = Math.max(1, customEnd.getTime() - start.getTime());
+    return {
+      start,
+      end: customEnd,
+      compareStart: new Date(start.getTime() - span),
+      compareEnd: new Date(start.getTime() - 1),
+    };
+  }
+
+  const periodMs: Record<Exclude<StatsPeriod, 'custom' | 'all'>, number> = {
+    live: 60 * 60 * 1000,
+    '24h': 24 * 60 * 60 * 1000,
+    '48h': 48 * 60 * 60 * 1000,
+    '72h': 72 * 60 * 60 * 1000,
+    '7d': 7 * 24 * 60 * 60 * 1000,
+    '30d': 30 * 24 * 60 * 60 * 1000,
+  };
+
+  if (period === 'all') {
+    return { start: null, end, compareStart: null, compareEnd: end };
+  }
+
+  const ms = periodMs[period as Exclude<StatsPeriod, 'custom' | 'all'>];
+  const start = new Date(end.getTime() - ms);
+  return {
+    start,
+    end,
+    compareStart: new Date(start.getTime() - ms),
+    compareEnd: new Date(start.getTime() - 1),
+  };
+}
+
+export function getStatsSummary(options: StatsSummaryOptions = {}): Statistics {
   const pdo = getDatabase();
-  const now = new Date();
-  const since24h = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
-  const since7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  const since30d = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const period = options.period || '30d';
+  const { start, end } = getRangeFromPeriod(period, options.from, options.to);
 
-  const excludePattern = '%Sammanfattning%';
+  const whereParts = ['type NOT LIKE ?'];
+  const params: (string | number)[] = ['%Sammanfattning%'];
 
-  // Last 24h
-  const last24h = (pdo.prepare('SELECT COUNT(*) as count FROM events WHERE event_time >= ? AND type NOT LIKE ?').get(since24h, excludePattern) as { count: number }).count;
+  if (start) {
+    whereParts.push('event_time >= ?');
+    params.push(start.toISOString());
+  }
+  whereParts.push('event_time <= ?');
+  params.push(end.toISOString());
 
-  // Last 7 days
-  const last7d = (pdo.prepare('SELECT COUNT(*) as count FROM events WHERE event_time >= ? AND type NOT LIKE ?').get(since7d, excludePattern) as { count: number }).count;
+  const rows = pdo.prepare(`
+    SELECT event_time, type, location_name, location_gps, publish_time, last_updated
+    FROM events
+    WHERE ${whereParts.join(' AND ')}
+  `).all(...params) as Array<{
+    event_time: string;
+    type: string;
+    location_name: string;
+    location_gps: string;
+    publish_time: string;
+    last_updated: string;
+  }>;
 
-  // Last 30 days
-  const last30d = (pdo.prepare('SELECT COUNT(*) as count FROM events WHERE event_time >= ? AND type NOT LIKE ?').get(since30d, excludePattern) as { count: number }).count;
-
-  // Total stored (all events in database)
   const totalStored = (pdo.prepare('SELECT COUNT(*) as count FROM events').get() as { count: number }).count;
+  const total = rows.length;
+  const now = new Date();
+  const since24h = now.getTime() - 24 * 60 * 60 * 1000;
+  const since7d = now.getTime() - 7 * 24 * 60 * 60 * 1000;
+  const since30d = now.getTime() - 30 * 24 * 60 * 60 * 1000;
 
-  // Total should match totalStored so the footer shows consistent counts
-  const total = totalStored;
+  let last24h = 0;
+  let last7d = 0;
+  let last30d = 0;
+  let gpsCount = 0;
+  let updatedCount = 0;
 
-  // Oldest event for average calculation
-  const oldest = pdo.prepare('SELECT MIN(event_time) as oldest FROM events WHERE type NOT LIKE ?').get(excludePattern) as { oldest: string | null };
-  let avgPerDay = 0;
-  if (oldest?.oldest) {
-    const oldestDate = new Date(oldest.oldest);
-    const daysDiff = Math.max(1, Math.floor((now.getTime() - oldestDate.getTime()) / (24 * 60 * 60 * 1000)));
-    avgPerDay = Math.round((total / daysDiff) * 10) / 10;
-  }
-
-  // Top types
-  const topTypes = pdo.prepare('SELECT type AS label, COUNT(*) AS total FROM events WHERE type NOT LIKE ? GROUP BY type ORDER BY total DESC LIMIT 8').all(excludePattern) as TopItem[];
-
-  // Top locations
-  const topLocations = pdo.prepare('SELECT location_name AS label, COUNT(*) AS total FROM events WHERE type NOT LIKE ? GROUP BY location_name ORDER BY total DESC LIMIT 8').all(excludePattern) as TopItem[];
-
-  // Per hour last 24h
-  const hourlyRows = pdo.prepare("SELECT strftime('%H', event_time) AS hour, COUNT(*) AS total FROM events WHERE event_time >= ? AND type NOT LIKE ? GROUP BY hour ORDER BY hour").all(since24h, excludePattern) as Array<{ hour: string; total: number }>;
   const hourly: number[] = Array(24).fill(0);
-  for (const row of hourlyRows) {
-    hourly[parseInt(row.hour, 10)] = row.total;
+  const weekdays: number[] = Array(7).fill(0);
+  const typeMap = new Map<string, number>();
+  const locationMap = new Map<string, number>();
+
+  const timestamps: number[] = [];
+
+  for (const row of rows) {
+    const ts = new Date(row.event_time).getTime();
+    if (!Number.isFinite(ts)) continue;
+    timestamps.push(ts);
+
+    if (ts >= since24h) last24h++;
+    if (ts >= since7d) last7d++;
+    if (ts >= since30d) last30d++;
+
+    const d = new Date(ts);
+    hourly[d.getHours()] += 1;
+    weekdays[(d.getDay() + 6) % 7] += 1; // Mon-first
+
+    typeMap.set(row.type, (typeMap.get(row.type) || 0) + 1);
+    locationMap.set(row.location_name, (locationMap.get(row.location_name) || 0) + 1);
+
+    if (row.location_gps) gpsCount += 1;
+    if (row.last_updated && row.publish_time && row.last_updated !== row.publish_time) updatedCount += 1;
   }
 
-  // Per weekday last 30 days
-  const weekdayRows = pdo.prepare("SELECT strftime('%w', event_time) AS weekday, COUNT(*) AS total FROM events WHERE event_time >= ? AND type NOT LIKE ? GROUP BY weekday ORDER BY weekday").all(since30d, excludePattern) as Array<{ weekday: string; total: number }>;
-  const weekdayData: number[] = Array(7).fill(0);
-  for (const row of weekdayRows) {
-    weekdayData[parseInt(row.weekday, 10)] = row.total;
-  }
-  // Convert to Monday-Sunday order (Swedish)
-  const weekdays = [
-    weekdayData[1], // Monday
-    weekdayData[2], // Tuesday
-    weekdayData[3], // Wednesday
-    weekdayData[4], // Thursday
-    weekdayData[5], // Friday
-    weekdayData[6], // Saturday
-    weekdayData[0], // Sunday
-  ];
+  const uniqueLocations = locationMap.size;
+  const uniqueTypes = typeMap.size;
 
-  // Events per day last 7 days
-  const dailyRows = pdo.prepare("SELECT date(event_time) AS day, COUNT(*) AS total FROM events WHERE event_time >= ? AND type NOT LIKE ? GROUP BY day ORDER BY day").all(since7d, excludePattern) as Array<{ day: string; total: number }>;
-  const dailyMap: Record<string, number> = {};
-  for (const row of dailyRows) {
-    dailyMap[row.day] = row.total;
+  const startMs = start ? start.getTime() : (timestamps.length ? Math.min(...timestamps) : now.getTime());
+  const endMs = end.getTime();
+  const daysSpan = Math.max(1, (endMs - startMs) / (24 * 60 * 60 * 1000));
+  const avgPerDay = total > 0 ? Math.round((total / daysSpan) * 10) / 10 : 0;
+
+  const topTypes = [...typeMap.entries()].sort((a, b) => b[1] - a[1]).map(([label, total]) => ({ label, total }));
+  const topLocations = [...locationMap.entries()].sort((a, b) => b[1] - a[1]).map(([label, total]) => ({ label, total }));
+
+  const dailyMap = new Map<string, number>();
+  for (const ts of timestamps) {
+    const d = new Date(ts);
+    let key = '';
+    if (period === 'live') {
+      const min = Math.floor(d.getMinutes() / 5) * 5;
+      key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}-${d.getHours()}-${min}`;
+    } else if (period === '24h' || period === '48h' || period === '72h') {
+      key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}-${d.getHours()}`;
+    } else {
+      key = d.toISOString().split('T')[0];
+    }
+    dailyMap.set(key, (dailyMap.get(key) || 0) + 1);
   }
 
   const daily: DailyStats[] = [];
-  const dayNames = ['Sön', 'Mån', 'Tis', 'Ons', 'Tor', 'Fre', 'Lör'];
-  for (let i = 6; i >= 0; i--) {
-    const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-    const dateStr = date.toISOString().split('T')[0];
-    daily.push({
-      date: dateStr,
-      day: dayNames[date.getDay()],
-      count: dailyMap[dateStr] || 0,
-    });
+  if (period === 'live') {
+    for (let i = 11; i >= 0; i--) {
+      const point = new Date(now.getTime() - i * 5 * 60 * 1000);
+      const min = Math.floor(point.getMinutes() / 5) * 5;
+      const key = `${point.getFullYear()}-${point.getMonth()}-${point.getDate()}-${point.getHours()}-${min}`;
+      daily.push({ date: point.toISOString(), day: `${String(point.getHours()).padStart(2, '0')}:${String(min).padStart(2, '0')}`, count: dailyMap.get(key) || 0 });
+    }
+  } else if (period === '24h' || period === '48h' || period === '72h') {
+    const hours = period === '24h' ? 24 : period === '48h' ? 48 : 72;
+    for (let i = hours - 1; i >= 0; i--) {
+      const point = new Date(now.getTime() - i * 60 * 60 * 1000);
+      const key = `${point.getFullYear()}-${point.getMonth()}-${point.getDate()}-${point.getHours()}`;
+      daily.push({ date: point.toISOString(), day: `${String(point.getHours()).padStart(2, '0')}:00`, count: dailyMap.get(key) || 0 });
+    }
+  } else {
+    const days = period === '7d' ? 7 : period === '30d' ? 30 : 14;
+    const dayNames = ['Sön', 'Mån', 'Tis', 'Ons', 'Tor', 'Fre', 'Lör'];
+    for (let i = days - 1; i >= 0; i--) {
+      const point = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+      const key = point.toISOString().split('T')[0];
+      daily.push({ date: key, day: dayNames[point.getDay()], count: dailyMap.get(key) || 0 });
+    }
   }
 
-  // GPS coverage
-  const eventsWithGps = (pdo.prepare("SELECT COUNT(*) as count FROM events WHERE location_gps != ''").get() as { count: number }).count;
-  const gpsPercent = totalStored > 0 ? Math.round((eventsWithGps / totalStored) * 100) : 0;
-
-  // Updated events
-  const updatedEvents = (pdo.prepare("SELECT COUNT(*) as count FROM events WHERE last_updated != publish_time").get() as { count: number }).count;
-  const updatedPercent = totalStored > 0 ? Math.round((updatedEvents / totalStored) * 100) : 0;
-
-  // Unique counts
-  const uniqueLocations = (pdo.prepare('SELECT COUNT(DISTINCT location_name) as count FROM events').get() as { count: number }).count;
-  const uniqueTypes = (pdo.prepare('SELECT COUNT(DISTINCT type) as count FROM events').get() as { count: number }).count;
-
   return {
+    period,
     total,
     totalStored,
     last24h,
@@ -500,8 +572,8 @@ export function getStatsSummary(): Statistics {
     hourly,
     weekdays,
     daily,
-    gpsPercent,
-    updatedPercent,
+    gpsPercent: total > 0 ? Math.round((gpsCount / total) * 100) : 0,
+    updatedPercent: total > 0 ? Math.round((updatedCount / total) * 100) : 0,
     uniqueLocations,
     uniqueTypes,
   };

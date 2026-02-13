@@ -23,6 +23,7 @@ interface ClientAppProps {
   locations: string[];
   types: string[];
   stats: Statistics;
+  previousStats?: Statistics;
   filters: {
     location: string;
     type: string;
@@ -39,6 +40,7 @@ function ClientAppContent({
   locations,
   types,
   stats,
+  previousStats,
   filters,
   initialView,
   highlightedEventId,
@@ -204,6 +206,7 @@ function ClientAppContent({
 
           <StatsView
               stats={stats}
+              previousStats={previousStats}
               isActive={currentView === 'stats'}
               onTypeClick={handleTypeClick}
               onLocationClick={handleLocationClick}

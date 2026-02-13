@@ -3359,3 +3359,30 @@ footer {
     font-size: 10px;
     line-height: 1.2;
 }
+
+/* Lägesbild dashboard */
+.stats-headline { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
+.stats-headline h2 { margin:0; font-size:1.4rem; }
+.period-filter { display:flex; flex-wrap:wrap; gap:8px; }
+.period-filter button { border:1px solid var(--border-color,#2b2f3a); background:#121722; color:#c9d1e6; padding:8px 12px; border-radius:999px; font-size:.85rem; }
+.period-filter button.active { background:#1d4ed8; color:#fff; border-color:#1d4ed8; }
+.stats-custom-period { display:flex; gap:8px; margin-bottom:12px; }
+.stats-custom-period input,.stats-custom-period button { background:#121722; border:1px solid #2b2f3a; color:#dbe4ff; padding:8px 10px; border-radius:8px; }
+.stats-hero-grid--overview { grid-template-columns:repeat(4,minmax(0,1fr)); margin-bottom:8px; }
+.stats-metric--span2 { grid-column:span 2; min-height:120px; }
+.stats-quality { display:flex; gap:8px; align-items:center; flex-wrap:wrap; color:#94a3b8; margin:0 0 18px; font-size:.85rem; }
+.stats-quality__badge { border:1px solid #2b2f3a; border-radius:999px; padding:4px 10px; }
+.stats-card--hero { min-height:320px; }
+.stats-show-more { margin-top:8px; border:0; background:transparent; color:#60a5fa; cursor:pointer; font-weight:600; }
+.stats-insights { margin:0; padding-left:18px; display:grid; gap:8px; }
+
+@media (max-width: 900px) {
+  .stats-hero-grid--overview { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .stats-metric--span2 { grid-column:span 2; }
+}
+@media (max-width: 640px) {
+  .stats-headline h2 { font-size:1.2rem; }
+  .stats-custom-period { flex-direction:column; }
+  .stats-hero-grid--overview { grid-template-columns:1fr; }
+  .stats-metric--span2 { grid-column:span 1; }
+}
