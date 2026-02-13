@@ -30,6 +30,61 @@ const MIN_GAP_DEG = 0.035;
 // Hard cap — never displace more than ~8 km from the real position.
 const MAX_FAN_RADIUS = 0.07;
 
+const SWEDEN_GEOJSON = {
+  type: 'Feature',
+  properties: { name: 'Sweden' },
+  geometry: {
+    type: 'Polygon',
+    coordinates: [[
+      [11.13, 55.34],
+      [12.75, 55.36],
+      [13.86, 55.43],
+      [14.62, 56.18],
+      [15.88, 56.41],
+      [16.78, 56.01],
+      [17.92, 57.35],
+      [18.66, 57.82],
+      [18.98, 58.58],
+      [17.71, 59.8],
+      [17.04, 60.65],
+      [17.64, 61.62],
+      [18.45, 62.46],
+      [18.98, 63.21],
+      [20.59, 63.77],
+      [20.36, 65.04],
+      [22.1, 65.73],
+      [22.21, 66.87],
+      [23.55, 67.76],
+      [23.51, 68.95],
+      [22.88, 69.51],
+      [20.72, 69.14],
+      [19.42, 68.44],
+      [18.07, 68.3],
+      [17.3, 67.66],
+      [16.28, 67.21],
+      [15.11, 66.15],
+      [14.0, 65.48],
+      [13.65, 64.58],
+      [13.33, 63.53],
+      [12.72, 62.66],
+      [12.1, 61.6],
+      [12.35, 60.11],
+      [11.51, 59.33],
+      [11.21, 58.18],
+      [11.52, 57.31],
+      [11.16, 56.14],
+      [11.13, 55.34],
+    ]],
+  },
+};
+
+const WORLD_RING: [number, number][] = [
+  [-90, -180],
+  [-90, 180],
+  [90, 180],
+  [90, -180],
+];
+
 /**
  * Pre-compute display positions so co-located markers (same city block)
  * get fanned out slightly.  Markers at distinct locations keep their
@@ -113,6 +168,8 @@ function EventMapInner({ events, isActive }: EventMapProps) {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const markersLayerRef = useRef<L.FeatureGroup | null>(null);
+  const swedenOutlineLayerRef = useRef<L.GeoJSON | null>(null);
+  const swedenMaskLayerRef = useRef<L.Polygon | null>(null);
   const infoControlRef = useRef<L.Control | null>(null);
   const leafletRef = useRef<typeof import('leaflet') | null>(null);
   const eventsRef = useRef<FormattedEvent[]>(events);
@@ -323,6 +380,32 @@ function EventMapInner({ events, isActive }: EventMapProps) {
         maxZoom: 18,
       }).addTo(map);
 
+      map.createPane('swedenMaskPane');
+      const swedenMaskPane = map.getPane('swedenMaskPane');
+      if (swedenMaskPane) {
+        swedenMaskPane.style.zIndex = '350';
+      }
+
+      const swedenRing = SWEDEN_GEOJSON.geometry.coordinates[0].map(([lng, lat]) => [lat, lng] as [number, number]);
+
+      swedenMaskLayerRef.current = L.polygon([WORLD_RING, swedenRing], {
+        pane: 'swedenMaskPane',
+        stroke: false,
+        fillColor: '#05070c',
+        fillOpacity: 0.62,
+        interactive: false,
+      }).addTo(map);
+
+      swedenOutlineLayerRef.current = L.geoJSON(SWEDEN_GEOJSON, {
+        style: {
+          color: '#4bf7ff',
+          weight: 3,
+          opacity: 1,
+          fill: false,
+        },
+        interactive: false,
+      }).addTo(map);
+
       // Fallback: if primary tiles fail, switch to OSM
       let hasFallback = false;
       tileLayer.on('tileerror', () => {
@@ -354,6 +437,8 @@ function EventMapInner({ events, isActive }: EventMapProps) {
         mapRef.current = null;
       }
       markersLayerRef.current = null;
+      swedenOutlineLayerRef.current = null;
+      swedenMaskLayerRef.current = null;
       infoControlRef.current = null;
       leafletRef.current = null;
       hasFittedBoundsRef.current = false;
