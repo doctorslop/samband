@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { Density } from './ClientApp';
 
@@ -94,7 +95,7 @@ export default function Header({ currentView, onViewChange, onLogoClick, density
   return (
     <header ref={headerRef} className={headerClasses}>
       <div className="header-content">
-        <a
+        <Link
           className="logo"
           href="/"
           onClick={(e) => {
@@ -104,12 +105,12 @@ export default function Header({ currentView, onViewChange, onLogoClick, density
             }
           }}
         >
-          <div className="logo-icon">👮</div>
+          <div className="logo-icon">🚨</div>
           <div className="logo-text">
             <h1>Sambandscentralen</h1>
             <p>Polisens händelsenotiser i realtid</p>
           </div>
-        </a>
+        </Link>
         <div className="header-controls">
           <nav className="view-toggle" role="tablist" aria-label="Vy-navigering">
             <button
