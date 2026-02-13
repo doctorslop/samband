@@ -3041,7 +3041,7 @@ footer {
 /* Stream item: the ticker row */
 .stream-item {
     display: grid;
-    grid-template-columns: 20px 72px 1fr auto;
+    grid-template-columns: 20px 112px 1fr auto;
     align-items: start;
     gap: 0 10px;
     padding: 12px 18px;
