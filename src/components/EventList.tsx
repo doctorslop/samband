@@ -72,7 +72,7 @@ export default function EventList({
     lastRefreshRef.current = Date.now();
   }, [filterKey, initialEvents, initialHasMore]);
 
-  // Auto-refresh to check for new events every 30 minutes
+  // Auto-refresh to check for new events every 10 minutes
   useEffect(() => {
     const checkForNewEvents = async () => {
       // Only auto-refresh if user is on the list view and document is visible
@@ -100,6 +100,7 @@ export default function EventList({
         const newFirstId = data.events[0]?.id;
 
         setLastChecked(new Date());
+        lastRefreshRef.current = Date.now();
 
         if (currentFirstId !== newFirstId && data.events.length > 0) {
           // Count how many new events there are
