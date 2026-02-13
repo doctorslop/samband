@@ -64,7 +64,7 @@ export default function EventCard({ event, currentView, onShowMap, isHighlighted
     } else if (!isHighlighted) {
       setExpanded(false);
     }
-  }, [autoExpand]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [autoExpand]);
 
   const typeClass = getTypeClass(event.type);
 
