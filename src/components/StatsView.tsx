@@ -1,113 +1,88 @@
 'use client';
 
-import { memo, useMemo, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { memo } from 'react';
 import { Statistics } from '@/types';
-import { generateStatsInsights } from '@/lib/statsInsights';
 
 interface StatsViewProps {
   stats: Statistics;
-  previousStats?: Statistics;
   isActive: boolean;
   onTypeClick?: (type: string) => void;
   onLocationClick?: (location: string) => void;
 }
 
-const PERIODS = [
-  { key: 'live', label: 'Live' },
-  { key: '24h', label: '24h' },
-  { key: '7d', label: '7 dagar' },
-  { key: '30d', label: '30 dagar' },
-  { key: 'custom', label: 'Anpassad' },
-];
-
-function StatsView({ stats, previousStats, isActive, onTypeClick, onLocationClick }: StatsViewProps) {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const [showAllLocations, setShowAllLocations] = useState(false);
-  const [showAllTypes, setShowAllTypes] = useState(false);
-
-  const maxDaily = Math.max(...stats.daily.map((d) => d.count), 1);
+function StatsView({ stats, isActive, onTypeClick, onLocationClick }: StatsViewProps) {
+  const maxDaily = Math.max(...stats.daily.map(d => d.count), 1);
   const maxWeekday = Math.max(...stats.weekdays, 1);
   const maxHourly = Math.max(...stats.hourly, 1);
   const weekdayNames = ['Mån', 'Tis', 'Ons', 'Tor', 'Fre', 'Lör', 'Sön'];
 
-  const insights = useMemo(() => generateStatsInsights(stats, previousStats), [stats, previousStats]);
-
-  const setPeriod = (period: string) => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('view', 'stats');
-    params.set('period', period);
-    if (period !== 'custom') {
-      params.delete('from');
-      params.delete('to');
-    }
-    router.push(`/?${params.toString()}`, { scroll: false });
-  };
-
-  const topTypes = showAllTypes ? stats.topTypes : stats.topTypes.slice(0, 8);
-  const topLocations = showAllLocations ? stats.topLocations : stats.topLocations.slice(0, 8);
-
   return (
-    <section className={`stats-view${isActive ? ' active' : ''}`} aria-hidden={!isActive} role="region" aria-label="Lägesbild">
-      <div className="stats-headline">
-        <h2>Lägesbild</h2>
-        <div className="period-filter" role="tablist" aria-label="Välj period">
-          {PERIODS.map((period) => (
-            <button key={period.key} type="button" className={stats.period === period.key ? 'active' : ''} onClick={() => setPeriod(period.key)}>
-              {period.label}
-            </button>
-          ))}
+    <section
+      className={`stats-view${isActive ? ' active' : ''}`}
+      aria-hidden={!isActive}
+      role="region"
+      aria-label="Statistik"
+    >
+      {/* Hero metrics */}
+      <div className="stats-hero">
+        <div className="stats-hero-grid">
+          <div className="stats-metric stats-metric--primary">
+            <span className="stats-metric__value">{stats.total.toLocaleString('sv-SE')}</span>
+            <span className="stats-metric__label">Totalt antal händelser</span>
+          </div>
+          <div className="stats-metric">
+            <span className="stats-metric__value">{stats.last24h}</span>
+            <span className="stats-metric__label">Senaste 24h</span>
+          </div>
+          <div className="stats-metric">
+            <span className="stats-metric__value">{stats.last7d}</span>
+            <span className="stats-metric__label">Senaste 7 dagar</span>
+          </div>
+          <div className="stats-metric">
+            <span className="stats-metric__value">{stats.last30d}</span>
+            <span className="stats-metric__label">Senaste 30 dagar</span>
+          </div>
+          <div className="stats-metric stats-metric--highlight">
+            <span className="stats-metric__value">~{stats.avgPerDay}</span>
+            <span className="stats-metric__label">Genomsnitt/dag</span>
+          </div>
+          <div className="stats-metric">
+            <span className="stats-metric__value">{stats.uniqueLocations}</span>
+            <span className="stats-metric__label">Unika platser</span>
+          </div>
+          <div className="stats-metric">
+            <span className="stats-metric__value">{stats.uniqueTypes}</span>
+            <span className="stats-metric__label">Händelsetyper</span>
+          </div>
+          <div className="stats-metric">
+            <span className="stats-metric__value">{stats.gpsPercent}%</span>
+            <span className="stats-metric__label">Med GPS-position</span>
+          </div>
+          <div className="stats-metric">
+            <span className="stats-metric__value">{stats.updatedPercent}%</span>
+            <span className="stats-metric__label">Uppdaterade</span>
+          </div>
         </div>
       </div>
 
-      {stats.period === 'custom' && (
-        <form className="stats-custom-period" onSubmit={(e) => {
-          e.preventDefault();
-          const formData = new FormData(e.currentTarget);
-          const from = formData.get('from')?.toString() || '';
-          const to = formData.get('to')?.toString() || '';
-          const params = new URLSearchParams(searchParams.toString());
-          params.set('view', 'stats');
-          params.set('period', 'custom');
-          if (from) params.set('from', from);
-          if (to) params.set('to', to);
-          router.push(`/?${params.toString()}`, { scroll: false });
-        }}>
-          <input type="date" name="from" defaultValue={searchParams.get('from') || ''} />
-          <input type="date" name="to" defaultValue={searchParams.get('to') || ''} />
-          <button type="submit">Uppdatera</button>
-        </form>
-      )}
-
-      <div className="stats-hero-grid stats-hero-grid--overview">
-        <div className="stats-metric stats-metric--primary stats-metric--span2">
-          <span className="stats-metric__value">{stats.total.toLocaleString('sv-SE')}</span>
-          <span className="stats-metric__label">Totala händelser</span>
-        </div>
-        <div className="stats-metric"><span className="stats-metric__value">{stats.last24h}</span><span className="stats-metric__label">Senaste 24h</span></div>
-        <div className="stats-metric"><span className="stats-metric__value">{stats.avgPerDay}</span><span className="stats-metric__label">Genomsnitt per dag</span></div>
-        <div className="stats-metric"><span className="stats-metric__value">{stats.uniqueLocations}</span><span className="stats-metric__label">Unika platser</span></div>
-        <div className="stats-metric"><span className="stats-metric__value">{stats.uniqueTypes}</span><span className="stats-metric__label">Händelsetyper</span></div>
-      </div>
-
-      <div className="stats-quality">
-        <span>Datakvalitet</span>
-        <span className="stats-quality__badge">GPS-position: {stats.gpsPercent}%</span>
-        <span className="stats-quality__badge">Uppdaterade: {stats.updatedPercent}%</span>
-      </div>
-
+      {/* Trend section */}
       <div className="stats-section">
-        <h3 className="stats-section__title">Händelser över tid</h3>
-        <div className="stats-card stats-card--chart stats-card--hero">
+        <h2 className="stats-section__title">Senaste 7 dagarna</h2>
+        <div className="stats-card stats-card--chart">
           <div className="trend-chart">
             {stats.daily.map((day, i) => {
               const pct = (day.count / maxDaily) * 100;
               return (
-                <div key={i} className="trend-chart__col" title={`${day.day}: ${day.count} händelser`}>
-                  <div className="trend-chart__bar-container"><div className="trend-chart__bar" style={{ height: `${pct}%` }} /></div>
+                <div key={i} className="trend-chart__col">
+                  <div className="trend-chart__bar-container">
+                    <div
+                      className="trend-chart__bar"
+                      style={{ height: `${pct}%` }}
+                      title={`${day.date}: ${day.count} händelser`}
+                    />
+                  </div>
                   <span className="trend-chart__value">{day.count}</span>
-                  <span className="trend-chart__label">{day.day}</span>
+                  <span className="trend-chart__label">{day.day.substring(0, 3)}</span>
                 </div>
               );
             })}
@@ -115,50 +90,132 @@ function StatsView({ stats, previousStats, isActive, onTypeClick, onLocationClic
         </div>
       </div>
 
+      {/* Distribution section */}
       <div className="stats-section">
-        <h3 className="stats-section__title">Händelsemönster</h3>
+        <h2 className="stats-section__title">Fördelning</h2>
         <div className="stats-grid stats-grid--2col">
+          {/* Weekday distribution */}
           <div className="stats-card">
-            <h4 className="stats-card__title">Per veckodag</h4>
+            <h3 className="stats-card__title">Per veckodag</h3>
             <div className="bar-chart bar-chart--weekday">
-              {stats.weekdays.map((count, i) => <div key={i} className="bar-chart__col"><div className="bar-chart__bar-container"><div className="bar-chart__bar" style={{ height: `${(count / maxWeekday) * 100}%` }} /></div><span className="bar-chart__label">{weekdayNames[i]}</span></div>)}
+              {stats.weekdays.map((count, i) => {
+                const pct = (count / maxWeekday) * 100;
+                return (
+                  <div key={i} className="bar-chart__col">
+                    <div className="bar-chart__bar-container">
+                      <div
+                        className="bar-chart__bar"
+                        style={{ height: `${pct}%` }}
+                        title={`${weekdayNames[i]}: ${count} händelser`}
+                      />
+                    </div>
+                    <span className="bar-chart__label">{weekdayNames[i]}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
+
+          {/* Hourly distribution */}
           <div className="stats-card">
-            <h4 className="stats-card__title">Per timme</h4>
+            <h3 className="stats-card__title">Per timme</h3>
             <div className="bar-chart bar-chart--hourly">
-              {stats.hourly.map((count, hour) => <div key={hour} className="bar-chart__col bar-chart__col--hour" title={`${String(hour).padStart(2, '0')}:00 - ${count}`}><div className="bar-chart__bar-container"><div className="bar-chart__bar" style={{ height: `${(count / maxHourly) * 100}%` }} /></div></div>)}
+              {stats.hourly.map((count, hour) => {
+                const pct = (count / maxHourly) * 100;
+                return (
+                  <div
+                    key={hour}
+                    className="bar-chart__col bar-chart__col--hour"
+                    title={`${String(hour).padStart(2, '0')}:00 - ${count} händelser`}
+                  >
+                    <div className="bar-chart__bar-container">
+                      <div
+                        className="bar-chart__bar"
+                        style={{ height: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="bar-chart__axis">
+              <span>00</span>
+              <span>06</span>
+              <span>12</span>
+              <span>18</span>
+              <span>23</span>
             </div>
           </div>
         </div>
       </div>
 
+      {/* Top lists section */}
       <div className="stats-section">
-        <h3 className="stats-section__title">Topplistor</h3>
+        <h2 className="stats-section__title">Vanligast förekommande</h2>
         <div className="stats-grid stats-grid--2col">
+          {/* Top event types */}
           <div className="stats-card">
-            <h4 className="stats-card__title">Län</h4>
+            <h3 className="stats-card__title">Händelsetyper</h3>
             <ul className="top-list">
-              {topLocations.map((row, i) => <li key={row.label} className={`top-list__item${onLocationClick ? ' top-list__item--clickable' : ''}`} onClick={() => onLocationClick?.(row.label)}><span className="top-list__rank">{i + 1}</span><span className="top-list__name">{row.label}</span><span className="top-list__count">{row.total}</span></li>)}
+              {stats.topTypes.map((row, i) => {
+                const pct = stats.total > 0 ? Math.round((row.total / stats.total) * 100) : 0;
+                return (
+                  <li
+                    key={i}
+                    className={`top-list__item${onTypeClick ? ' top-list__item--clickable' : ''}`}
+                    onClick={() => onTypeClick?.(row.label)}
+                    role={onTypeClick ? 'button' : undefined}
+                    tabIndex={onTypeClick ? 0 : undefined}
+                    onKeyDown={(e) => {
+                      if (onTypeClick && (e.key === 'Enter' || e.key === ' ')) {
+                        e.preventDefault();
+                        onTypeClick(row.label);
+                      }
+                    }}
+                  >
+                    <span className="top-list__rank">{i + 1}</span>
+                    <span className="top-list__name">{row.label}</span>
+                    <div className="top-list__bar-container">
+                      <div className="top-list__bar" style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="top-list__count">{row.total.toLocaleString('sv-SE')}</span>
+                  </li>
+                );
+              })}
             </ul>
-            {stats.topLocations.length > 8 && <button type="button" className="stats-show-more" onClick={() => setShowAllLocations((v) => !v)}>{showAllLocations ? 'Visa färre' : 'Visa fler'}</button>}
           </div>
-          <div className="stats-card">
-            <h4 className="stats-card__title">Händelsetyper</h4>
-            <ul className="top-list">
-              {topTypes.map((row, i) => <li key={row.label} className={`top-list__item${onTypeClick ? ' top-list__item--clickable' : ''}`} onClick={() => onTypeClick?.(row.label)}><span className="top-list__rank">{i + 1}</span><span className="top-list__name">{row.label}</span><span className="top-list__count">{row.total}</span></li>)}
-            </ul>
-            {stats.topTypes.length > 8 && <button type="button" className="stats-show-more" onClick={() => setShowAllTypes((v) => !v)}>{showAllTypes ? 'Visa färre' : 'Visa fler'}</button>}
-          </div>
-        </div>
-      </div>
 
-      <div className="stats-section">
-        <h3 className="stats-section__title">Insikter</h3>
-        <div className="stats-card">
-          <ul className="stats-insights">
-            {insights.map((line) => <li key={line}>{line}</li>)}
-          </ul>
+          {/* Top locations */}
+          <div className="stats-card">
+            <h3 className="stats-card__title">Platser</h3>
+            <ul className="top-list">
+              {stats.topLocations.map((row, i) => {
+                const pct = stats.total > 0 ? Math.round((row.total / stats.total) * 100) : 0;
+                return (
+                  <li
+                    key={i}
+                    className={`top-list__item${onLocationClick ? ' top-list__item--clickable' : ''}`}
+                    onClick={() => onLocationClick?.(row.label)}
+                    role={onLocationClick ? 'button' : undefined}
+                    tabIndex={onLocationClick ? 0 : undefined}
+                    onKeyDown={(e) => {
+                      if (onLocationClick && (e.key === 'Enter' || e.key === ' ')) {
+                        e.preventDefault();
+                        onLocationClick(row.label);
+                      }
+                    }}
+                  >
+                    <span className="top-list__rank">{i + 1}</span>
+                    <span className="top-list__name">{row.label}</span>
+                    <div className="top-list__bar-container">
+                      <div className="top-list__bar" style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="top-list__count">{row.total.toLocaleString('sv-SE')}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         </div>
       </div>
     </section>

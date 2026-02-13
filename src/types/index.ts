@@ -63,7 +63,6 @@ export interface TopItem {
 }
 
 export interface Statistics {
-  period: string;
   total: number;
   totalStored: number;
   last24h: number;
