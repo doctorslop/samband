@@ -122,7 +122,6 @@ header {
     isolation: isolate;
     -moz-appearance: none;
 }
-.logo:hover .logo-icon { transform: scale(1.05) rotate(-3deg); }
 .logo-icon.radio-playing { animation: radioGlow 1.5s ease-in-out infinite; }
 @keyframes radioGlow { 0%, 100% { box-shadow: 0 4px 16px var(--accent-glow); } 50% { box-shadow: 0 4px 24px var(--accent-glow), 0 0 30px var(--accent-glow); } }
 .logo-text { min-width: 0; overflow: hidden; }
