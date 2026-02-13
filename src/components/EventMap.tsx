@@ -9,11 +9,27 @@ interface EventMapProps {
 }
 
 type TimeRange = '24h' | '48h' | '72h';
+type EventCategoryKey = 'all' | 'violence' | 'theft' | 'traffic' | 'fire' | 'other';
+
+interface EventCategory {
+  key: EventCategoryKey;
+  label: string;
+  emoji: string;
+}
 
 const TIME_RANGES: { key: TimeRange; label: string; ms: number }[] = [
   { key: '24h', label: '24 tim', ms: 24 * 60 * 60 * 1000 },
   { key: '48h', label: '48 tim', ms: 48 * 60 * 60 * 1000 },
   { key: '72h', label: '72 tim', ms: 72 * 60 * 60 * 1000 },
+];
+
+const EVENT_CATEGORIES: EventCategory[] = [
+  { key: 'all', label: 'Alla', emoji: '🧭' },
+  { key: 'violence', label: 'Våld', emoji: '⚠️' },
+  { key: 'theft', label: 'Stöld', emoji: '🔓' },
+  { key: 'traffic', label: 'Trafik', emoji: '🚗' },
+  { key: 'fire', label: 'Brand', emoji: '🔥' },
+  { key: 'other', label: 'Övrigt', emoji: '📍' },
 ];
 
 const REPLAY_STEP_MS = 5 * 60 * 1000;
@@ -109,6 +125,55 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#39;');
 }
 
+function getEventCategory(type: string): EventCategoryKey {
+  const t = type.toLowerCase();
+
+  if (
+    t.includes('misshandel') ||
+    t.includes('mord') ||
+    t.includes('dråp') ||
+    t.includes('vald') ||
+    t.includes('våld') ||
+    t.includes('rån') ||
+    t.includes('ran') ||
+    t.includes('olaga hot') ||
+    t.includes('ofredande')
+  ) {
+    return 'violence';
+  }
+
+  if (
+    t.includes('stöld') ||
+    t.includes('stold') ||
+    t.includes('inbrott') ||
+    t.includes('bedrägeri') ||
+    t.includes('bedrageri')
+  ) {
+    return 'theft';
+  }
+
+  if (
+    t.includes('trafik') ||
+    t.includes('olycka') ||
+    t.includes('rattfylleri') ||
+    t.includes('väg') ||
+    t.includes('vag')
+  ) {
+    return 'traffic';
+  }
+
+  if (t.includes('brand') || t.includes('eld')) {
+    return 'fire';
+  }
+
+  return 'other';
+}
+
+function matchesCategory(event: FormattedEvent, selectedCategories: EventCategoryKey[]): boolean {
+  if (selectedCategories.includes('all')) return true;
+  return selectedCategories.includes(getEventCategory(event.type || ''));
+}
+
 function EventMapInner({ events, isActive }: EventMapProps) {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -129,6 +194,7 @@ function EventMapInner({ events, isActive }: EventMapProps) {
   const [replayTimestamp, setReplayTimestamp] = useState<number | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [visibleCount, setVisibleCount] = useState(0);
+  const [selectedCategories, setSelectedCategories] = useState<EventCategoryKey[]>(['all']);
 
   eventsRef.current = events;
 
@@ -275,7 +341,7 @@ function EventMapInner({ events, isActive }: EventMapProps) {
 
     const visible = eventsRef.current.filter(e => {
       const ts = new Date(e.date?.iso || e.datetime).getTime();
-      return !isNaN(ts) && ts >= windowStart && ts <= now;
+      return !isNaN(ts) && ts >= windowStart && ts <= now && matchesCategory(e, selectedCategories);
     });
 
     const positions = computeMarkerPositions(visible);
@@ -294,7 +360,7 @@ function EventMapInner({ events, isActive }: EventMapProps) {
       map.fitBounds(markersLayerRef.current.getBounds(), { padding: [40, 40] });
       hasFittedBoundsRef.current = true;
     }
-  }, [getRangeMs, clearMarkers, addMarker, updateInfoBadge]);
+  }, [getRangeMs, clearMarkers, addMarker, updateInfoBadge, selectedCategories]);
 
   // --- Initialize map once ---
   useEffect(() => {
@@ -425,7 +491,7 @@ function EventMapInner({ events, isActive }: EventMapProps) {
     const sortedEvents = eventsRef.current
       .filter(e => {
         const ts = new Date(e.date?.iso || e.datetime).getTime();
-        return !isNaN(ts) && ts >= start && ts <= now && e.gps;
+        return !isNaN(ts) && ts >= start && ts <= now && e.gps && matchesCategory(e, selectedCategories);
       })
       .sort((a, b) => {
         const ta = new Date(a.date?.iso || a.datetime).getTime();
@@ -476,7 +542,7 @@ function EventMapInner({ events, isActive }: EventMapProps) {
         replayIntervalRef.current = null;
       }
     };
-  }, [isPlaying, mapReady, getRangeMs, renderMarkers, clearMarkers, addMarker, updateInfoBadge]);
+  }, [isPlaying, mapReady, getRangeMs, renderMarkers, clearMarkers, addMarker, updateInfoBadge, selectedCategories]);
 
   // --- Handlers ---
   const handleSlider = useCallback((val: number) => {
@@ -508,6 +574,18 @@ function EventMapInner({ events, isActive }: EventMapProps) {
     });
   }, []);
 
+  const toggleCategory = useCallback((key: EventCategoryKey) => {
+    setSelectedCategories(prev => {
+      if (key === 'all') return ['all'];
+
+      const withoutAll = prev.filter(c => c !== 'all');
+      const isActive = withoutAll.includes(key);
+      const next = isActive ? withoutAll.filter(c => c !== key) : [...withoutAll, key];
+
+      return next.length > 0 ? next : ['all'];
+    });
+  }, []);
+
   const sliderLabel = replayTimestamp
     ? new Date(replayTimestamp).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' })
     : 'Live';
@@ -519,6 +597,23 @@ function EventMapInner({ events, isActive }: EventMapProps) {
 
       {/* Timeline bar - compact overlay at bottom */}
       <div className="map-timeline">
+        <div className="timeline-chip-row" role="group" aria-label="Filtrera händelser efter typ">
+          {EVENT_CATEGORIES.map(category => {
+            const isActive = selectedCategories.includes(category.key);
+            return (
+              <button
+                key={category.key}
+                className={`timeline-chip${isActive ? ' active' : ''}`}
+                onClick={() => toggleCategory(category.key)}
+                aria-pressed={isActive}
+              >
+                <span aria-hidden="true">{category.emoji}</span>
+                <span>{category.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
         <div className="timeline-controls">
           {/* Play / pause */}
           <button
