@@ -50,7 +50,7 @@ body::before {
 }
 
 .container {
-    max-width: 1400px;
+    max-width: 1800px;
     margin: 0 auto;
     padding: 0 var(--space-page);
     position: relative;
@@ -105,7 +105,7 @@ header {
 
 .header-content {
     display: flex; align-items: center; justify-content: space-between;
-    gap: 12px; max-width: 1320px; margin: 0 auto;
+    gap: 12px; max-width: 1720px; margin: 0 auto;
     transition: gap 0.3s ease;
     flex-wrap: nowrap;
 }
@@ -1234,7 +1234,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .stats-view {
     display: none;
     width: 100%;
-    max-width: 1000px;
+    max-width: 1400px;
     margin: 0 auto;
     padding: 0;
 }
@@ -2041,7 +2041,7 @@ footer {
 }
 
 .ops-header-content {
-    max-width: 1200px;
+    max-width: 1600px;
     margin: 0 auto;
     display: flex;
     justify-content: space-between;
@@ -2104,7 +2104,7 @@ footer {
 }
 
 .ops-main {
-    max-width: 1200px;
+    max-width: 1600px;
     margin: 0 auto;
     padding: 24px;
 }
@@ -3372,4 +3372,230 @@ footer {
     font-family: monospace;
     font-size: 10px;
     line-height: 1.2;
+}
+
+/* ========================================
+   Large Monitor Support
+   Scales layout, grids, modals, and charts
+   for 1440px+ / 1920px+ / 2560px+ screens
+   ======================================== */
+
+/* Large desktop: expand spacing and enable multi-column grids */
+@media (min-width: 1440px) {
+    :root {
+        --space-page: 48px;
+        --space-section: 28px;
+    }
+
+    /* Events grid: 2-column layout on large screens */
+    .events-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    /* Stats hero: 4-column grid */
+    .stats-hero-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+    .stats-metric--primary {
+        grid-column: 1 / 2;
+        grid-row: 1 / 2;
+    }
+
+    /* Stats 2-col grid stays 2-col but with more room */
+    .stats-grid--2col {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 20px;
+    }
+
+    /* Ops metrics: allow 4 columns */
+    .ops-metrics-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+
+    /* Map modal: larger on big screens */
+    .map-modal {
+        max-width: 900px;
+    }
+    .map-modal-body {
+        height: 500px;
+    }
+
+    /* Trend chart: taller */
+    .trend-chart {
+        height: 160px;
+    }
+    .trend-chart__bar-container {
+        height: 120px;
+    }
+
+    /* Bar charts: taller */
+    .bar-chart {
+        height: 110px;
+    }
+    .bar-chart__bar-container {
+        height: 80px;
+    }
+}
+
+/* Full HD (1920px+): widen further, 3-col events */
+@media (min-width: 1920px) {
+    :root {
+        --space-page: 56px;
+        --space-section: 32px;
+    }
+
+    /* Events grid: 3-column layout */
+    .events-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    /* Stats view: wider */
+    .stats-view {
+        max-width: 1600px;
+    }
+
+    /* Ops dashboard: wider */
+    .ops-header-content {
+        max-width: 1800px;
+    }
+    .ops-main {
+        max-width: 1800px;
+    }
+
+    /* Ops metrics: 5 columns for the 4-col variant */
+    .ops-metrics-grid--4 {
+        grid-template-columns: repeat(4, 1fr);
+    }
+
+    /* Map modal: even larger */
+    .map-modal {
+        max-width: 1100px;
+    }
+    .map-modal-body {
+        height: 600px;
+    }
+
+    /* Ops bar/trend charts: taller */
+    .ops-trend-chart {
+        height: 150px;
+    }
+    .ops-trend-bar-container {
+        height: 100px;
+    }
+    .ops-bar-chart {
+        height: 100px;
+    }
+    .ops-bar-container {
+        height: 75px;
+    }
+}
+
+/* Ultra-wide / 4K (2560px+) */
+@media (min-width: 2560px) {
+    :root {
+        --space-page: 64px;
+        --space-section: 36px;
+        --space-card: 20px;
+    }
+
+    /* Remove max-width cap entirely - let content breathe */
+    .container {
+        max-width: 2400px;
+    }
+
+    .header-content {
+        max-width: 2300px;
+    }
+
+    /* Events grid: 4-column layout */
+    .events-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+
+    /* Stats view: wider */
+    .stats-view {
+        max-width: 2000px;
+    }
+
+    /* Stats hero: 5-column with primary spanning */
+    .stats-hero-grid {
+        grid-template-columns: repeat(5, 1fr);
+        gap: 20px;
+    }
+    .stats-metric--primary {
+        grid-column: 1 / 2;
+        grid-row: 1 / 2;
+    }
+
+    /* Stats grid: 3 columns */
+    .stats-grid--2col {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    /* Ops dashboard: wider */
+    .ops-header-content {
+        max-width: 2200px;
+    }
+    .ops-main {
+        max-width: 2200px;
+        padding: 32px;
+    }
+
+    /* Ops metrics: 6 columns */
+    .ops-metrics-grid {
+        grid-template-columns: repeat(6, 1fr);
+    }
+    .ops-metrics-grid--4 {
+        grid-template-columns: repeat(4, 1fr);
+    }
+
+    /* Ops grid: 3 columns */
+    .ops-grid--2 {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    /* Map modal: scale up for 4K */
+    .map-modal {
+        max-width: 1400px;
+    }
+    .map-modal-body {
+        height: 700px;
+    }
+
+    /* Larger font sizes for readability at distance */
+    .stats-metric__value {
+        font-size: 36px;
+    }
+    .stats-metric--primary .stats-metric__value {
+        font-size: 48px;
+    }
+    .ops-metric-value {
+        font-size: 28px;
+    }
+    .ops-metric--large .ops-metric-value {
+        font-size: 38px;
+    }
+
+    /* Trend/bar charts: taller for 4K */
+    .trend-chart {
+        height: 200px;
+    }
+    .trend-chart__bar-container {
+        height: 150px;
+    }
+    .bar-chart {
+        height: 130px;
+    }
+    .bar-chart__bar-container {
+        height: 100px;
+    }
+
+    /* Stream mode: wider grid */
+    .stream-item {
+        grid-template-columns: 20px 140px 1fr auto;
+        padding: 14px 24px;
+    }
+    .stream-item__headline {
+        font-size: 15px;
+    }
 }
