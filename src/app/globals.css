@@ -2618,6 +2618,18 @@ footer {
     border-color: var(--border-accent);
     background: var(--surface-light);
 }
+.settings-toggle:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    color: var(--text-muted);
+    border-color: var(--border);
+    background: var(--surface-solid);
+}
+.settings-toggle:disabled:hover {
+    color: var(--text-muted);
+    border-color: var(--border);
+    background: var(--surface-solid);
+}
 .settings-toggle.active {
     color: var(--accent);
     border-color: var(--border-accent);
