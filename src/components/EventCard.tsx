@@ -268,7 +268,7 @@ export default function EventCard({ event, currentView, onShowMap, isHighlighted
                   rel="noopener noreferrer nofollow"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  polisen.se
+                  Källa
                 </a>
               </>
             )}

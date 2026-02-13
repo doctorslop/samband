@@ -497,19 +497,22 @@ header {
 }
 .event-meta-row .meta-separator {
     color: rgba(255, 255, 255, 0.15);
-    font-size: 8px;
+    font-size: inherit;
 }
 .event-meta-row .event-source {
     display: inline-flex;
     align-items: center;
     gap: 4px;
     color: var(--text-muted);
+    opacity: 0.72;
     text-decoration: none;
-    font-size: 11px;
-    transition: color 0.2s ease;
+    font-size: inherit;
+    font-weight: 400;
+    transition: color 0.2s ease, opacity 0.2s ease;
 }
 .event-meta-row .event-source:hover {
-    color: var(--accent);
+    color: var(--text-muted);
+    opacity: 0.95;
 }
 .event-meta-row .updated-indicator {
     font-size: 10px;
@@ -1907,7 +1910,7 @@ footer {
         font-size: 11px;
         gap: 6px;
     }
-    .event-meta-row .event-relative { font-size: 10px; }
+    .event-meta-row .event-relative { font-size: inherit; }
     .event-type { padding: 6px 10px; font-size: 10px; }
     .event-location-link { font-size: 14px; margin-top: 5px; font-weight: 600; }
     .event-summary { font-size: 13px; line-height: 1.5; margin-top: 8px; }
