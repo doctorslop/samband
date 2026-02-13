@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import { getEventsFromDb, countEventsInDb, getFilterOptions, getStatsSummary } from '@/lib/db';
+import { getEventsFromDb, countEventsInDb, getFilterOptions, getStatsSummary, StatsPeriod } from '@/lib/db';
 import { refreshEventsIfNeeded } from '@/lib/policeApi';
 import { formatEventForUi, sanitizeLocation, sanitizeType, sanitizeSearch } from '@/lib/utils';
 import ClientApp from '@/components/ClientApp';
@@ -18,6 +18,9 @@ interface PageProps {
     search?: string;
     page?: string;
     event?: string;
+    period?: string;
+    from?: string;
+    to?: string;
   }>;
 }
 
@@ -40,6 +43,10 @@ async function HomeContent({ searchParams }: PageProps) {
     currentView = 'list';
   }
 
+
+  const allowedPeriods: StatsPeriod[] = ['live', '24h', '48h', '72h', '7d', '30d', 'custom', 'all'];
+  const period = allowedPeriods.includes((params.period || '') as StatsPeriod) ? (params.period as StatsPeriod) : '30d';
+
   // Fetch data
   const page = Math.max(1, parseInt(params.page || '1', 10) || 1);
   const offset = (page - 1) * EVENTS_PER_PAGE;
@@ -58,7 +65,8 @@ async function HomeContent({ searchParams }: PageProps) {
   // Get filter options and stats
   const locations = getFilterOptions('location_name');
   const types = getFilterOptions('type');
-  const stats = getStatsSummary();
+  const stats = getStatsSummary({ period, from: params.from, to: params.to });
+  const previousStats = undefined;
 
   // Parse highlighted event ID from URL
   const highlightedEventId = params.event ? parseInt(params.event, 10) : null;
@@ -72,6 +80,7 @@ async function HomeContent({ searchParams }: PageProps) {
       types={types}
       stats={stats}
       filters={filters}
+      previousStats={previousStats}
       initialView={currentView}
       highlightedEventId={isNaN(highlightedEventId as number) ? null : highlightedEventId}
     />
