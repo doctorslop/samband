@@ -281,9 +281,9 @@ Events are color-coded by type:
 | Skadegörelse (Vandalism) | Amber | 🔨 |
 | Stöld (Theft) | Orange | 🔓 |
 | Stöld/inbrott | Orange | 🔓 |
-| Mord/dråp (Murder) | Dark Red | ⚠️ |
-| Ofredande (Harassment) | Rose | 🚨 |
-| Rattfylleri (DUI) | Red | 🚗 |
+| Mord/dråp (Murder) | Dark Red | 🔪 |
+| Ofredande (Harassment) | Rose | 🙅 |
+| Rattfylleri (DUI) | Red | 🍺 |
 | Sammanfattning (Summary) | Green | 📊 |
 | Default | Yellow | 📌 |
 
