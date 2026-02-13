@@ -9,11 +9,27 @@ interface EventMapProps {
 }
 
 type TimeRange = '24h' | '48h' | '72h';
+type EventCategoryKey = 'all' | 'violence' | 'theft' | 'traffic' | 'fire' | 'other';
+
+interface EventCategory {
+  key: EventCategoryKey;
+  label: string;
+  emoji: string;
+}
 
 const TIME_RANGES: { key: TimeRange; label: string; ms: number }[] = [
   { key: '24h', label: '24 tim', ms: 24 * 60 * 60 * 1000 },
   { key: '48h', label: '48 tim', ms: 48 * 60 * 60 * 1000 },
   { key: '72h', label: '72 tim', ms: 72 * 60 * 60 * 1000 },
+];
+
+const EVENT_CATEGORIES: EventCategory[] = [
+  { key: 'all', label: 'Alla', emoji: '🧭' },
+  { key: 'violence', label: 'Våld', emoji: '⚠️' },
+  { key: 'theft', label: 'Stöld', emoji: '🔓' },
+  { key: 'traffic', label: 'Trafik', emoji: '🚗' },
+  { key: 'fire', label: 'Brand', emoji: '🔥' },
+  { key: 'other', label: 'Övrigt', emoji: '📍' },
 ];
 
 const REPLAY_STEP_MS = 5 * 60 * 1000;
@@ -29,6 +45,43 @@ const MIN_GAP_DEG = 0.035;
 
 // Hard cap — never displace more than ~8 km from the real position.
 const MAX_FAN_RADIUS = 0.07;
+const CLUSTER_ZOOM_THRESHOLD = 6;
+
+const SWEDEN_OUTLINE: [number, number][] = [
+  [55.35, 12.45],
+  [56.2, 13.2],
+  [57.0, 12.7],
+  [57.9, 11.6],
+  [58.9, 11.2],
+  [59.8, 11.5],
+  [60.8, 12.3],
+  [61.9, 13.2],
+  [62.8, 14.6],
+  [63.7, 16.1],
+  [64.8, 17.8],
+  [65.8, 19.6],
+  [66.9, 21.0],
+  [67.9, 22.4],
+  [68.8, 23.6],
+  [68.7, 20.8],
+  [67.9, 19.0],
+  [66.8, 18.0],
+  [65.5, 17.1],
+  [64.0, 16.4],
+  [62.6, 15.6],
+  [61.3, 14.8],
+  [60.1, 14.1],
+  [58.9, 13.8],
+  [57.5, 13.2],
+  [56.4, 13.0],
+  [55.35, 12.45],
+];
+
+interface ClusterBucket {
+  latSum: number;
+  lngSum: number;
+  events: FormattedEvent[];
+}
 
 /**
  * Pre-compute display positions so co-located markers (same city block)
@@ -109,6 +162,85 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#39;');
 }
 
+function getEventCategory(type: string): EventCategoryKey {
+  const t = type.toLowerCase();
+
+  if (
+    t.includes('misshandel') ||
+    t.includes('mord') ||
+    t.includes('dråp') ||
+    t.includes('vald') ||
+    t.includes('våld') ||
+    t.includes('rån') ||
+    t.includes('ran') ||
+    t.includes('olaga hot') ||
+    t.includes('ofredande')
+  ) {
+    return 'violence';
+  }
+
+  if (
+    t.includes('stöld') ||
+    t.includes('stold') ||
+    t.includes('inbrott') ||
+    t.includes('bedrägeri') ||
+    t.includes('bedrageri')
+  ) {
+    return 'theft';
+  }
+
+  if (
+    t.includes('trafik') ||
+    t.includes('olycka') ||
+    t.includes('rattfylleri') ||
+    t.includes('väg') ||
+    t.includes('vag')
+  ) {
+    return 'traffic';
+  }
+
+  if (t.includes('brand') || t.includes('eld')) {
+    return 'fire';
+  }
+
+  return 'other';
+}
+
+function matchesCategory(event: FormattedEvent, selectedCategories: EventCategoryKey[]): boolean {
+  if (selectedCategories.includes('all')) return true;
+  return selectedCategories.includes(getEventCategory(event.type || ''));
+}
+
+function getClusterCellSize(zoom: number): number {
+  if (zoom <= 4) return 1.2;
+  if (zoom <= 5) return 0.8;
+  return 0.5;
+}
+
+function clusterEvents(events: FormattedEvent[], zoom: number): FormattedEvent[][] {
+  if (zoom > CLUSTER_ZOOM_THRESHOLD) {
+    return events.map(event => [event]);
+  }
+
+  const cellSize = getClusterCellSize(zoom);
+  const buckets = new Map<string, ClusterBucket>();
+
+  for (const event of events) {
+    if (!event.gps) continue;
+    const [lat, lng] = event.gps.split(',').map(Number);
+    if (isNaN(lat) || isNaN(lng)) continue;
+
+    const key = `${Math.floor(lat / cellSize)}:${Math.floor(lng / cellSize)}`;
+    const bucket = buckets.get(key) ?? { latSum: 0, lngSum: 0, events: [] };
+    bucket.latSum += lat;
+    bucket.lngSum += lng;
+    bucket.events.push(event);
+    buckets.set(key, bucket);
+  }
+
+  return Array.from(buckets.values()).map(bucket => bucket.events);
+}
+
 function EventMapInner({ events, isActive }: EventMapProps) {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -118,10 +250,6 @@ function EventMapInner({ events, isActive }: EventMapProps) {
   const eventsRef = useRef<FormattedEvent[]>(events);
   const replayIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasFittedBoundsRef = useRef(false);
-  // Track which event IDs have been added during current replay run
-  const addedMarkerIdsRef = useRef<Set<number>>(new Set());
-  // Counter for replay runs to invalidate stale intervals
-  const replayRunRef = useRef(0);
 
   const [timeRange, setTimeRange] = useState<TimeRange>('24h');
   const [isPlaying, setIsPlaying] = useState(false);
@@ -129,6 +257,7 @@ function EventMapInner({ events, isActive }: EventMapProps) {
   const [replayTimestamp, setReplayTimestamp] = useState<number | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [visibleCount, setVisibleCount] = useState(0);
+  const [selectedCategories, setSelectedCategories] = useState<EventCategoryKey[]>(['all']);
 
   eventsRef.current = events;
 
@@ -231,6 +360,56 @@ function EventMapInner({ events, isActive }: EventMapProps) {
     markersLayerRef.current.addLayer(marker);
   }, []);
 
+  const addClusterMarker = useCallback((eventsInCluster: FormattedEvent[], now: number, rangeMs: number) => {
+    const L = leafletRef.current;
+    if (!L || !markersLayerRef.current || eventsInCluster.length === 0) return;
+
+    let latSum = 0;
+    let lngSum = 0;
+    let latestTs = 0;
+
+    for (const event of eventsInCluster) {
+      const [lat, lng] = event.gps.split(',').map(Number);
+      if (isNaN(lat) || isNaN(lng)) continue;
+      latSum += lat;
+      lngSum += lng;
+      const ts = new Date(event.date?.iso || event.datetime).getTime();
+      latestTs = Math.max(latestTs, ts);
+    }
+
+    const count = eventsInCluster.length;
+    const center: [number, number] = [latSum / count, lngSum / count];
+    const ageFrac = latestTs ? Math.min(1, (now - latestTs) / rangeMs) : 1;
+    const radius = Math.min(22, 11 + Math.log2(count + 1) * 4);
+
+    const clusterMarker = L.circleMarker(center, {
+      radius,
+      fillColor: '#fbbf24',
+      color: '#fff',
+      weight: 2,
+      fillOpacity: 0.28 - ageFrac * 0.1,
+      opacity: 0.9,
+      className: 'map-cluster-marker',
+    });
+
+    clusterMarker.bindTooltip(String(count), {
+      permanent: true,
+      direction: 'center',
+      className: 'map-cluster-count',
+      opacity: 1,
+    });
+
+    clusterMarker.bindPopup(`
+      <div class="map-popup">
+        <span class="badge" style="background:#fbbf2420;color:#fbbf24">🧩 Kluster</span>
+        <h3>${count} händelser i området</h3>
+        <p>Zooma in för att se varje händelse separat.</p>
+      </div>
+    `);
+
+    markersLayerRef.current.addLayer(clusterMarker);
+  }, []);
+
   // --- Update the info badge ---
   const updateInfoBadge = useCallback((count: number, cutoffTs?: number | null, rangeOverride?: TimeRange) => {
     const L = leafletRef.current;
@@ -275,14 +454,24 @@ function EventMapInner({ events, isActive }: EventMapProps) {
 
     const visible = eventsRef.current.filter(e => {
       const ts = new Date(e.date?.iso || e.datetime).getTime();
-      return !isNaN(ts) && ts >= windowStart && ts <= now;
+      return !isNaN(ts) && ts >= windowStart && ts <= now && matchesCategory(e, selectedCategories);
     });
 
-    const positions = computeMarkerPositions(visible);
+    const zoom = map.getZoom();
+    const grouped = clusterEvents(visible, zoom);
+    const shouldCluster = zoom <= CLUSTER_ZOOM_THRESHOLD;
 
-    for (const e of visible) {
-      const pos = e.id !== null ? positions.get(e.id) : undefined;
-      addMarker(e, now, rangeMs, pos);
+    for (const group of grouped) {
+      if (shouldCluster && group.length > 1) {
+        addClusterMarker(group, now, rangeMs);
+        continue;
+      }
+
+      const positions = computeMarkerPositions(group);
+      for (const event of group) {
+        const pos = event.id !== null ? positions.get(event.id) : undefined;
+        addMarker(event, now, rangeMs, pos);
+      }
     }
 
     const count = markersLayerRef.current.getLayers().length;
@@ -294,7 +483,7 @@ function EventMapInner({ events, isActive }: EventMapProps) {
       map.fitBounds(markersLayerRef.current.getBounds(), { padding: [40, 40] });
       hasFittedBoundsRef.current = true;
     }
-  }, [getRangeMs, clearMarkers, addMarker, updateInfoBadge]);
+  }, [getRangeMs, clearMarkers, addMarker, addClusterMarker, updateInfoBadge, selectedCategories]);
 
   // --- Initialize map once ---
   useEffect(() => {
@@ -318,6 +507,11 @@ function EventMapInner({ events, isActive }: EventMapProps) {
         attributionControl: true,
       });
 
+      map.createPane('swedenMaskPane');
+      map.getPane('swedenMaskPane')!.style.zIndex = '350';
+      map.createPane('swedenBorderPane');
+      map.getPane('swedenBorderPane')!.style.zIndex = '450';
+
       const tileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         attribution: '&copy; OpenStreetMap',
         maxZoom: 18,
@@ -335,8 +529,35 @@ function EventMapInner({ events, isActive }: EventMapProps) {
         }).addTo(map);
       });
 
+      const worldMask = [
+        [[-90, -180], [-90, 180], [90, 180], [90, -180], [-90, -180]],
+        SWEDEN_OUTLINE,
+      ] as [number, number][][];
+
+      L.polygon(worldMask, {
+        pane: 'swedenMaskPane',
+        stroke: false,
+        fillColor: '#040810',
+        fillOpacity: 0.42,
+        fillRule: 'evenodd',
+        interactive: false,
+      }).addTo(map);
+
+      L.polygon(SWEDEN_OUTLINE, {
+        pane: 'swedenBorderPane',
+        color: '#fbbf24',
+        weight: 2,
+        opacity: 0.95,
+        fill: false,
+        interactive: false,
+      }).addTo(map);
+
       mapRef.current = map;
       setMapReady(true);
+
+      map.on('zoomend', () => {
+        renderMarkers(replayTimestamp);
+      });
 
       // Make sure tiles render properly — double-nudge for mobile browsers
       setTimeout(() => map.invalidateSize(), 200);
@@ -359,7 +580,7 @@ function EventMapInner({ events, isActive }: EventMapProps) {
       hasFittedBoundsRef.current = false;
       setMapReady(false);
     };
-  }, [isActive]); // Only depends on isActive — stable
+  }, [isActive, renderMarkers, replayTimestamp]);
 
   // --- Render markers when data/range changes (non-playing) ---
   useEffect(() => {
@@ -402,44 +623,13 @@ function EventMapInner({ events, isActive }: EventMapProps) {
       return;
     }
 
-    // New run — bump counter, reset tracking
-    const runId = ++replayRunRef.current;
-    addedMarkerIdsRef.current = new Set();
-
-    // Immediately clear all existing markers for a clean slate
-    clearMarkers();
-    if (!markersLayerRef.current) {
-      const L = leafletRef.current;
-      if (L && mapRef.current) {
-        markersLayerRef.current = L.featureGroup().addTo(mapRef.current);
-      }
-    }
-    setVisibleCount(0);
-
     const rangeMs = getRangeMs();
     const now = Date.now();
     const start = now - rangeMs;
     let pos = 0;
-
-    // Pre-sort events by timestamp for efficient replay
-    const sortedEvents = eventsRef.current
-      .filter(e => {
-        const ts = new Date(e.date?.iso || e.datetime).getTime();
-        return !isNaN(ts) && ts >= start && ts <= now && e.gps;
-      })
-      .sort((a, b) => {
-        const ta = new Date(a.date?.iso || a.datetime).getTime();
-        const tb = new Date(b.date?.iso || b.datetime).getTime();
-        return ta - tb;
-      });
-
-    // Pre-compute offset positions so co-located markers fan out
-    const positions = computeMarkerPositions(sortedEvents);
+    renderMarkers(start);
 
     replayIntervalRef.current = setInterval(() => {
-      // Stale run check
-      if (replayRunRef.current !== runId) return;
-
       pos += REPLAY_STEP_MS / rangeMs;
       if (pos >= 1) {
         pos = 1;
@@ -454,20 +644,7 @@ function EventMapInner({ events, isActive }: EventMapProps) {
       setReplayPosition(pos);
       const ts = start + pos * rangeMs;
       setReplayTimestamp(ts);
-
-      // Add only NEW markers that haven't been added yet
-      for (const e of sortedEvents) {
-        const eventTs = new Date(e.date?.iso || e.datetime).getTime();
-        if (eventTs > ts) break; // sorted, so no more to add
-        if (e.id !== null && addedMarkerIdsRef.current.has(e.id)) continue;
-        const posOverride = e.id !== null ? positions.get(e.id) : undefined;
-        addMarker(e, ts, rangeMs, posOverride);
-        if (e.id !== null) addedMarkerIdsRef.current.add(e.id);
-      }
-
-      const totalAdded = addedMarkerIdsRef.current.size;
-      setVisibleCount(totalAdded);
-      updateInfoBadge(totalAdded, ts);
+      renderMarkers(ts);
     }, REPLAY_INTERVAL_MS);
 
     return () => {
@@ -476,7 +653,7 @@ function EventMapInner({ events, isActive }: EventMapProps) {
         replayIntervalRef.current = null;
       }
     };
-  }, [isPlaying, mapReady, getRangeMs, renderMarkers, clearMarkers, addMarker, updateInfoBadge]);
+  }, [isPlaying, mapReady, getRangeMs, renderMarkers, selectedCategories]);
 
   // --- Handlers ---
   const handleSlider = useCallback((val: number) => {
@@ -508,6 +685,18 @@ function EventMapInner({ events, isActive }: EventMapProps) {
     });
   }, []);
 
+  const toggleCategory = useCallback((key: EventCategoryKey) => {
+    setSelectedCategories(prev => {
+      if (key === 'all') return ['all'];
+
+      const withoutAll = prev.filter(c => c !== 'all');
+      const isActive = withoutAll.includes(key);
+      const next = isActive ? withoutAll.filter(c => c !== key) : [...withoutAll, key];
+
+      return next.length > 0 ? next : ['all'];
+    });
+  }, []);
+
   const sliderLabel = replayTimestamp
     ? new Date(replayTimestamp).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' })
     : 'Live';
@@ -519,6 +708,23 @@ function EventMapInner({ events, isActive }: EventMapProps) {
 
       {/* Timeline bar - compact overlay at bottom */}
       <div className="map-timeline">
+        <div className="timeline-chip-row" role="group" aria-label="Filtrera händelser efter typ">
+          {EVENT_CATEGORIES.map(category => {
+            const isActive = selectedCategories.includes(category.key);
+            return (
+              <button
+                key={category.key}
+                className={`timeline-chip${isActive ? ' active' : ''}`}
+                onClick={() => toggleCategory(category.key)}
+                aria-pressed={isActive}
+              >
+                <span aria-hidden="true">{category.emoji}</span>
+                <span>{category.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
         <div className="timeline-controls">
           {/* Play / pause */}
           <button

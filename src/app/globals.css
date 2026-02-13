@@ -965,6 +965,16 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .map-info { background: var(--surface); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); box-shadow: 0 4px 12px var(--shadow); }
 .map-info-content { color: var(--text); font-size: 13px; font-weight: 600; text-align: center; }
 .map-info-content small { font-size: 10px; color: var(--text-muted); font-weight: 400; }
+.map-cluster-marker { filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.25)); }
+.map-cluster-count {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    color: #fff;
+    font-weight: 700;
+    font-size: 11px;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
 
 /* ========================================
    Map Timeline Controls - Floating bottom bar
@@ -984,6 +994,52 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     z-index: 10;
     max-width: calc(100% - 32px);
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.timeline-chip-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    margin-bottom: 7px;
+    padding-bottom: 1px;
+}
+
+.timeline-chip-row::-webkit-scrollbar {
+    display: none;
+}
+
+.timeline-chip {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-muted);
+    border-radius: 999px;
+    min-height: 30px;
+    padding: 5px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+}
+
+.timeline-chip:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.timeline-chip.active {
+    color: var(--primary);
+    background: var(--accent);
+    border-color: var(--accent);
+    box-shadow: 0 1px 6px var(--accent-glow);
 }
 
 .timeline-controls {
@@ -1194,6 +1250,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
         gap: 5px;
         flex-wrap: wrap;
         justify-content: center;
+    }
+    .timeline-chip-row {
+        margin-bottom: 6px;
+        gap: 5px;
+    }
+    .timeline-chip {
+        min-height: 32px;
+        padding: 6px 10px;
+        font-size: 10px;
     }
     .timeline-range-btn {
         padding: 6px 10px;
