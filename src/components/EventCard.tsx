@@ -181,14 +181,16 @@ export default function EventCard({ event, currentView, onShowMap, isHighlighted
         <div className="stream-item__content">
           <div className="stream-item__headline">
             <span className="stream-item__type">{event.icon} {event.type}</span>
-            <span className="stream-item__sep">&mdash;</span>
-            <a
-              href={`/?location=${encodeURIComponent(event.location)}&view=${currentView}`}
-              className="stream-item__location"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {event.location}
-            </a>
+            <span className="stream-item__headline-location">
+              <span className="stream-item__sep">&mdash;</span>
+              <a
+                href={`/?location=${encodeURIComponent(event.location)}&view=${currentView}`}
+                className="stream-item__location"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {event.location}
+              </a>
+            </span>
           </div>
           <p className="stream-item__summary">{event.summary}</p>
           {expanded && (

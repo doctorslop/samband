@@ -3042,7 +3042,7 @@ footer {
 .stream-item {
     display: grid;
     grid-template-columns: 20px 112px 1fr auto;
-    align-items: start;
+    align-items: center;
     gap: 0 10px;
     padding: 12px 18px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.04);
@@ -3092,7 +3092,6 @@ footer {
 
 /* Time column */
 .stream-item__time {
-    padding-top: 2px;
     flex-shrink: 0;
 }
 .stream-item__relative {
@@ -3137,6 +3136,9 @@ footer {
 .stream-item__location:hover {
     color: var(--accent);
 }
+.stream-item__headline-location {
+    display: none;
+}
 .stream-item__summary {
     font-size: 13px;
     color: rgba(148, 163, 184, 0.7);
@@ -3154,7 +3156,7 @@ footer {
     color: rgba(148, 163, 184, 0.5);
     text-align: right;
     white-space: nowrap;
-    padding-top: 4px;
+    align-self: center;
     flex-shrink: 0;
 }
 
@@ -3276,6 +3278,9 @@ footer {
     }
     .stream-item__headline {
         font-size: 13px;
+    }
+    .stream-item__headline-location {
+        display: inline;
     }
     .stream-item__date {
         font-size: 11px;
