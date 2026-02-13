@@ -181,7 +181,7 @@ export default function Filters({ locations, types, currentView, filters }: Filt
                 aria-label="Välj plats"
                 title="Filtrera efter plats eller välj 'Annan plats' för fritext"
               >
-                <option value="">Alla platser</option>
+                <option value="">Välj län</option>
                 {locations.map((loc) => (
                   <option key={loc} value={loc}>
                     {loc}
@@ -225,7 +225,7 @@ export default function Filters({ locations, types, currentView, filters }: Filt
               aria-label="Välj händelsetyp"
               title="Filtrera efter typ av händelse"
             >
-              <option value="">Alla typer</option>
+              <option value="">Välj händelsetyp</option>
               {types.map((t) => (
                 <option key={t} value={t}>
                   {t}
