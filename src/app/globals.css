@@ -935,9 +935,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .leaflet-control-attribution a {
     color: var(--text-muted) !important;
 }
-/* Hide attribution flags */
-.leaflet-attribution-flag {
+/* Hide Leaflet's attribution flag icon (including fallback pseudo-elements) */
+.leaflet-control-attribution .leaflet-attribution-flag,
+.leaflet-control-attribution .leaflet-attribution-flag::before,
+.leaflet-control-attribution .leaflet-attribution-flag::after {
     display: none !important;
+    background-image: none !important;
+    content: none !important;
 }
 /* Zoom controls */
 .leaflet-control-zoom a {
