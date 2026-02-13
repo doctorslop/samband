@@ -965,6 +965,16 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .map-info { background: var(--surface); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); box-shadow: 0 4px 12px var(--shadow); }
 .map-info-content { color: var(--text); font-size: 13px; font-weight: 600; text-align: center; }
 .map-info-content small { font-size: 10px; color: var(--text-muted); font-weight: 400; }
+.map-cluster-marker { filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.25)); }
+.map-cluster-count {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    color: #fff;
+    font-weight: 700;
+    font-size: 11px;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
 
 /* ========================================
    Map Timeline Controls - Floating bottom bar
