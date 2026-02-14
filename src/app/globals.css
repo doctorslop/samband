@@ -3674,3 +3674,698 @@ footer {
 .error-boundary-btn-secondary:hover {
     background: var(--glass-bg);
 }
+
+/* ========================================
+   RADAR THEME
+   Authentic P1 green phosphor radar display.
+   Scoped under [data-theme="radar"] on <html>.
+   All overrides use CSS custom properties so
+   existing component selectors adapt automatically.
+   ======================================== */
+
+[data-theme="radar"] {
+    /* ------ Color system ------ */
+    /* Background tiers */
+    --radar-black: #050a05;
+    --radar-surface-1: #0a120a;
+    --radar-surface-2: #0e160e;
+    --radar-surface-3: #121e12;
+
+    /* P1 phosphor green scale */
+    --radar-green: #33ff66;
+    --radar-green-bright: #55ff80;
+    --radar-green-mid: #22cc52;
+    --radar-green-dim: #1a9940;
+    --radar-green-faint: #0d4d20;
+
+    /* Functional alpha variants */
+    --radar-glow: rgba(51, 255, 102, 0.25);
+    --radar-glow-strong: rgba(51, 255, 102, 0.4);
+    --radar-line: rgba(51, 255, 102, 0.12);
+    --radar-line-bright: rgba(51, 255, 102, 0.25);
+
+    /* Override the design-system variables */
+    --primary: var(--radar-black);
+    --primary-light: var(--radar-surface-2);
+    --accent: var(--radar-green);
+    --accent-dark: var(--radar-green-mid);
+    --accent-glow: var(--radar-glow);
+    --text: #c8e6c8;
+    --text-muted: #6b9b6b;
+    --surface: rgba(10, 18, 10, 0.85);
+    --surface-solid: var(--radar-surface-1);
+    --surface-light: rgba(18, 30, 18, 0.9);
+    --border: var(--radar-line);
+    --border-accent: var(--radar-line-bright);
+    --success: var(--radar-green-mid);
+    --danger: #cc3333;
+    --warning: #b89b33;
+    --info: var(--radar-green-dim);
+    --shadow: rgba(0, 0, 0, 0.4);
+    --shadow-lg: rgba(0, 0, 0, 0.6);
+    --glass-bg: rgba(5, 10, 5, 0.85);
+    --glass-border: var(--radar-line);
+
+    /* Radii: tighter for a technical feel */
+    --radius: 4px;
+    --radius-sm: 3px;
+    --radius-xs: 2px;
+
+    color-scheme: dark;
+}
+
+/* ------ Typography ------ */
+[data-theme="radar"] body {
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono', 'Consolas', 'Liberation Mono', monospace;
+    -webkit-font-smoothing: auto;
+    background: var(--radar-black);
+}
+
+/* Remove the default ambient gradient */
+[data-theme="radar"] body::before {
+    background: none;
+}
+
+/* Logo / title: monospace, no serif display font */
+[data-theme="radar"] .logo-text h1 {
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    font-size: 16px;
+}
+[data-theme="radar"] .logo-text p {
+    font-family: inherit;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 10px;
+    color: var(--radar-green-dim);
+}
+
+/* Logo icon: flat green, no gradient */
+[data-theme="radar"] .logo-icon {
+    background: var(--radar-surface-2);
+    border: 1px solid var(--radar-line-bright);
+    box-shadow: 0 0 8px var(--radar-glow);
+    border-radius: 2px;
+}
+
+/* ------ Header ------ */
+[data-theme="radar"] header {
+    background: rgba(5, 10, 5, 0.92);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--radar-line-bright);
+}
+
+/* ------ View toggle ------ */
+[data-theme="radar"] .view-toggle {
+    background: var(--radar-surface-1);
+    border: 1px solid var(--radar-line);
+    border-radius: 2px;
+    padding: 2px;
+}
+[data-theme="radar"] .view-toggle button {
+    border-radius: 2px;
+    font-family: inherit;
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+}
+[data-theme="radar"] .view-toggle button.active {
+    background: var(--radar-green-faint);
+    color: var(--radar-green);
+    box-shadow: 0 0 6px var(--radar-glow);
+    border: 1px solid var(--radar-line-bright);
+}
+[data-theme="radar"] .view-toggle button:hover:not(.active) {
+    background: var(--radar-surface-2);
+    color: var(--radar-green-mid);
+}
+
+/* ------ Search / Filters ------ */
+[data-theme="radar"] .search-bar {
+    background: rgba(10, 18, 10, 0.8);
+    backdrop-filter: blur(4px);
+    border: 1px solid var(--radar-line);
+    border-radius: 2px;
+    box-shadow: none;
+}
+[data-theme="radar"] .search-input,
+[data-theme="radar"] .filter-select,
+[data-theme="radar"] .filter-input {
+    background: var(--radar-black);
+    border: 1px solid var(--radar-line);
+    border-radius: 2px;
+    color: var(--radar-green);
+    font-family: inherit;
+}
+[data-theme="radar"] .search-input:focus,
+[data-theme="radar"] .filter-select:focus,
+[data-theme="radar"] .filter-input:focus {
+    border-color: var(--radar-green-dim);
+    box-shadow: 0 0 0 2px var(--radar-glow);
+}
+[data-theme="radar"] .search-input::placeholder,
+[data-theme="radar"] .filter-input::placeholder {
+    color: var(--radar-green-faint);
+}
+[data-theme="radar"] .filter-select option {
+    background: var(--radar-black);
+    color: var(--radar-green);
+}
+
+/* ------ Buttons ------ */
+[data-theme="radar"] .btn {
+    background: var(--radar-green-faint);
+    color: var(--radar-green);
+    border: 1px solid var(--radar-green-dim);
+    box-shadow: 0 0 4px var(--radar-glow);
+    border-radius: 2px;
+    font-family: inherit;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 12px;
+}
+[data-theme="radar"] .btn:hover {
+    background: var(--radar-green-dim);
+    color: var(--radar-black);
+    box-shadow: 0 0 12px var(--radar-glow);
+}
+[data-theme="radar"] .btn-secondary {
+    background: var(--radar-surface-2);
+    color: var(--radar-green-dim);
+    border: 1px solid var(--radar-line);
+    box-shadow: none;
+}
+[data-theme="radar"] .btn-secondary:hover {
+    background: var(--radar-surface-3);
+    border-color: var(--radar-line-bright);
+}
+
+/* ------ Filter tags ------ */
+[data-theme="radar"] .filter-tag {
+    background: var(--radar-surface-2);
+    border: 1px solid var(--radar-line);
+    border-radius: 2px;
+    font-family: inherit;
+}
+
+/* ------ Event cards ------ */
+[data-theme="radar"] .event-card {
+    background: var(--radar-surface-1);
+    border: 1px solid var(--radar-line);
+    border-radius: 2px;
+    box-shadow: none;
+    animation: radarSlideIn 0.4s ease-out backwards;
+}
+@keyframes radarSlideIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+[data-theme="radar"] .event-card::before {
+    background: var(--radar-green-dim);
+    width: 2px;
+}
+[data-theme="radar"] .event-card::after {
+    background: none;
+}
+[data-theme="radar"] .event-card-header:hover {
+    background: rgba(51, 255, 102, 0.03);
+}
+[data-theme="radar"] .event-card:has(.event-card-header:hover) {
+    border-color: var(--radar-line-bright);
+    transform: none;
+    box-shadow: 0 0 8px rgba(51, 255, 102, 0.08);
+}
+[data-theme="radar"] .event-card.expanded {
+    border-color: var(--radar-line-bright);
+    box-shadow: 0 0 8px rgba(51, 255, 102, 0.06);
+}
+[data-theme="radar"] .event-card.expanded .event-card-chevron {
+    color: var(--radar-green);
+}
+[data-theme="radar"] .event-card.highlighted {
+    border-color: var(--radar-green-dim);
+    box-shadow: 0 0 12px var(--radar-glow);
+}
+
+/* Event type chips: monochrome green in radar mode */
+[data-theme="radar"] .event-type {
+    border-radius: 2px;
+    font-family: inherit;
+    backdrop-filter: none;
+}
+[data-theme="radar"] .event-type--inbrott,
+[data-theme="radar"] .event-type--brand,
+[data-theme="radar"] .event-type--ran,
+[data-theme="radar"] .event-type--trafikolycka,
+[data-theme="radar"] .event-type--misshandel,
+[data-theme="radar"] .event-type--skadegorelse,
+[data-theme="radar"] .event-type--bedrageri,
+[data-theme="radar"] .event-type--narkotikabrott,
+[data-theme="radar"] .event-type--ofredande,
+[data-theme="radar"] .event-type--sammanfattning,
+[data-theme="radar"] .event-type--stold,
+[data-theme="radar"] .event-type--mord,
+[data-theme="radar"] .event-type--ratta,
+[data-theme="radar"] .event-type--default {
+    background: rgba(51, 255, 102, 0.08);
+    color: var(--radar-green-mid);
+}
+/* High-severity types get brighter treatment */
+[data-theme="radar"] .event-type--mord,
+[data-theme="radar"] .event-type--brand {
+    background: rgba(51, 255, 102, 0.14);
+    color: var(--radar-green-bright);
+}
+
+[data-theme="radar"] .event-location-link {
+    color: var(--radar-green);
+}
+[data-theme="radar"] .event-location-link:hover {
+    color: var(--radar-green-bright);
+}
+
+/* Meta row */
+[data-theme="radar"] .event-meta-row {
+    font-family: inherit;
+}
+[data-theme="radar"] .event-meta-row .event-relative {
+    color: var(--radar-green-dim);
+}
+[data-theme="radar"] .event-meta-row .updated-indicator {
+    color: var(--radar-green-mid);
+}
+
+/* Event summary text */
+[data-theme="radar"] .event-summary {
+    color: var(--text-muted);
+    font-family: inherit;
+}
+
+/* ------ Settings panel ------ */
+[data-theme="radar"] .settings-panel {
+    background: var(--radar-surface-1);
+    border: 1px solid var(--radar-line-bright);
+    border-radius: 2px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+[data-theme="radar"] .settings-options {
+    background: var(--radar-black);
+    border: 1px solid var(--radar-line);
+    border-radius: 2px;
+}
+[data-theme="radar"] .settings-option {
+    border-radius: 2px;
+    font-family: inherit;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.3px;
+}
+[data-theme="radar"] .settings-option.active {
+    background: var(--radar-green-faint);
+    color: var(--radar-green);
+    border: 1px solid var(--radar-green-dim);
+}
+[data-theme="radar"] .settings-option:hover:not(.active) {
+    color: var(--radar-green-mid);
+    background: var(--radar-surface-2);
+}
+[data-theme="radar"] .settings-section-label,
+[data-theme="radar"] .settings-label {
+    color: var(--radar-green-dim);
+    font-family: inherit;
+    letter-spacing: 1px;
+}
+[data-theme="radar"] .settings-divider {
+    background: var(--radar-line);
+}
+[data-theme="radar"] .settings-toggle {
+    background: var(--radar-surface-1);
+    border: 1px solid var(--radar-line);
+    border-radius: 2px;
+}
+[data-theme="radar"] .settings-toggle:hover {
+    border-color: var(--radar-line-bright);
+    color: var(--radar-green);
+}
+[data-theme="radar"] .settings-toggle.active {
+    color: var(--radar-green);
+    border-color: var(--radar-green-dim);
+    background: var(--radar-green-faint);
+}
+[data-theme="radar"] .settings-switch {
+    background: var(--radar-black);
+    border: 1px solid var(--radar-line);
+    border-radius: 2px;
+}
+[data-theme="radar"] .settings-switch .settings-switch-thumb {
+    background: var(--radar-green-faint);
+    border-radius: 2px;
+}
+[data-theme="radar"] .settings-switch.active {
+    background: rgba(51, 255, 102, 0.1);
+    border-color: var(--radar-green-dim);
+}
+[data-theme="radar"] .settings-switch.active .settings-switch-thumb {
+    background: var(--radar-green);
+}
+
+/* ------ Map overrides ------ */
+[data-theme="radar"] .leaflet-container {
+    background: var(--radar-black) !important;
+}
+[data-theme="radar"] .leaflet-tile-pane {
+    filter: grayscale(1) invert(1) brightness(0.35) sepia(0.8) hue-rotate(70deg) saturate(0.6) !important;
+}
+[data-theme="radar"] .leaflet-popup-content-wrapper {
+    background: var(--radar-surface-1) !important;
+    border: 1px solid var(--radar-line-bright) !important;
+    color: var(--radar-green) !important;
+    border-radius: 2px !important;
+}
+[data-theme="radar"] .leaflet-popup-tip {
+    background: var(--radar-surface-1) !important;
+}
+
+/* ------ Stats view ------ */
+[data-theme="radar"] .stats-card {
+    background: var(--radar-surface-1);
+    border: 1px solid var(--radar-line);
+    border-radius: 2px;
+}
+[data-theme="radar"] .stats-number {
+    color: var(--radar-green);
+    font-family: inherit;
+}
+[data-theme="radar"] .bar-fill {
+    background: var(--radar-green-dim) !important;
+    border-radius: 1px;
+}
+[data-theme="radar"] .bar-label {
+    font-family: inherit;
+}
+
+/* ------ Footer ------ */
+[data-theme="radar"] footer {
+    border-top: 1px solid var(--radar-line);
+}
+
+/* ------ Scroll to top ------ */
+[data-theme="radar"] .scroll-to-top {
+    background: var(--radar-surface-1);
+    border: 1px solid var(--radar-line-bright);
+    border-radius: 2px;
+    color: var(--radar-green);
+}
+[data-theme="radar"] .scroll-to-top:hover {
+    background: var(--radar-surface-2);
+    box-shadow: 0 0 8px var(--radar-glow);
+}
+
+/* ------ Map modal ------ */
+[data-theme="radar"] .map-modal-overlay .map-modal-content {
+    background: var(--radar-surface-1);
+    border: 1px solid var(--radar-line-bright);
+    border-radius: 2px;
+}
+
+/* ------ Spinner ------ */
+[data-theme="radar"] .spinner {
+    border-color: var(--radar-line);
+    border-top-color: var(--radar-green);
+}
+
+/* ------ Links ------ */
+[data-theme="radar"] a {
+    color: var(--radar-green-mid);
+}
+[data-theme="radar"] a:hover {
+    color: var(--radar-green);
+}
+
+/* ------ Skip link ------ */
+[data-theme="radar"] .skip-link:focus {
+    background: var(--radar-green-faint);
+    color: var(--radar-green);
+    border: 1px solid var(--radar-green-dim);
+}
+
+/* ------ Load more / pagination ------ */
+[data-theme="radar"] .load-more-section .btn {
+    background: var(--radar-surface-2);
+    border: 1px solid var(--radar-line-bright);
+}
+[data-theme="radar"] .load-more-section .btn:hover {
+    background: var(--radar-green-faint);
+}
+
+/* ------ Action buttons inside cards ------ */
+[data-theme="radar"] .show-map-link,
+[data-theme="radar"] .share-event-btn {
+    color: var(--radar-green-dim);
+    font-family: inherit;
+}
+[data-theme="radar"] .show-map-link:hover,
+[data-theme="radar"] .share-event-btn:hover {
+    color: var(--radar-green);
+}
+
+/* ------ Clear all filters ------ */
+[data-theme="radar"] .clear-all-filters {
+    background: rgba(204, 51, 51, 0.1);
+    border: 1px solid rgba(204, 51, 51, 0.25);
+    color: #cc3333;
+}
+[data-theme="radar"] .clear-all-filters:hover {
+    background: rgba(204, 51, 51, 0.2);
+    border-color: rgba(204, 51, 51, 0.4);
+}
+
+/* ------ Error boundary ------ */
+[data-theme="radar"] .error-boundary-container {
+    background: var(--radar-surface-1);
+    border: 1px solid var(--radar-line);
+}
+[data-theme="radar"] .error-boundary-btn {
+    background: var(--radar-green-faint);
+    color: var(--radar-green);
+    border: 1px solid var(--radar-green-dim);
+}
+[data-theme="radar"] .error-boundary-btn-secondary {
+    background: var(--radar-surface-2);
+    color: var(--text-muted);
+    border: 1px solid var(--radar-line);
+}
+
+/* ========================================
+   RADAR SCANLINE + CRT EFFECT (Optional)
+   Subtle CRT persistence overlay.
+   Uses a pseudo-element on body so it
+   covers everything without extra DOM.
+   GPU-composited via will-change: transform.
+   ======================================== */
+
+[data-theme="radar"] body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 99999;
+    background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0, 0, 0, 0.06) 2px,
+        rgba(0, 0, 0, 0.06) 4px
+    );
+    will-change: transform;
+}
+
+/* ========================================
+   RADAR DISPLAY COMPONENT
+   Decorative radar scope that can be placed
+   in the UI. Pure CSS concentric rings,
+   radial lines, and sweep animation.
+   ======================================== */
+
+.radar-scope {
+    position: relative;
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    background: var(--radar-black, #050a05);
+    border: 1px solid var(--radar-line-bright, rgba(51, 255, 102, 0.25));
+    overflow: hidden;
+    box-shadow: 0 0 16px rgba(51, 255, 102, 0.1);
+}
+
+/* Concentric rings via box-shadow on a centered pseudo */
+.radar-scope::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 2px;
+    height: 2px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow:
+        0 0 0 25px transparent,
+        0 0 0 26px rgba(51, 255, 102, 0.12),
+        0 0 0 50px transparent,
+        0 0 0 51px rgba(51, 255, 102, 0.10),
+        0 0 0 75px transparent,
+        0 0 0 76px rgba(51, 255, 102, 0.08),
+        0 0 0 99px transparent,
+        0 0 0 100px rgba(51, 255, 102, 0.06);
+    z-index: 1;
+}
+
+/* Crosshair lines */
+.radar-scope .radar-crosshair {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+}
+.radar-scope .radar-crosshair::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 1px;
+    background: rgba(51, 255, 102, 0.10);
+}
+.radar-scope .radar-crosshair::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 1px;
+    background: rgba(51, 255, 102, 0.10);
+}
+
+/* Sweep arm */
+.radar-scope .radar-sweep {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 50%;
+    height: 2px;
+    transform-origin: 0 50%;
+    z-index: 2;
+    animation: radarSweep 4s linear infinite;
+    will-change: transform;
+}
+.radar-scope .radar-sweep::before {
+    content: '';
+    position: absolute;
+    top: -49px;
+    left: 0;
+    width: 100%;
+    height: 100px;
+    background: conic-gradient(
+        from -6deg at 0% 50%,
+        transparent 0deg,
+        rgba(51, 255, 102, 0.15) 10deg,
+        rgba(51, 255, 102, 0.06) 30deg,
+        transparent 45deg
+    );
+    border-radius: 0 100px 100px 0;
+}
+/* Bright leading edge of sweep */
+.radar-scope .radar-sweep::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: linear-gradient(90deg, rgba(51, 255, 102, 0.6), rgba(51, 255, 102, 0));
+}
+
+@keyframes radarSweep {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Signal blips - small dots that appear on the radar */
+.radar-scope .radar-blip {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    background: rgba(51, 255, 102, 0.7);
+    border-radius: 50%;
+    z-index: 3;
+    animation: radarBlipFade 4s linear infinite;
+    box-shadow: 0 0 4px rgba(51, 255, 102, 0.4);
+}
+
+@keyframes radarBlipFade {
+    0% { opacity: 1; }
+    25% { opacity: 0.6; }
+    75% { opacity: 0.15; }
+    100% { opacity: 1; }
+}
+
+/* Center dot */
+.radar-scope .radar-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 4px;
+    height: 4px;
+    background: var(--radar-green, #33ff66);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 4;
+    box-shadow: 0 0 6px rgba(51, 255, 102, 0.5);
+}
+
+/* Radar scope sizing variants */
+.radar-scope--sm {
+    width: 120px;
+    height: 120px;
+}
+.radar-scope--lg {
+    width: 300px;
+    height: 300px;
+}
+
+/* ========================================
+   RADAR HEADER DECORATION
+   Small radar scope shown in the header
+   area when radar theme is active.
+   ======================================== */
+
+[data-theme="radar"] .logo-icon {
+    position: relative;
+    overflow: hidden;
+}
+
+/* Compact radar animation inside logo icon */
+[data-theme="radar"] .logo-icon::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 60%;
+    height: 1px;
+    transform-origin: 0 50%;
+    background: linear-gradient(90deg, rgba(51, 255, 102, 0.5), transparent);
+    animation: radarSweep 3s linear infinite;
+    z-index: 1;
+}
+
+/* ========================================
+   DESKTOP COMPACT HEADER (radar overrides)
+   ======================================== */
+
+@media (min-width: 769px) {
+    [data-theme="radar"] header.header-compact .logo-text h1 {
+        font-size: 14px;
+    }
+}

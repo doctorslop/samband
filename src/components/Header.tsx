@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState, useCallback } from 'react';
-import type { Density } from './ClientApp';
+import type { Density, Theme } from './ClientApp';
 
 interface HeaderProps {
   currentView: string;
@@ -10,12 +10,14 @@ interface HeaderProps {
   onLogoClick?: () => void;
   density: Density;
   onDensityChange: (density: Density) => void;
+  theme: Theme;
+  onThemeChange: (theme: Theme) => void;
   expandSummaries: boolean;
   onExpandSummariesChange: (expand: boolean) => void;
   showDensitySettings?: boolean;
 }
 
-export default function Header({ currentView, onViewChange, onLogoClick, density, onDensityChange, expandSummaries, onExpandSummariesChange, showDensitySettings = true }: HeaderProps) {
+export default function Header({ currentView, onViewChange, onLogoClick, density, onDensityChange, theme, onThemeChange, expandSummaries, onExpandSummariesChange, showDensitySettings = true }: HeaderProps) {
   const headerRef = useRef<HTMLElement>(null);
   const settingsRef = useRef<HTMLDivElement>(null);
   const toggleRef = useRef<HTMLButtonElement>(null);
@@ -24,7 +26,7 @@ export default function Header({ currentView, onViewChange, onLogoClick, density
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [panelTop, setPanelTop] = useState<number | undefined>(undefined);
   const lastScrollY = useRef(0);
-  const settingsAvailable = showDensitySettings;
+  const settingsAvailable = true;
 
   const updatePanelPosition = useCallback(() => {
     if (toggleRef.current) {
@@ -242,6 +244,26 @@ export default function Header({ currentView, onViewChange, onLogoClick, density
                       aria-checked={expandSummaries}
                     >
                       <span className="settings-switch-thumb"></span>
+                    </button>
+                  </div>
+                </div>
+                <div className="settings-divider"></div>
+                <div className="settings-section">
+                  <span className="settings-section-label">Tema</span>
+                  <div className="settings-options">
+                    <button
+                      type="button"
+                      className={`settings-option${theme === 'default' ? ' active' : ''}`}
+                      onClick={() => onThemeChange('default')}
+                    >
+                      Standard
+                    </button>
+                    <button
+                      type="button"
+                      className={`settings-option${theme === 'radar' ? ' active' : ''}`}
+                      onClick={() => onThemeChange('radar')}
+                    >
+                      Radar
                     </button>
                   </div>
                 </div>

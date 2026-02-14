@@ -49,6 +49,11 @@ export default function RootLayout({
         />
       </head>
       <body>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('theme');if(t==='radar')document.documentElement.setAttribute('data-theme',t)}catch(e){}})()`,
+          }}
+        />
         <ServiceWorkerRegistration />
         <a href="#eventsGrid" className="skip-link">
           Hoppa till innehåll
