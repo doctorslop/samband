@@ -15,6 +15,7 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { FormattedEvent, Statistics } from '@/types';
 
 export type Density = 'comfortable' | 'compact' | 'stream';
+export type Theme = 'default' | 'radar';
 
 
 interface ClientAppProps {
@@ -48,6 +49,7 @@ function ClientAppContent({
   const searchParams = useSearchParams();
   const [currentView, setCurrentView] = useState(initialView);
   const [density, setDensity] = useState<Density>('comfortable');
+  const [theme, setTheme] = useState<Theme>('default');
   const [expandSummaries, setExpandSummaries] = useState(false);
   const [lastChecked, setLastChecked] = useState<Date>(new Date());
   const [mapModal, setMapModal] = useState<{
@@ -69,6 +71,11 @@ function ClientAppContent({
       if (saved === 'comfortable' || saved === 'compact' || saved === 'stream') {
         setDensity(saved);
       }
+      const savedTheme = localStorage.getItem('theme');
+      if (savedTheme === 'radar') {
+        setTheme(savedTheme);
+        document.documentElement.setAttribute('data-theme', savedTheme);
+      }
       const savedExpand = localStorage.getItem('expandSummaries');
       if (savedExpand === 'true') {
         setExpandSummaries(true);
@@ -82,6 +89,20 @@ function ClientAppContent({
     setDensity(d);
     try {
       localStorage.setItem('density', d);
+    } catch {
+      // localStorage unavailable
+    }
+  }, []);
+
+  const handleThemeChange = useCallback((t: Theme) => {
+    setTheme(t);
+    if (t === 'default') {
+      document.documentElement.removeAttribute('data-theme');
+    } else {
+      document.documentElement.setAttribute('data-theme', t);
+    }
+    try {
+      localStorage.setItem('theme', t);
     } catch {
       // localStorage unavailable
     }
@@ -173,7 +194,7 @@ function ClientAppContent({
   return (
     <>
       <div className={`container view-${currentView} density-${density}${expandSummaries ? ' summaries-expanded' : ''}`}>
-        <Header currentView={currentView} onViewChange={handleViewChange} onLogoClick={handleLogoClick} density={density} onDensityChange={handleDensityChange} expandSummaries={expandSummaries} onExpandSummariesChange={handleExpandSummariesChange} showDensitySettings={currentView === 'list'} />
+        <Header currentView={currentView} onViewChange={handleViewChange} onLogoClick={handleLogoClick} density={density} onDensityChange={handleDensityChange} theme={theme} onThemeChange={handleThemeChange} expandSummaries={expandSummaries} onExpandSummariesChange={handleExpandSummariesChange} showDensitySettings={currentView === 'list'} />
 
         {currentView !== 'map' && currentView !== 'stats' && (
           <Filters
