@@ -10,6 +10,7 @@ import StatsView from './StatsView';
 import Footer from './Footer';
 import ScrollToTop from './ScrollToTop';
 import MapModal from './MapModal';
+import ErrorBoundary from './ErrorBoundary';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { FormattedEvent, Statistics } from '@/types';
 
@@ -228,8 +229,10 @@ function ClientAppContent({
 
 export default function ClientApp(props: ClientAppProps) {
   return (
-    <Suspense fallback={<div className="container"><div className="spinner" /></div>}>
-      <ClientAppContent {...props} />
-    </Suspense>
+    <ErrorBoundary>
+      <Suspense fallback={<div className="container"><div className="spinner" /></div>}>
+        <ClientAppContent {...props} />
+      </Suspense>
+    </ErrorBoundary>
   );
 }
