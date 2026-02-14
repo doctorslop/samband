@@ -37,6 +37,12 @@ export default function RadarDisplay({
       role="img"
       aria-label="Radar display"
     >
+      <div className="radar-rings">
+        <div className="radar-ring" />
+        <div className="radar-ring" />
+        <div className="radar-ring" />
+        <div className="radar-ring" />
+      </div>
       <div className="radar-crosshair" />
       <div className="radar-sweep" />
       <div className="radar-center" />

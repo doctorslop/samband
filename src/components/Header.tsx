@@ -26,20 +26,12 @@ export default function Header({ currentView, onViewChange, onLogoClick, density
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [panelTop, setPanelTop] = useState<number | undefined>(undefined);
   const lastScrollY = useRef(0);
-  const settingsAvailable = true;
-
   const updatePanelPosition = useCallback(() => {
     if (toggleRef.current) {
       const rect = toggleRef.current.getBoundingClientRect();
       setPanelTop(rect.bottom + 8);
     }
   }, []);
-
-  useEffect(() => {
-    if (!settingsAvailable) {
-      setSettingsOpen(false);
-    }
-  }, [settingsAvailable]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -114,7 +106,22 @@ export default function Header({ currentView, onViewChange, onLogoClick, density
             }
           }}
         >
-          <div className="logo-icon">🚨</div>
+          <div className="logo-icon">
+            {theme === 'radar' ? (
+              <svg className="logo-icon-radar-svg" width="24" height="24" viewBox="0 0 508 508" fill="currentColor" aria-hidden="true">
+                <path d="M475.6,383.8h-55.9V254c0-91.4-74.3-165.7-165.7-165.7S88.3,162.6,88.3,254v129.8H32.4c-7.8,0-14.1,6.3-14.1,14.1v96c0,7.8,6.3,14.1,14.1,14.1h443.2c7.8,0,14.1-6.3,14.1-14.1v-96C489.7,390.1,483.4,383.8,475.6,383.8z M116.5,254c0-75.8,61.7-137.5,137.5-137.5S391.5,178.2,391.5,254v129.8h-275V254z M461.5,479.8h-415V412h415V479.8z"/>
+                <path d="M46,239.9H14.1C6.3,239.9,0,246.2,0,254s6.3,14.1,14.1,14.1H46c7.8,0,14.1-6.3,14.1-14.1S53.8,239.9,46,239.9z"/>
+                <path d="M67.2,161.4l-29.4-12.2c-7.2-3-15.5,0.4-18.4,7.6c-3,7.2,0.4,15.5,7.6,18.4l29.4,12.2c7.2,3,15.5-0.4,18.4-7.6C77.8,172.6,74.4,164.3,67.2,161.4z"/>
+                <path d="M116.9,96.9L94.4,74.4c-5.5-5.5-14.4-5.5-20,0c-5.5,5.5-5.5,14.4,0,20l22.5,22.5c5.5,5.5,14.4,5.5,20,0C122.4,111.4,122.4,102.5,116.9,96.9z"/>
+                <path d="M187.4,56.4L175.2,27c-3-7.2-11.2-10.6-18.4-7.6c-7.2,3-10.6,11.2-7.6,18.4l12.2,29.4c3,7.2,11.2,10.6,18.4,7.6S190.4,63.6,187.4,56.4z"/>
+                <path d="M254,0c-7.8,0-14.1,6.3-14.1,14.1V46c0,7.8,6.3,14.1,14.1,14.1s14.1-6.3,14.1-14.1V14.1C268.1,6.3,261.8,0,254,0z"/>
+                <path d="M351.2,19.4c-7.2-3-15.5,0.4-18.4,7.6l-12.2,29.4c-3,7.2,0.4,15.5,7.6,18.4c7.2,3,15.5-0.4,18.4-7.6l12.2-29.4C361.8,30.6,358.4,22.3,351.2,19.4z"/>
+                <path d="M433.6,74.4c-5.5-5.5-14.4-5.5-20,0l-22.5,22.5c-5.5,5.5-5.5,14.5,0,20s14.4,5.5,20,0l22.5-22.5C439.1,88.9,439.1,80,433.6,74.4z"/>
+                <path d="M488.6,156.8c-3-7.2-11.2-10.6-18.4-7.6l-29.4,12.2c-7.2,2.9-10.6,11.2-7.6,18.4s11.2,10.6,18.4,7.6l29.4-12.2C488.2,172.2,491.6,164,488.6,156.8z"/>
+                <path d="M493.9,239.9H462c-7.8,0-14.1,6.3-14.1,14.1s6.3,14.1,14.1,14.1h31.9c7.8,0,14.1-6.3,14.1-14.1S501.7,239.9,493.9,239.9z"/>
+              </svg>
+            ) : '🚨'}
+          </div>
           <div className="logo-text">
             <h1>Sambandscentralen</h1>
             <p>Polisens händelsenotiser i realtid</p>
@@ -176,7 +183,6 @@ export default function Header({ currentView, onViewChange, onLogoClick, density
               type="button"
               className={`settings-toggle${settingsOpen ? ' active' : ''}`}
               onClick={(e) => {
-                if (!settingsAvailable) return;
                 e.stopPropagation();
                 if (!settingsOpen) updatePanelPosition();
                 setSettingsOpen(!settingsOpen);
@@ -186,16 +192,14 @@ export default function Header({ currentView, onViewChange, onLogoClick, density
               }}
               aria-label="Inställningar"
               aria-expanded={settingsOpen}
-              aria-disabled={!settingsAvailable}
-              title={settingsAvailable ? 'Inställningar' : 'Inga inställningar för denna vy'}
-              disabled={!settingsAvailable}
+              title="Inställningar"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <circle cx="12" cy="12" r="3"></circle>
                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
               </svg>
             </button>
-            {settingsOpen && settingsAvailable && (
+            {settingsOpen && (
               <div
                 className="settings-panel"
                 style={panelTop !== undefined ? { top: panelTop } : undefined}
