@@ -183,13 +183,9 @@ export default function EventCard({ event, currentView, onShowMap, isHighlighted
             <span className="stream-item__type">{event.icon} {event.type}</span>
             <span className="stream-item__headline-location">
               <span className="stream-item__sep">&mdash;</span>
-              <a
-                href={`/?location=${encodeURIComponent(event.location)}&view=${currentView}`}
-                className="stream-item__location"
-                onClick={(e) => e.stopPropagation()}
-              >
+              <span className="stream-item__location">
                 {event.location}
-              </a>
+              </span>
             </span>
           </div>
           <p className="stream-item__summary">{event.summary}</p>
@@ -286,13 +282,9 @@ export default function EventCard({ event, currentView, onShowMap, isHighlighted
             >
               {event.icon} {event.type}
             </a>
-            <a
-              href={`/?location=${encodeURIComponent(event.location)}&view=${currentView}`}
-              className="event-location-link"
-              onClick={(e) => e.stopPropagation()}
-            >
+            <span className="event-location-link">
               {event.location}
-            </a>
+            </span>
           </div>
           <p className="event-summary">{event.summary}</p>
           <div className="event-header-actions">

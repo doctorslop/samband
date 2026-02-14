@@ -597,12 +597,9 @@ header {
     font-size: 15px;
     font-weight: 700;
     color: var(--text);
-    text-decoration: none;
     margin-top: 6px;
-    transition: color 0.2s ease;
     letter-spacing: -0.01em;
 }
-.event-location-link:hover { color: var(--accent); }
 .event-summary {
     color: var(--text-muted);
     font-size: 13px;
@@ -3165,11 +3162,6 @@ footer {
 }
 .stream-item__location {
     color: var(--text-muted);
-    text-decoration: none;
-    transition: color 0.15s ease;
-}
-.stream-item__location:hover {
-    color: var(--accent);
 }
 .stream-item__headline-location {
     display: none;
