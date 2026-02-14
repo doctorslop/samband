@@ -13,7 +13,7 @@
     --accent-dark: #d97706;
     --accent-glow: rgba(251, 191, 36, 0.35);
     --text: #f1f5f9;
-    --text-muted: #94a3b8;
+    --text-muted: #a0aec0;
     --surface: rgba(15, 31, 56, 0.8);
     --surface-solid: #0f1f38;
     --surface-light: rgba(22, 42, 72, 0.9);
@@ -194,9 +194,9 @@ header {
     color: var(--text);
     background: var(--surface-light);
 }
-@media (min-width: 769px) {
-    .view-toggle button span.label { display: none; }
-    .view-toggle button.active span.label { display: inline; }
+/* Labels hidden by default on tablets, shown on large desktops */
+@media (min-width: 1200px) {
+    .view-toggle button span.label { display: inline; }
 }
 
 @keyframes livePulse {
@@ -455,6 +455,32 @@ header {
 .event-card.expanded::before { opacity: 1; }
 .event-card.expanded::after { opacity: 1; }
 
+/* Expand/collapse chevron indicator */
+.event-card-chevron {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    color: var(--text-muted);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s ease;
+    margin-top: 2px;
+    opacity: 0.6;
+}
+.event-card-chevron svg {
+    display: block;
+}
+.event-card.expanded .event-card-chevron {
+    transform: rotate(180deg);
+    color: var(--accent);
+    opacity: 1;
+}
+.event-card-header:hover .event-card-chevron {
+    opacity: 1;
+    color: var(--text);
+}
+
 /* Card body - contains expandable details and actions */
 .event-card-body {
     padding: 0 18px 16px;
@@ -495,7 +521,7 @@ header {
     font-size: inherit;
 }
 .event-meta-row .meta-separator {
-    color: rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.35);
     font-size: inherit;
 }
 .event-meta-row .event-source {
@@ -593,17 +619,16 @@ header {
     margin-top: 10px;
 }
 
-/* Action buttons - consistent styling with explicit reset */
+/* Action buttons - shared base styling */
 .show-map-link,
-.expand-details-btn {
-    /* Reset browser defaults */
+.expand-details-btn,
+.share-event-btn {
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
     background: none;
     border: none;
     margin: 0;
-    /* Shared base styling */
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -648,7 +673,8 @@ header {
     box-shadow: 0 4px 12px rgba(251, 191, 36, 0.2);
 }
 .expand-details-btn:active,
-.show-map-link:active {
+.show-map-link:active,
+.share-event-btn:active {
     transform: translateY(0);
 }
 .expand-details-btn.loading {
@@ -665,28 +691,6 @@ header {
 
 /* Share button - green theme */
 .share-event-btn {
-    /* Reset browser defaults */
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
-    background: none;
-    border: none;
-    margin: 0;
-    /* Shared base styling */
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    font-family: inherit;
-    font-size: 13px;
-    font-weight: 500;
-    line-height: 1.4;
-    cursor: pointer;
-    padding: 8px 14px;
-    border-radius: 6px;
-    transition: all 0.2s ease;
-    text-decoration: none;
-    white-space: nowrap;
     color: var(--success);
     background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(16, 185, 129, 0.06));
     border: 1px solid rgba(16, 185, 129, 0.2);
@@ -1192,13 +1196,20 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     }
     .timeline-controls {
         gap: 5px;
-        flex-wrap: wrap;
-        justify-content: center;
+        flex-wrap: nowrap;
+    }
+    /* Hide event counter on small screens to save space */
+    .timeline-counter {
+        display: none;
     }
     .timeline-range-btn {
-        padding: 6px 10px;
-        font-size: 10px;
-        min-height: 32px;
+        padding: 4px 7px;
+        font-size: 9px;
+        min-height: 28px;
+    }
+    .timeline-range-selector {
+        padding: 1px;
+        gap: 0;
     }
     .timeline-play-btn {
         width: 36px;
@@ -1856,20 +1867,18 @@ footer {
     }
     .main-content { flex-direction: column; }
     header { padding: 16px var(--space-page); }
-    .logo-text h1 { font-size: 18px; }
+    .header-content { gap: 8px; }
+    .logo { gap: 10px; }
+    .logo-text h1 { font-size: 16px; }
     .logo-text p { font-size: 11px; }
-    .logo-icon { width: 38px; height: 38px; min-width: 38px; min-height: 38px; font-size: 18px; }
+    .logo-icon { width: 36px; height: 36px; min-width: 36px; min-height: 36px; font-size: 17px; }
+    .header-controls { gap: 6px; }
     .view-toggle button { padding: 6px 10px; font-size: 12px; }
     .view-toggle button span.label { display: none; }
 }
 
 @media (max-width: 900px) {
-    .header-content { gap: 8px; }
-    .logo { gap: 10px; }
-    .logo-text h1 { font-size: 16px; }
     .logo-text p { display: none; }
-    .logo-icon { width: 36px; height: 36px; min-width: 36px; min-height: 36px; font-size: 17px; }
-    .header-controls { gap: 6px; }
     .view-toggle button { padding: 6px 8px; }
 }
 @media (max-width: 768px) {
@@ -1944,7 +1953,6 @@ footer {
 
     .map-wrapper.active { min-height: 400px; max-height: calc(100vh - 120px); max-height: calc(100dvh - 120px); }
     .map-container { min-height: 0; }
-    .view-toggle button span.label { display: none; }
 }
 
 /* Landscape mobile: shorter map, ensure timeline stays visible */
@@ -2681,6 +2689,14 @@ footer {
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
+}
+.settings-section-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
 }
 .settings-options {
     display: flex;
@@ -3611,43 +3627,43 @@ footer {
     align-items: center;
     justify-content: center;
     min-height: 60vh;
-    padding: 2rem;
+    padding: 32px;
 }
 
 .error-boundary-content {
     text-align: center;
-    background: var(--glass);
+    background: var(--glass-bg);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius);
-    padding: 3rem 2rem;
+    padding: 48px 32px;
     max-width: 480px;
 }
 
 .error-boundary-content h2 {
-    font-size: 1.5rem;
-    color: var(--text-primary);
-    margin: 0 0 0.75rem;
+    font-size: 24px;
+    color: var(--text);
+    margin: 0 0 12px;
 }
 
 .error-boundary-content p {
-    color: var(--text-secondary);
-    margin: 0 0 1.5rem;
+    color: var(--text-muted);
+    margin: 0 0 24px;
     line-height: 1.5;
 }
 
 .error-boundary-actions {
     display: flex;
-    gap: 0.75rem;
+    gap: 12px;
     justify-content: center;
     flex-wrap: wrap;
 }
 
 .error-boundary-btn {
-    padding: 0.6rem 1.5rem;
+    padding: 10px 24px;
     border-radius: var(--radius-sm);
     border: 1px solid var(--accent);
     background: var(--accent);
-    color: #fff;
+    color: var(--primary);
     font-weight: 600;
     cursor: pointer;
     transition: opacity 0.15s;
@@ -3659,10 +3675,10 @@ footer {
 
 .error-boundary-btn-secondary {
     background: transparent;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     border-color: var(--glass-border);
 }
 
 .error-boundary-btn-secondary:hover {
-    background: var(--glass);
+    background: var(--glass-bg);
 }
