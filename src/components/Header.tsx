@@ -203,6 +203,7 @@ export default function Header({ currentView, onViewChange, onLogoClick, density
                 {showDensitySettings && (
                   <>
                     <div className="settings-section">
+                      <span className="settings-section-label">Visningsläge</span>
                       <div className="settings-options">
                         <button
                           type="button"

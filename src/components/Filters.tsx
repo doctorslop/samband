@@ -45,6 +45,11 @@ export default function Filters({ locations, types, currentView, filters }: Filt
   // Debounce search input (300ms delay)
   const debouncedSearch = useDebounce(search, 300);
 
+  // Debounce custom location input (400ms delay - slightly longer for typing city names)
+  const debouncedCustomLocation = useDebounce(customLocation, 400);
+
+  const isCustomLocationInitMount = useRef(true);
+
   // Check if current location is not in dropdown
   useEffect(() => {
     if (filters.location && !locations.includes(filters.location)) {
@@ -73,6 +78,26 @@ export default function Filters({ locations, types, currentView, filters }: Filt
       router.push(`/?${params.toString()}`);
     }
   }, [debouncedSearch, currentView, searchParams, router, filters.search]);
+
+  // Auto-filter when debounced custom location changes
+  useEffect(() => {
+    if (isCustomLocationInitMount.current) {
+      isCustomLocationInitMount.current = false;
+      return;
+    }
+    if (!showCustomLocation) return;
+
+    if (debouncedCustomLocation !== filters.location) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('view', currentView);
+      if (debouncedCustomLocation) {
+        params.set('location', debouncedCustomLocation);
+      } else {
+        params.delete('location');
+      }
+      router.push(`/?${params.toString()}`);
+    }
+  }, [debouncedCustomLocation, showCustomLocation, currentView, searchParams, router, filters.location]);
 
   // Check if any filters are active
   const hasActiveFilters = filters.location || filters.type || filters.search;
