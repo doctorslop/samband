@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   keywords: ['polis', 'polishändelser', 'Sverige', 'realtid', 'brott', 'olyckor', 'karta'],
   manifest: '/manifest.json',
   icons: {
-    icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🚨</text></svg>",
+    icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect fill='%230a1628' rx='96' width='512' height='512'/><rect x='136' y='340' width='240' height='40' rx='8' fill='%23cbd5e1'/><rect x='156' y='300' width='200' height='48' rx='6' fill='%2394a3b8'/><path d='M180 308C180 308 190 180 256 160C322 180 332 308 332 308Z' fill='%23e2e8f0'/><circle cx='256' cy='220' r='24' fill='%23ef4444'/><circle cx='256' cy='220' r='14' fill='%23fca5a5'/><line x1='256' y1='140' x2='256' y2='118' stroke='%23ef4444' stroke-width='10' stroke-linecap='round' opacity='0.8'/><line x1='312' y1='168' x2='330' y2='152' stroke='%23ef4444' stroke-width='10' stroke-linecap='round' opacity='0.6'/><line x1='200' y1='168' x2='182' y2='152' stroke='%23ef4444' stroke-width='10' stroke-linecap='round' opacity='0.6'/></svg>",
   },
   appleWebApp: {
     capable: true,
