@@ -124,8 +124,20 @@ header {
 }
 .logo-icon-default-svg {
     display: block;
-    width: 26px;
-    height: 26px;
+    width: 28px;
+    height: 28px;
+    animation: sirenPulse 2.5s ease-in-out infinite;
+}
+.logo-icon-default-svg .siren-ray {
+    animation: sirenRayPulse 2.5s ease-in-out infinite;
+}
+@keyframes sirenPulse {
+    0%, 100% { filter: drop-shadow(0 0 2px rgba(255, 40, 40, 0.2)); }
+    50% { filter: drop-shadow(0 0 5px rgba(255, 40, 40, 0.45)); }
+}
+@keyframes sirenRayPulse {
+    0%, 100% { opacity: 0.7; }
+    50% { opacity: 1; }
 }
 .logo-icon.radio-playing { animation: radioGlow 1.5s ease-in-out infinite; }
 @keyframes radioGlow { 0%, 100% { box-shadow: 0 4px 16px var(--accent-glow); } 50% { box-shadow: 0 4px 24px var(--accent-glow), 0 0 30px var(--accent-glow); } }
