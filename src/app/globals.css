@@ -814,7 +814,34 @@ header {
     border-left-color: var(--danger);
 }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes detailsSlideIn { from { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; } to { opacity: 1; max-height: 1000px; } }
+@keyframes detailsSlideIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Actions bar inside expanded card body */
+.event-body-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    animation: detailsSlideIn 0.2s ease-out;
+}
+.event-relative-time {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+/* Spinner inside expand button */
+.expand-details-btn .spinner-small {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(251, 191, 36, 0.3);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
 
 /* Click hint removed - chevron indicates interactivity */
 
@@ -1930,15 +1957,21 @@ footer {
     .event-card-body { padding: 0 var(--space-card) 14px; }
     .event-details { padding: var(--space-element) 14px; font-size: 13px; line-height: 1.6; margin-top: var(--space-element); }
     .event-header-actions { margin-top: var(--space-element); flex-wrap: wrap; gap: 8px; }
-    .expand-details-btn,
-    .show-map-link,
-    .share-event-btn {
+    .expand-details-btn {
+        font-size: 14px;
+        min-height: 44px;
+        padding: 10px 16px;
+    }
+    .event-body-actions { flex-wrap: wrap; gap: 8px; }
+    .event-body-actions .show-map-link,
+    .event-body-actions .share-event-btn {
         font-size: 14px;
         min-height: 44px;
         padding: 10px 16px;
         flex: 1;
         justify-content: center;
     }
+    .event-relative-time { width: 100%; text-align: center; margin-left: 0; }
 
     /* Mobile status footer */
     .status-counts { flex-direction: column; gap: 8px; }
@@ -1977,9 +2010,9 @@ footer {
     .event-location-link { font-size: 13px; }
     .event-summary { font-size: 12px; }
     .event-card-body { padding: 0 var(--space-card) var(--space-card); }
-    .expand-details-btn,
-    .show-map-link,
-    .share-event-btn { font-size: 13px; padding: var(--space-element) 12px; min-height: 40px; }
+    .expand-details-btn { font-size: 13px; padding: var(--space-element) 12px; min-height: 40px; }
+    .event-body-actions .show-map-link,
+    .event-body-actions .share-event-btn { font-size: 13px; padding: var(--space-element) 12px; min-height: 40px; }
 }
 
 .view-map .filters-section { display: none; }
@@ -2860,9 +2893,12 @@ footer {
     margin-top: 6px;
     gap: 8px;
 }
-.density-compact .expand-details-btn,
-.density-compact .show-map-link,
-.density-compact .share-event-btn {
+.density-compact .expand-details-btn {
+    padding: 5px 10px;
+    font-size: 12px;
+}
+.density-compact .event-body-actions .show-map-link,
+.density-compact .event-body-actions .share-event-btn {
     padding: 5px 10px;
     font-size: 12px;
 }
@@ -2958,9 +2994,13 @@ footer {
         gap: 6px;
     }
 
-    .density-compact .expand-details-btn,
-    .density-compact .show-map-link,
-    .density-compact .share-event-btn {
+    .density-compact .expand-details-btn {
+        font-size: 13px;
+        min-height: 40px;
+        padding: 6px 12px;
+    }
+    .density-compact .event-body-actions .show-map-link,
+    .density-compact .event-body-actions .share-event-btn {
         font-size: 13px;
         min-height: 40px;
         padding: 6px 12px;
@@ -3012,9 +3052,13 @@ footer {
         font-size: 11px;
     }
 
-    .density-compact .expand-details-btn,
-    .density-compact .show-map-link,
-    .density-compact .share-event-btn {
+    .density-compact .expand-details-btn {
+        font-size: 12px;
+        padding: 5px 8px;
+        min-height: 36px;
+    }
+    .density-compact .event-body-actions .show-map-link,
+    .density-compact .event-body-actions .share-event-btn {
         font-size: 12px;
         padding: 5px 8px;
         min-height: 36px;

@@ -200,7 +200,12 @@ export default function EventList({
         return;
       }
 
-      setEvents(prev => [...prev, ...data.events]);
+      // Deduplicate: new events may overlap with existing ones if data shifted between pages
+      setEvents(prev => {
+        const existingIds = new Set(prev.map(e => e.id));
+        const newUnique = (data.events as FormattedEvent[]).filter(e => !existingIds.has(e.id));
+        return [...prev, ...newUnique];
+      });
       setHasMore(data.hasMore);
       setPage(nextPage);
     } catch (err) {
