@@ -4027,14 +4027,10 @@ footer {
 [data-theme="radar"] .settings-divider {
     background: var(--radar-line);
 }
-[data-theme="radar"] .header-controls {
-    align-items: stretch;
-}
 [data-theme="radar"] .settings-toggle {
     background: var(--radar-surface-1);
     border: 1px solid var(--radar-line);
     border-radius: 2px;
-    height: auto;
 }
 [data-theme="radar"] .settings-toggle:hover {
     border-color: var(--radar-line-bright);
