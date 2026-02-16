@@ -133,11 +133,12 @@ export default function Header({ currentView, onViewChange, onLogoClick, density
               type="button"
               role="tab"
               aria-selected={currentView === 'list'}
+              aria-label="Lista"
               data-view="list"
               className={currentView === 'list' ? 'active' : ''}
               onClick={() => onViewChange('list')}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <line x1="8" y1="6" x2="21" y2="6"></line>
                 <line x1="8" y1="12" x2="21" y2="12"></line>
                 <line x1="8" y1="18" x2="21" y2="18"></line>
@@ -151,11 +152,12 @@ export default function Header({ currentView, onViewChange, onLogoClick, density
               type="button"
               role="tab"
               aria-selected={currentView === 'map'}
+              aria-label="Karta"
               data-view="map"
               className={currentView === 'map' ? 'active' : ''}
               onClick={() => onViewChange('map')}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
                 <circle cx="12" cy="10" r="3"></circle>
               </svg>
@@ -165,11 +167,12 @@ export default function Header({ currentView, onViewChange, onLogoClick, density
               type="button"
               role="tab"
               aria-selected={currentView === 'stats'}
+              aria-label="Statistik"
               data-view="stats"
               className={currentView === 'stats' ? 'active' : ''}
               onClick={() => onViewChange('stats')}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <line x1="18" y1="20" x2="18" y2="10"></line>
                 <line x1="12" y1="20" x2="12" y2="4"></line>
                 <line x1="6" y1="20" x2="6" y2="14"></line>

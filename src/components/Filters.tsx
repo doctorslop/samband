@@ -104,7 +104,10 @@ export default function Filters({ locations, types, currentView, filters }: Filt
 
   // Clear all filters at once
   const clearAllFilters = useCallback(() => {
-    const params = new URLSearchParams();
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('location');
+    params.delete('type');
+    params.delete('search');
     params.set('view', currentView);
     setSearch('');
     setLocation('');
@@ -112,18 +115,18 @@ export default function Filters({ locations, types, currentView, filters }: Filt
     setShowCustomLocation(false);
     setCustomLocation('');
     router.push(`/?${params.toString()}`);
-  }, [currentView, router]);
+  }, [currentView, router, searchParams]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    const params = new URLSearchParams();
+    const params = new URLSearchParams(searchParams.toString());
     params.set('view', currentView);
 
     const locationValue = showCustomLocation ? customLocation : location;
-    if (locationValue) params.set('location', locationValue);
-    if (type) params.set('type', type);
-    if (search) params.set('search', search);
+    if (locationValue) { params.set('location', locationValue); } else { params.delete('location'); }
+    if (type) { params.set('type', type); } else { params.delete('type'); }
+    if (search) { params.set('search', search); } else { params.delete('search'); }
 
     router.push(`/?${params.toString()}`);
   };

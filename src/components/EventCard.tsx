@@ -46,7 +46,8 @@ export default function EventCard({ event, currentView, onShowMap, isHighlighted
   useEffect(() => {
     if (autoExpand) {
       setExpanded(true);
-      if (!details && event.url && !loading) {
+      // Skip fetch if isHighlighted — that effect already handles it
+      if (!isHighlighted && !details && event.url && !loading) {
         setLoading(true);
         setError(false);
         fetch(`/api/details?url=${encodeURIComponent(event.url)}`)
@@ -64,7 +65,8 @@ export default function EventCard({ event, currentView, onShowMap, isHighlighted
     } else if (!isHighlighted) {
       setExpanded(false);
     }
-  }, [autoExpand]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Only react to autoExpand toggle; details/loading are guards, not triggers
+  }, [autoExpand, event.url, isHighlighted]);
 
   const typeClass = getTypeClass(event.type);
 
@@ -296,8 +298,25 @@ export default function EventCard({ event, currentView, onShowMap, isHighlighted
                 toggleAccordion();
               }}
             >
+              {loading && <span className="spinner-small" />}
               {expanded ? 'Dölj' : 'Läs mer'}
             </button>
+          </div>
+        </div>
+        <span className="event-card-chevron" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </span>
+      </div>
+      <div className="event-card-body">
+        <div className={`event-details${expanded ? ' visible' : ''}${loading ? ' loading' : ''}${error ? ' error' : ''}`}>
+          {loading && 'Laddar detaljer...'}
+          {error && 'Kunde inte hämta detaljer. Klicka på polisen.se-länken för att läsa mer.'}
+          {details && details}
+        </div>
+        {expanded && (
+          <div className="event-body-actions">
             {gpsCoords && (
               <button
                 type="button"
@@ -320,20 +339,9 @@ export default function EventCard({ event, currentView, onShowMap, isHighlighted
                 {copied ? 'Kopierad!' : 'Dela'}
               </button>
             )}
+            <span className="event-relative-time">{relativeTime}</span>
           </div>
-        </div>
-        <span className="event-card-chevron" aria-hidden="true">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="6 9 12 15 18 9"></polyline>
-          </svg>
-        </span>
-      </div>
-      <div className="event-card-body">
-        <div className={`event-details${expanded ? ' visible' : ''}${loading ? ' loading' : ''}${error ? ' error' : ''}`}>
-          {loading && 'Laddar detaljer...'}
-          {error && 'Kunde inte hämta detaljer. Klicka på polisen.se-länken för att läsa mer.'}
-          {details && details}
-        </div>
+        )}
       </div>
     </article>
   );
