@@ -209,7 +209,7 @@ export default function EventCard({ event, currentView, onShowMap, isHighlighted
                   </a>
                 )}
                 {gpsCoords && (
-                  <button type="button" className="stream-item__link" onClick={handleShowMap}>
+                  <button type="button" className="stream-item__link" onClick={handleShowMap} title="Platsen visar vart anmälan vart upprättad">
                     Visa på karta
                   </button>
                 )}
@@ -301,22 +301,6 @@ export default function EventCard({ event, currentView, onShowMap, isHighlighted
               {loading && <span className="spinner-small" />}
               {expanded ? 'Dölj' : 'Läs mer'}
             </button>
-          </div>
-        </div>
-        <span className="event-card-chevron" aria-hidden="true">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="6 9 12 15 18 9"></polyline>
-          </svg>
-        </span>
-      </div>
-      <div className="event-card-body">
-        <div className={`event-details${expanded ? ' visible' : ''}${loading ? ' loading' : ''}${error ? ' error' : ''}`}>
-          {loading && 'Laddar detaljer...'}
-          {error && 'Kunde inte hämta detaljer. Klicka på polisen.se-länken för att läsa mer.'}
-          {details && details}
-        </div>
-        {expanded && (
-          <div className="event-body-actions">
             {gpsCoords && (
               <button
                 type="button"
@@ -325,6 +309,7 @@ export default function EventCard({ event, currentView, onShowMap, isHighlighted
                 data-lng={gpsCoords.lng}
                 data-location={event.location}
                 onClick={handleShowMap}
+                title="Platsen visar vart anmälan vart upprättad"
               >
                 Visa på karta
               </button>
@@ -339,9 +324,20 @@ export default function EventCard({ event, currentView, onShowMap, isHighlighted
                 {copied ? 'Kopierad!' : 'Dela'}
               </button>
             )}
-            <span className="event-relative-time">{relativeTime}</span>
           </div>
-        )}
+        </div>
+        <span className="event-card-chevron" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </span>
+      </div>
+      <div className="event-card-body">
+        <div className={`event-details${expanded ? ' visible' : ''}${loading ? ' loading' : ''}${error ? ' error' : ''}`}>
+          {loading && 'Laddar detaljer...'}
+          {error && 'Kunde inte hämta detaljer. Klicka på polisen.se-länken för att läsa mer.'}
+          {details && details}
+        </div>
       </div>
     </article>
   );
