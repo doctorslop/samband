@@ -216,6 +216,10 @@ header {
     box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
 }
 .search-form { display: flex; gap: 10px; flex-wrap: wrap; }
+/* Hide explicit submit button on desktop — filters apply immediately on change */
+@media (min-width: 769px) {
+    .search-form > .btn[type="submit"] { display: none; }
+}
 .filter-selects-row { display: contents; }
 .search-input-wrapper { flex: 1; min-width: 200px; position: relative; }
 .search-input-wrapper::before {
@@ -1220,10 +1224,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     .timeline-label {
         font-size: 10px;
         min-width: 32px;
-    }
-    .timeline-counter {
-        font-size: 9px;
-        padding: 2px 6px;
     }
     .timeline-slider-wrap {
         min-width: 60px;
@@ -4073,22 +4073,28 @@ footer {
 }
 
 /* ------ Scroll to top ------ */
-[data-theme="radar"] .scroll-to-top {
+[data-theme="radar"] .scroll-top {
     background: var(--radar-surface-1);
     border: 1px solid var(--radar-line-bright);
     border-radius: 2px;
     color: var(--radar-green);
+    box-shadow: none;
 }
-[data-theme="radar"] .scroll-to-top:hover {
+[data-theme="radar"] .scroll-top:hover {
     background: var(--radar-surface-2);
     box-shadow: 0 0 8px var(--radar-glow);
 }
 
 /* ------ Map modal ------ */
-[data-theme="radar"] .map-modal-overlay .map-modal-content {
+[data-theme="radar"] .map-modal {
     background: var(--radar-surface-1);
     border: 1px solid var(--radar-line-bright);
     border-radius: 2px;
+}
+[data-theme="radar"] .map-modal-header,
+[data-theme="radar"] .map-modal-body,
+[data-theme="radar"] .map-modal-footer {
+    background: var(--radar-surface-1);
 }
 
 /* ------ Spinner ------ */

@@ -138,23 +138,23 @@ function ClientAppContent({
   const handleTypeClick = useCallback(
     (type: string) => {
       setCurrentView('list');
-      const params = new URLSearchParams();
+      const params = new URLSearchParams(searchParams.toString());
       params.set('view', 'list');
       params.set('type', type);
       router.push(`/?${params.toString()}`, { scroll: false });
     },
-    [router]
+    [router, searchParams]
   );
 
   const handleLocationClick = useCallback(
     (location: string) => {
       setCurrentView('list');
-      const params = new URLSearchParams();
+      const params = new URLSearchParams(searchParams.toString());
       params.set('view', 'list');
       params.set('location', location);
       router.push(`/?${params.toString()}`, { scroll: false });
     },
-    [router]
+    [router, searchParams]
   );
 
   // Navigate to home: reset view to list and clear all filters

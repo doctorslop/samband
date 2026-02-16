@@ -103,6 +103,9 @@ export default function MapModal({ isOpen, lat, lng, location, onClose }: MapMod
       id="mapModalOverlay"
       className={`map-modal-overlay${isOpen ? ' active' : ''}`}
       onClick={handleOverlayClick}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="mapModalTitle"
     >
       <div className="map-modal">
         <div className="map-modal-header">
@@ -112,6 +115,7 @@ export default function MapModal({ isOpen, lat, lng, location, onClose }: MapMod
             className="map-modal-close"
             type="button"
             onClick={onClose}
+            aria-label="Stäng karta"
           >
             ✕
           </button>
