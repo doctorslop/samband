@@ -1,0 +1,11 @@
+.git
+.github
+node_modules
+.next
+data
+.env*
+*.md
+jest.config.js
+jest.setup.js
+eslint.config.mjs
+src/__tests__
